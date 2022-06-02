@@ -1,0 +1,32 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Sandbox", "Sandbox\Sandbox.vcxproj", "{F4C124E3-60A1-A37E-69B9-2E55D5170AE0}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OS", "OS\OS.vcxproj", "{C7745900-B300-880B-1CAF-880B085A880B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Renderer", "Renderer\Renderer.vcxproj", "{7CCE658F-689B-C09A-91B4-AE427DE0F528}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F4C124E3-60A1-A37E-69B9-2E55D5170AE0}.Debug|x64.ActiveCfg = Debug|x64
+		{F4C124E3-60A1-A37E-69B9-2E55D5170AE0}.Debug|x64.Build.0 = Debug|x64
+		{F4C124E3-60A1-A37E-69B9-2E55D5170AE0}.Release|x64.ActiveCfg = Release|x64
+		{F4C124E3-60A1-A37E-69B9-2E55D5170AE0}.Release|x64.Build.0 = Release|x64
+		{C7745900-B300-880B-1CAF-880B085A880B}.Debug|x64.ActiveCfg = Debug|x64
+		{C7745900-B300-880B-1CAF-880B085A880B}.Debug|x64.Build.0 = Debug|x64
+		{C7745900-B300-880B-1CAF-880B085A880B}.Release|x64.ActiveCfg = Release|x64
+		{C7745900-B300-880B-1CAF-880B085A880B}.Release|x64.Build.0 = Release|x64
+		{7CCE658F-689B-C09A-91B4-AE427DE0F528}.Debug|x64.ActiveCfg = Debug|x64
+		{7CCE658F-689B-C09A-91B4-AE427DE0F528}.Debug|x64.Build.0 = Debug|x64
+		{7CCE658F-689B-C09A-91B4-AE427DE0F528}.Release|x64.ActiveCfg = Release|x64
+		{7CCE658F-689B-C09A-91B4-AE427DE0F528}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

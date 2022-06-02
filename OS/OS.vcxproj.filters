@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="OS">
+      <UniqueIdentifier>{C7745900-B300-880B-1CAF-880B085A880B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OS\Core">
+      <UniqueIdentifier>{7FAD0D8A-EB8C-8C25-F4A4-17FC6003F386}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OS\Interfaces">
+      <UniqueIdentifier>{BAEE9EF8-26AF-1A2F-EFE9-63AC5B695F0B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OS\Windows">
+      <UniqueIdentifier>{01F656BF-EDAD-980C-56B5-7168428C33FD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty">
+      <UniqueIdentifier>{107145F9-FC28-8746-6530-60A251072237}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource">
+      <UniqueIdentifier>{E22582C4-4E92-3DBF-1786-D51C83B15F27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\FluidStudios">
+      <UniqueIdentifier>{F0AAAF4C-DCE6-B2B6-45F9-CAAD31545BD1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\FluidStudios\MemoryManager">
+      <UniqueIdentifier>{3388480A-1F31-B039-48C7-CBB834CFCA7A}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\mmgr.h">
+      <Filter>ThirdParty\OpenSource\FluidStudios\MemoryManager</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\nommgr.h">
+      <Filter>ThirdParty\OpenSource\FluidStudios\MemoryManager</Filter>
+    </ClInclude>
+    <ClInclude Include="OS\Core\Config.h">
+      <Filter>OS\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="OS\Interfaces\IApp.h">
+      <Filter>OS\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="OS\Interfaces\IMemory.h">
+      <Filter>OS\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="OS\Interfaces\IOperatingSystem.h">
+      <Filter>OS\Interfaces</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\mmgr.cpp">
+      <Filter>ThirdParty\OpenSource\FluidStudios\MemoryManager</Filter>
+    </ClCompile>
+    <ClCompile Include="OS\Windows\WindowsBase.cpp">
+      <Filter>OS\Windows</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
