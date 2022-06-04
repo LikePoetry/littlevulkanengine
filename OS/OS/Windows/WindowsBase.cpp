@@ -17,5 +17,7 @@ int WindowsMain(int argc, char** argv, IApp* app)
 	fsDesc.pAppName = app->GetName();
 	if (initFileSystem(&fsDesc))
 		return EXIT_FAILURE;
+
+	fsSetPathForResourceDir(pSystemFileIO, RM_DEBUG, RD_LOG, "");
 	return 0;
 }

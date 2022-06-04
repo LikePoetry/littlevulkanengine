@@ -48,6 +48,7 @@
     <ClInclude Include="OS\Interfaces\IFileSystem.h" />
     <ClInclude Include="OS\Interfaces\ILog.h" />
     <ClInclude Include="OS\Logging\Log.h" />
+    <ClInclude Include="OS\Interfaces\IThread.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\mmgr.cpp">
@@ -58,5 +59,8 @@
     </ClCompile>
     <ClCompile Include="OS\Windows\WindowsFileSystem.cpp" />
     <ClCompile Include="OS\Logging\Log.c" />
+    <ClCompile Include="OS\Windows\WindowsThread.c" />
+    <ClCompile Include="OS\Windows\WindowsLog.c" />
+    <ClCompile Include="OS\FileSystem\FileSystem.cpp" />
   </ItemGroup>
 </Project>

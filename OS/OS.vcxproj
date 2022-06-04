@@ -97,13 +97,17 @@
     <ClInclude Include="OS\Core\Config.h" />
     <ClInclude Include="OS\Interfaces\IApp.h" />
     <ClInclude Include="OS\Interfaces\IMemory.h" />
+    <ClInclude Include="OS\Interfaces\IThread.h" />
     <ClInclude Include="OS\Logging\Log.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\mmgr.cpp" />
+    <ClCompile Include="OS\FileSystem\FileSystem.cpp" />
     <ClCompile Include="OS\Logging\Log.c" />
     <ClCompile Include="OS\Windows\WindowsBase.cpp" />
     <ClCompile Include="OS\Windows\WindowsFileSystem.cpp" />
+    <ClCompile Include="OS\Windows\WindowsLog.c" />
+    <ClCompile Include="OS\Windows\WindowsThread.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

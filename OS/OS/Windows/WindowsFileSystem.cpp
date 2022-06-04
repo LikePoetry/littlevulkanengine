@@ -12,4 +12,12 @@ bool initFileSystem(FileSystemInitDesc* pDesc)
 		//LOGF();
 	}
 	return true;
+}  
+
+bool PlatformOpenFile(ResourceDirectory resourceDir, const char* fileName, FileMode mode, FileStream* pOut)
+{
+	const char* resourcePath = fsGetResourceDirectory(resourceDir);
+	char filePath[FS_MAX_PATH] = {};
+	fsAppendPathComponent(resourcePath, fileName, filePath);
 }
+
