@@ -77,7 +77,7 @@ typedef enum FileMode
 	FM_WRITE = 1 << 1,
 	FM_APPEND = 1 << 2,
 	FM_BINARY = 1 << 3,
-	FM_ALLOW_READ = 1 << 4,// Read Access to Other Processes, Usefull for Log System
+	FM_ALLOW_READ = 1 << 4, // Read Access to Other Processes, Usefull for Log System
 	FM_READ_WRITE = FM_READ | FM_WRITE,
 	FM_READ_APPEND = FM_READ | FM_APPEND,
 	FM_WRITE_BINARY = FM_WRITE | FM_BINARY,
@@ -152,6 +152,8 @@ struct IFileSystem
 	void* pUser;
 };
 
+/// Default file system using C File IO or Bundled File IO (Android) based on the ResourceDirectory
+extern IFileSystem* pSystemFileIO;
 /***********************************************************************/
 // Mark: - Initialization
 /***********************************************************************/
@@ -164,8 +166,52 @@ bool initFileSystem(FileSystemInitDesc* pDesc);
 /// Appends `pathComponent` to `basePath`, where `basePath` is assumed to be a directory.
 void fsAppendPathComponent(const char* basePath, const char* pathComponent, char* output);
 
+/// Get `path`'s parent path, excluding the end seperator. 
+void fsGetParentPath(const char* path, char* output);
+
 /************************************************************************/
 // MARK: - Directory queries
 /************************************************************************/
 /// Returns location set for resource directory in fsSetPathForResourceDir.
 const char* fsGetResourceDirectory(ResourceDirectory resourceDir);
+/// Returns Resource Mount point for resource directory
+ResourceMount fsGetResourceDirectoryMount(ResourceDirectory resourceDir);
+
+/// Sets the relative path for `resourceDir` from `mount` to `bundledFolder`.
+/// The `resourceDir` will making use of the given IFileSystem `pIO` file functions.
+/// When `mount` is set to `RM_CONTENT` for a `resourceDir`, this directory is marked as a bundled resource folder.
+/// Bundled resource folders should only be used for Read operations.
+/// NOTE: A `resourceDir` can only be set once.
+void fsSetPathForResourceDir(IFileSystem* pIO, ResourceMount mount, ResourceDirectory resourceDir, const char* bundledFolder);
+
+/// Converts `mode` to a string which is compatible with the C standard library conventions for `fopen`
+/// parameter strings.
+static inline FORGE_CONSTEXPR const char* fsFileModeToString(FileMode mode)
+{
+	mode = (FileMode)(mode & ~FM_ALLOW_READ);
+	switch (mode)
+	{
+	case FM_READ: return "r";
+	case FM_WRITE: return "w";
+	case FM_APPEND: return "a";
+	case FM_READ_BINARY: return "rb";
+	case FM_WRITE_BINARY: return "wb";
+	case FM_APPEND_BINARY: return "ab";
+	case FM_READ_WRITE: return "r+";
+	case FM_READ_APPEND: return "a+";
+	case FM_READ_WRITE_BINARY: return "rb+";
+	case FM_READ_APPEND_BINARY: return "ab+";
+	default: return "r";
+	}
+}
+
+static inline FORGE_CONSTEXPR const char* fsOverwriteFileModeToString(FileMode mode)
+{
+
+	switch (mode)
+	{
+	case FM_READ_WRITE: return "w+";
+	case FM_READ_WRITE_BINARY: return "wb+";
+	default: return fsFileModeToString(mode);
+	}
+}

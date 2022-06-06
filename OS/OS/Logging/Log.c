@@ -1,7 +1,12 @@
+#include <stdarg.h>
+
 #include "../Logging/Log.h"
 
 #include "../Interfaces/ILog.h"
 #include "../Interfaces/IThread.h"
+#include "../Interfaces/ITime.h"
+#include "../Interfaces/IOperatingSystem.h"
+
 
 #define LOG_CALLBACK_MAX_ID FS_MAX_PATH
 #define LOG_MAX_BUFFER 1024
@@ -53,21 +58,20 @@ void writeLog(uint32_t level, const char* filename, int line_number, const char*
 	typedef struct Prefix {
 		uint32_t first;
 		const char* second;
-	} Prefix;
+	}Prefix;
 
-	static Prefix logLevelPrefixes[] =
-	{
-		{eWARNING,"WARN| "},
-		{eINFO,"INFO| "},
-		{eDEBUG,"DBG| "},
-		{eERROR,"ERR| "},
+	static Prefix logLevelPrefixes[] = {
+		{ eWARNING, "WARN| " },
+		{ eINFO,	"INFO| " },
+		{ eDEBUG,	" DBG| " },
+		{ eERROR,	" ERR| " }
 	};
 
 	uint32_t log_levels[LEVELS_LOG];
 	uint32_t log_level_count = 0;
 
 	// Check flags
-	for (uint32_t i = 0; i < sizeof(logLevelPrefixes) / sizeof(logLevelPrefixes[0]); i++)
+	for (uint32_t i = 0; i < sizeof(logLevelPrefixes) / sizeof(logLevelPrefixes[0]); ++i)
 	{
 		Prefix* it = &logLevelPrefixes[i];
 		if (it->first & level)
@@ -84,7 +88,7 @@ void writeLog(uint32_t level, const char* filename, int line_number, const char*
 	memset(gLogBuffer + preable_end, ' ', indentation);
 
 	uint32_t offset = preable_end + LOG_LEVEL_SIZE + indentation;
-	va_list args;
+	va_list  args;
 	va_start(args, message);
 	offset += vsnprintf(gLogBuffer + offset, LOG_MAX_BUFFER - offset, message, args);
 	va_end(args);

@@ -49,6 +49,7 @@
     <ClInclude Include="OS\Interfaces\ILog.h" />
     <ClInclude Include="OS\Logging\Log.h" />
     <ClInclude Include="OS\Interfaces\IThread.h" />
+    <ClInclude Include="OS\Interfaces\ITime.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\mmgr.cpp">
