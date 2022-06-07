@@ -7,8 +7,24 @@
 // App Data
 static IApp* pApp = nullptr;
 
+static uint8_t gResetScenario = RESET_SCENARIO_NONE;
+
 // WindowsWindow.cpp
 extern IApp* pWindowAppRef;
+
+CustomMessageProcessor sCustomProc = nullptr;
+void setCustomMessageProcessor(CustomMessageProcessor proc)
+{
+	sCustomProc = proc;
+}
+
+//------------------------------------------------------------------------
+// OPERATING SYSTEM INTERFACE FUNCTIONS
+//------------------------------------------------------------------------
+void onRequestReload()
+{
+	gResetScenario |= RESET_SCENARIO_RELOAD;
+}
 
 
 //------------------------------------------------------------------------

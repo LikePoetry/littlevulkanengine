@@ -36,6 +36,11 @@ void* tf_malloc_internal(size_t size, const char* f, int l, const char* sf)
 	/*return tf_memalign_internal(MIN_ALLOC_ALIGNMENT, size, f, l, sf);*/
 }
 
+void* tf_calloc_internal(size_t count, size_t size, const char* f, int l, const char* sf)
+{
+	return tf_calloc_memalign_internal(count, MIN_ALLOC_ALIGNMENT, size, f, l, sf);
+}
+
 void* tf_memalign_internal(size_t align, size_t size, const char* f, int l, const char* sf)
 {
 	void* pMemAlign = mmgrAllocator(f, l, sf, m_alloc_malloc, align, size);
@@ -46,6 +51,22 @@ void* tf_memalign_internal(size_t align, size_t size, const char* f, int l, cons
 	// Return handle to allocated memory.
 	return pMemAlign;
 }
+
+void* tf_calloc_memalign_internal(size_t count, size_t align, size_t size, const char* f, int l, const char* sf)
+{
+	size = ALIGN_TO(size, align);
+
+	void* pMemAlign = mmgrAllocator(f, l, sf, m_alloc_calloc, align, size * count);
+
+	// If using MTuner, report allocation to rmem.
+	MTUNER_ALIGNED_ALLOC(0, pMemAlign, size, 0, align);
+
+	// Return handle to allocated memory.
+	return pMemAlign;
+}
+
+
+
 
 void* tf_realloc_internal(void* ptr, size_t size, const char* f, int l, const char* sf)
 {
