@@ -330,3 +330,37 @@ void fsSetPathForResourceDir(IFileSystem* pIO, ResourceMount mount, ResourceDire
 	}
 
 }
+
+/// Opens the file at `filePath` using the mode `mode`, returning a new FileStream that can be used
+/// to read from or modify the file. May return NULL if the file could not be opened.
+bool fsOpenStreamFromPath(const ResourceDirectory resourceDir, const char* fileName,
+	FileMode mode, const char* password, FileStream* pOut)
+{
+	IFileSystem* io = gResourceDirectories[resourceDir].pIO;
+	if (!io)
+	{
+		LOGF(LogLevel::eERROR, "Trying to get an unset resource directory '%d', make sure the resourceDirectory is set on start of the application", resourceDir);
+		return false;
+	}
+
+	return io->Open(io, resourceDir, fileName, mode, password, pOut);
+}
+
+/// Closes and invalidates the file stream.
+bool fsCloseStream(FileStream* pStream)
+{
+	return pStream->pIO->Close(pStream);
+}
+
+/// Reads at most `bufferSizeInBytes` bytes from sourceBuffer and writes them into the file.
+/// Returns the number of bytes written.
+size_t fsWriteToStream(FileStream* pStream, const void* pSourceBuffer, size_t byteCount)
+{
+	return pStream->pIO->Write(pStream, pSourceBuffer, byteCount);
+}
+
+/// Flushes all writes to the file stream to the underlying subsystem.
+bool fsFlushStream(FileStream* pStream)
+{
+	return pStream->pIO->Flush(pStream);
+}

@@ -30,6 +30,11 @@ extern "C"
 #endif
 
 	// Initialization/Exit functions are thread unsafe
+	void initLog(const char* appName, LogLevel level);
+
+	void addLogFile(const char* filename, FileMode file_mode, LogLevel log_level);
+	void addLogCallback(const char* id, uint32_t log_level, void* user_data, LogCallbackFn callback, LogCloseFn close, LogFlushFn flush);
+
 	void writeLog(uint32_t level, const char* filename, int line_number, const char* message, ...);
 
 #ifdef __cplusplus

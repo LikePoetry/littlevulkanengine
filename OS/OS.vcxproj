@@ -15,7 +15,7 @@
     <IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>OS</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -89,26 +89,25 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\mmgr.h" />
-    <ClInclude Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\nommgr.h" />
-    <ClInclude Include="OS\Interfaces\IFileSystem.h" />
-    <ClInclude Include="OS\Interfaces\ILog.h" />
-    <ClInclude Include="OS\Interfaces\IOperatingSystem.h" />
     <ClInclude Include="OS\Core\Config.h" />
     <ClInclude Include="OS\Interfaces\IApp.h" />
+    <ClInclude Include="OS\Interfaces\IFileSystem.h" />
+    <ClInclude Include="OS\Interfaces\ILog.h" />
     <ClInclude Include="OS\Interfaces\IMemory.h" />
+    <ClInclude Include="OS\Interfaces\IOperatingSystem.h" />
     <ClInclude Include="OS\Interfaces\IThread.h" />
     <ClInclude Include="OS\Interfaces\ITime.h" />
     <ClInclude Include="OS\Logging\Log.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\ThirdParty\OpenSource\FluidStudios\MemoryManager\mmgr.cpp" />
     <ClCompile Include="OS\FileSystem\FileSystem.cpp" />
     <ClCompile Include="OS\Logging\Log.c" />
+    <ClCompile Include="OS\MemoryTracking\MemoryTracking.c" />
     <ClCompile Include="OS\Windows\WindowsBase.cpp" />
     <ClCompile Include="OS\Windows\WindowsFileSystem.cpp" />
     <ClCompile Include="OS\Windows\WindowsLog.c" />
     <ClCompile Include="OS\Windows\WindowsThread.c" />
+    <ClCompile Include="OS\Windows\WindowsWindow.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -6,6 +6,8 @@
 #include "../Interfaces/IThread.h"
 #include "../Interfaces/ITime.h"
 #include "../Interfaces/IOperatingSystem.h"
+#include "../Interfaces/IMemory.h"
+
 
 
 #define LOG_CALLBACK_MAX_ID FS_MAX_PATH
@@ -14,22 +16,35 @@
 typedef struct LogCallback
 {
 	char			mID[LOG_CALLBACK_MAX_ID];
-	void*			mUserData;
+	void* mUserData;
 	LogCallbackFn	mCallback;
 	LogCloseFn		mClose;
 	LogFlushFn		mFlush;
 	uint32_t		mLevel;
 } LogCallback;
 
+static void initLogCallback(LogCallback* pLogCallback, const char* id, void* pUserData, LogCallbackFn callback, LogCloseFn close, LogFlushFn flush, uint32_t level)
+{
+	size_t length = strlen(id);
+	length = length < LOG_CALLBACK_MAX_ID ? length : LOG_CALLBACK_MAX_ID - 1;
+	strncpy(pLogCallback->mID, id, length);
+	pLogCallback->mUserData = pUserData;
+	pLogCallback->mCallback = callback;
+	pLogCallback->mClose = close;
+	pLogCallback->mFlush = flush;
+	pLogCallback->mLevel = level;
+}
+
 typedef struct Log
 {
 	LogCallback* pCallbacks;
-		size_t			mCallbacksSize;
-		Mutex			mLogMutex;
-		uint32_t		mLogLevel;
-		uint32_t		mIndentation;
+	size_t			mCallbacksSize;
+	Mutex			mLogMutex;
+	uint32_t		mLogLevel;
+	uint32_t		mIndentation;
 } Log;
 
+static bool gIsLoggerInitialized = false;
 static Log gLogger;
 
 static THREAD_LOCAL char gLogBuffer[LOG_MAX_BUFFER + 2];
@@ -38,6 +53,9 @@ static bool gConsoleLogging = true;
 #define LOG_PREAMBLE_SIZE (56 + MAX_THREAD_NAME_LENGTH + FILENAME_NAME_LENGTH_LOG)
 #define LOG_LEVEL_SIZE 6
 
+static void addInitialLogFile(const char* appName);
+static bool     isLogCallback(const char* id);
+static uint32_t writeLogPreamble(char* buffer, uint32_t buffer_size, const char* file, int line);
 // Returns the part of the path after the last / or \(if any)
 static const char* getFilename(const char* path)
 {
@@ -51,7 +69,110 @@ static const char* getFilename(const char* path)
 	return path;
 }
 
-static uint32_t writeLogPreamble(char* buffer, uint32_t buffer_size, const char* file, int line);
+// Default callback
+static void defaultCallback(void* user_data, const char* message)
+{
+	FileStream* fh = (FileStream*)user_data;
+	ASSERT(fh);
+
+	fsWriteToStream(fh, message, strlen(message));
+	fsFlushStream(fh);
+}
+
+// Close callback
+static void defaultClose(void* user_data)
+{
+	FileStream* fh = (FileStream*)user_data;
+	ASSERT(fh);
+	fsCloseStream(fh);
+	tf_free(fh);
+}
+
+// Flush callback
+static void defaultFlush(void* user_data)
+{
+	FileStream* fh = (FileStream*)user_data;
+	ASSERT(fh);
+
+	fsFlushStream(fh);
+}
+
+
+
+void initLog(const char* appName, LogLevel level)
+{
+	if (!gIsLoggerInitialized)
+	{
+		gLogger.pCallbacks = NULL;
+		gLogger.mCallbacksSize = 0;
+		initMutex(&gLogger.mLogMutex);
+		gLogger.mLogLevel = level;
+		gLogger.mIndentation = 0;
+
+		setMainThread();
+		setCurrentThreadName("MainThread");
+
+		addInitialLogFile(appName);
+	}
+}
+
+void addLogFile(const char* filename, FileMode file_mode, LogLevel log_level)
+{
+	if (filename == NULL)
+		return;
+
+	FileStream fh;
+	memset(&fh, 0, sizeof(FileStream));
+	if (fsOpenStreamFromPath(RD_LOG, filename, file_mode, NULL, &fh))
+	{
+		FileStream* user = (FileStream*)tf_malloc(sizeof(FileStream));
+		*user = fh;
+		// AddCallback will try to acquire mutex
+		char path[FS_MAX_PATH] = { 0 };
+		fsAppendPathComponent(fsGetResourceDirectory(RD_LOG), filename, path);
+		addLogCallback(path, log_level, user, defaultCallback, defaultClose, defaultFlush);
+
+		acquireMutex(&gLogger.mLogMutex);
+		{
+			// Header
+			static const char header[] = "date       time     "
+										"[thread name/id ]"
+										"                   file:line  "
+										"  v |\n";
+
+			fsWriteToStream(&fh, header, sizeof(header) - 1);
+			fsFlushStream(&fh);
+		}
+		releaseMutex(&gLogger.mLogMutex);
+
+		writeLog(eINFO, __FILE__, __LINE__, "Opened log file %s", filename);
+	}
+	else
+	{
+		writeLog(eERROR, __FILE__, __LINE__, "Failed to create log file %s", filename);    // will try to acquire mutex
+	}
+}
+
+void addLogCallback(const char* id, uint32_t log_level, void* user_data, LogCallbackFn callback, LogCloseFn close, LogFlushFn flush)
+{
+	acquireMutex(&gLogger.mLogMutex);
+	{
+		if (!isLogCallback(id))
+		{
+			LogCallback logCallback;
+			memset(&logCallback, 0, sizeof(LogCallback));
+			initLogCallback(&logCallback, id, user_data, callback, clock, flush, log_level);
+			LogCallback* pNewArray = (LogCallback*)tf_realloc(gLogger.pCallbacks, sizeof(LogCallback) * (gLogger.mCallbacksSize + 1));
+			ASSERT(pNewArray != NULL);
+			gLogger.pCallbacks = pNewArray;
+			gLogger.pCallbacks[gLogger.mCallbacksSize] = logCallback;
+			gLogger.mCallbacksSize = gLogger.mCallbacksSize + 1;
+		}
+		else
+			close(user_data);
+	}
+	releaseMutex(&gLogger.mLogMutex);
+}
 
 void writeLog(uint32_t level, const char* filename, int line_number, const char* message, ...)
 {
@@ -121,6 +242,26 @@ void writeLog(uint32_t level, const char* filename, int line_number, const char*
 	}
 }
 
+static void addInitialLogFile(const char* appName)
+{
+	// Add new file with executable name
+
+	const char* extension = ".log";
+	const size_t extensionLength = strlen(extension);
+
+	char exeFileName[FS_MAX_PATH] = { 0 };
+	strcpy(exeFileName, appName);
+
+	// Minimum length check
+	if (exeFileName[0] == 0 || exeFileName[1] == 0)
+	{
+		strncpy(exeFileName, "Log", 3);
+	}
+	strncat(exeFileName, extension, extensionLength);
+
+	addLogFile(exeFileName, FM_WRITE_BINARY_ALLOW_READ, eALL);
+}
+
 static uint32_t writeLogPreamble(char* buffer, uint32_t buffer_size, const char* file, int line)
 {
 	uint32_t pos = 0;
@@ -153,4 +294,17 @@ static uint32_t writeLogPreamble(char* buffer, uint32_t buffer_size, const char*
 			FILENAME_NAME_LENGTH_LOG, file, line);
 	}
 	return pos;
+}
+
+static bool isLogCallback(const char* id)
+{
+	for (const LogCallback* pCallback = gLogger.pCallbacks;
+		pCallback != gLogger.pCallbacks + gLogger.mCallbacksSize;
+		++pCallback)
+	{
+		if (strcmp(pCallback->mID, id) == 0)
+			return true;
+	}
+
+	return false;
 }

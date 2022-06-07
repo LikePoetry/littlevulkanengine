@@ -7,10 +7,29 @@
 
 #include <process.h>		//	_beginthreadex
 
+bool initMutex(Mutex* mutex)
+{
+	return InitializeCriticalSectionAndSpinCount((CRITICAL_SECTION*)&mutex->mHandle, (DWORD)MUTEX_DEFAULT_SPIN_COUNT);
+}
+
+void destroyMutex(Mutex* mutex)
+{
+	CRITICAL_SECTION* cs = (CRITICAL_SECTION*)&mutex->mHandle;
+	DeleteCriticalSection(cs);
+	memset(&mutex->mHandle, 0, sizeof(mutex->mHandle));
+}
 
 void acquireMutex(Mutex* mutex) { EnterCriticalSection((CRITICAL_SECTION*)&mutex->mHandle); }
 
 void releaseMutex(Mutex* mutex) { LeaveCriticalSection((CRITICAL_SECTION*)&mutex->mHandle); }
+
+
+
+static ThreadID mainThreadID = 0;
+
+void setMainThread() { mainThreadID = getCurrentThreadID(); }
+
+ThreadID getCurrentThreadID() { return GetCurrentThreadId(); /* Windows built-in function*/ }
 
 char* thread_name()
 {
@@ -26,3 +45,5 @@ void getCurrentThreadName(char* buffer,int size)
 	else
 		buffer[0] = 0;
 }
+
+void setCurrentThreadName(const char* name) { strcpy_s(thread_name(), MAX_THREAD_NAME_LENGTH + 1, name); }

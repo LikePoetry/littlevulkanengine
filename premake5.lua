@@ -24,10 +24,9 @@ project "OS"
 	{
 		"%{prj.name}/OS/*/**.h",
 		"%{prj.name}/OS/*/**.cpp",
+		"%{prj.name}/OS/*/**.c",
 		"%{prj.name}/OS/**.h",
-		"%{prj.name}/OS/**.cpp",
-		"ThirdParty/OpenSource/FluidStudios/MemoryManager/**.cpp",
-		"ThirdParty/OpenSource/FluidStudios/MemoryManager/**.h"
+		"%{prj.name}/OS/**.cpp"
 	}
 	
 	defines
