@@ -90,6 +90,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="OS\Core\Config.h" />
+    <ClInclude Include="OS\Core\CPUConfig.h" />
     <ClInclude Include="OS\Interfaces\IApp.h" />
     <ClInclude Include="OS\Interfaces\IFileSystem.h" />
     <ClInclude Include="OS\Interfaces\ILog.h" />
@@ -97,10 +98,17 @@
     <ClInclude Include="OS\Interfaces\IOperatingSystem.h" />
     <ClInclude Include="OS\Interfaces\IThread.h" />
     <ClInclude Include="OS\Interfaces\ITime.h" />
+    <ClInclude Include="OS\Interfaces\IUI.h" />
     <ClInclude Include="OS\Logging\Log.h" />
+    <ClInclude Include="OS\Math\MathTypes.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
+    <ClCompile Include="OS\Core\CPUConfig.cpp" />
     <ClCompile Include="OS\FileSystem\FileSystem.cpp" />
+    <ClCompile Include="OS\Fonts\FontSystem.cpp" />
     <ClCompile Include="OS\Logging\Log.c" />
     <ClCompile Include="OS\MemoryTracking\MemoryTracking.c" />
     <ClCompile Include="OS\Windows\WindowsBase.cpp" />

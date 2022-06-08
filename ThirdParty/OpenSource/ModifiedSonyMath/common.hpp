@@ -8,7 +8,7 @@
 #pragma once
 
 #define IMEMORY_FROM_HEADER
-#include "../../../OS/Interfaces/IMemory.h"
+#include "../OS/Interfaces/IMemory.h"
 
 namespace Vectormath
 {
@@ -210,7 +210,7 @@ inline void decompose(const Matrix4& mat, Vector3* translationOut, Quat* rotatio
 } // namespace Vectormath
 
 //========================================= #TheForgeMathExtensionsBegin ================================================
-#include "../../../OS/Core/Config.h"
+#include "../OS/Core/Config.h"
 
 #include <math.h>
 #include <stdint.h>

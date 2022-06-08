@@ -19,6 +19,15 @@
     <Filter Include="Windows">
       <UniqueIdentifier>{5032B729-BC11-36C5-C529-C19B31889C26}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Dependencies">
+      <UniqueIdentifier>{87b06638-51cf-49e9-aab1-98e1f83b32a8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Dependencies\EASTL">
+      <UniqueIdentifier>{850de7ce-c7fa-4de6-9df0-d0f68934a20b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Dependencies\cpu_features">
+      <UniqueIdentifier>{9534b053-2c50-422d-aa3a-050d852d2145}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="OS\Core\Config.h">
@@ -45,9 +54,16 @@
     <ClInclude Include="OS\Interfaces\ITime.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
+    <ClInclude Include="OS\Interfaces\IUI.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
     <ClInclude Include="OS\Logging\Log.h">
       <Filter>Logging</Filter>
     </ClInclude>
+    <ClInclude Include="OS\Core\CPUConfig.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="OS\Math\MathTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="OS\FileSystem\FileSystem.cpp">
@@ -71,6 +87,19 @@
     <ClCompile Include="OS\Windows\WindowsThread.c">
       <Filter>Windows</Filter>
     </ClCompile>
-    <ClCompile Include="OS\Windows\WindowsWindow.cpp" />
+    <ClCompile Include="OS\Windows\WindowsWindow.cpp">
+      <Filter>Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="OS\Core\CPUConfig.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp">
+      <Filter>Dependencies\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp">
+      <Filter>Dependencies\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c">
+      <Filter>Dependencies\cpu_features</Filter>
+    </ClCompile>
+    <ClCompile Include="OS\Fonts\FontSystem.cpp" />
   </ItemGroup>
 </Project>

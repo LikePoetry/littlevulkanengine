@@ -59,7 +59,7 @@ static uint32_t writeLogPreamble(char* buffer, uint32_t buffer_size, const char*
 // Returns the part of the path after the last / or \(if any)
 static const char* getFilename(const char* path)
 {
-	for (const char* ptr = path; &ptr != '\0'; ++ptr)
+	for (const char* ptr = path; *ptr != '\0'; ++ptr)
 	{
 		if (*ptr == '/' || *ptr == '\\')
 		{

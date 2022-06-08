@@ -5,10 +5,13 @@
 
 #include "../Interfaces/IOperatingSystem.h"
 
+#include "../Math/MathTypes.h"
+
 #include "../../ThirdParty/OpenSource/EASTL/vector.h"
 
 #pragma comment(lib, "WinMM.lib")
 #include <windowsx.h>
+
 
 #define elementsOf(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -108,6 +111,19 @@ static DWORD PrepareStyleMask(WindowDesc* winDesc)
 	}
 
 	return windowStyle;
+}
+
+static void OffsetRectToDisplay(WindowDesc* winDesc, LPRECT rect)
+{
+	int32_t displayOffsetX = winDesc->fullscreenRect.left;
+	int32_t displayOffsetY = winDesc->fullscreenRect.top;
+
+	// Adjust for display coordinates in absolute virtual
+	// display space.
+	rect->left += (LONG)displayOffsetX;
+	rect->top += (LONG)displayOffsetY;
+	rect->right += (LONG)displayOffsetX;
+	rect->bottom += (LONG)displayOffsetY;
 }
 
 void onResize(WindowDesc* wnd, int32_t newSizeX, int32_t newSizeY)
@@ -673,4 +689,208 @@ void initWindowClass()
 		}
 	}
 	collectMonitorInfo();
+}
+
+//------------------------------------------------------------------------
+// WINDOW HANDLING INTERFACE FUNCTIONS
+//------------------------------------------------------------------------
+
+void openWindow(const char* app_name, WindowDesc* winDesc)
+{
+	UpdateWindowDescFullScreenRect(winDesc);
+
+	// Defer borderless window setting
+	bool borderless = winDesc->borderlessWindow;
+	winDesc->borderlessWindow = false;
+
+	// Adjust windowed rect for windowed mode rendering.
+	RECT  rect = { (LONG)winDesc->clientRect.left, (LONG)winDesc->clientRect.top,
+				  (LONG)winDesc->clientRect.left + (LONG)winDesc->clientRect.right,
+				  (LONG)winDesc->clientRect.top + (LONG)winDesc->clientRect.bottom };
+	DWORD windowStyle = PrepareStyleMask(winDesc);
+
+	AdjustWindowRect(&rect, windowStyle, FALSE);
+
+	WCHAR  app[FS_MAX_PATH] = {};
+	size_t charConverted = 0;
+	mbstowcs_s(&charConverted, app, app_name, FS_MAX_PATH);
+
+	int windowY = rect.top;
+	int windowX = rect.left;
+
+	if (!winDesc->overrideDefaultPosition)
+	{
+		windowX = windowY = CW_USEDEFAULT;
+	}
+
+	// Defer fullscreen. We always create in windowed, and
+	// switch to fullscreen after creation.
+	bool fullscreen = winDesc->fullScreen;
+	winDesc->fullScreen = false;
+
+	HWND hwnd = CreateWindowW(
+		FORGE_WINDOW_CLASS, app, windowStyle, windowX, windowY, rect.right - windowX, rect.bottom - windowY, NULL, NULL,
+		(HINSTANCE)GetModuleHandle(NULL), 0);
+
+	if (hwnd != NULL)
+	{
+		winDesc->handle.window = hwnd;
+
+		GetClientRect(hwnd, &rect);
+		winDesc->clientRect = { (int)rect.left, (int)rect.top, (int)rect.right, (int)rect.bottom };
+
+		GetWindowRect(hwnd, &rect);
+		winDesc->windowedRect = { (int)rect.left, (int)rect.top, (int)rect.right, (int)rect.bottom };
+
+		if (!winDesc->hide)
+		{
+			if (winDesc->maximized)
+			{
+				ShowWindow(hwnd, SW_MAXIMIZE);
+			}
+			else if (winDesc->minimized)
+			{
+				ShowWindow(hwnd, SW_MINIMIZE);
+			}
+
+			if (borderless)
+			{
+				toggleBorderless(winDesc, getRectWidth(&winDesc->clientRect), getRectHeight(&winDesc->clientRect));
+			}
+
+			if (winDesc->centered)
+			{
+				centerWindow(winDesc);
+			}
+
+			if (fullscreen)
+			{
+				toggleFullscreen(winDesc);
+			}
+		}
+
+		LOGF(LogLevel::eINFO, "Created window app %s", app_name);
+	}
+	else
+	{
+		LOGF(LogLevel::eERROR, "Failed to create window app %s", app_name);
+	}
+
+	setMousePositionRelative(winDesc, getRectWidth(&winDesc->windowedRect) >> 1, getRectHeight(&winDesc->windowedRect) >> 1);
+}
+
+void setWindowRect(WindowDesc* winDesc, const RectDesc* rect)
+{
+	HWND hwnd = (HWND)winDesc->handle.window;
+
+	// Adjust position to prevent the window from dancing around
+	int clientWidthStart = (getRectWidth(&winDesc->windowedRect) - getRectWidth(&winDesc->clientRect)) >> 1;
+	int clientHeightStart = getRectHeight(&winDesc->windowedRect) - getRectHeight(&winDesc->clientRect) - clientWidthStart;
+
+	winDesc->clientRect = *rect;
+
+	DWORD windowStyle = PrepareStyleMask(winDesc);
+	SetWindowLong(hwnd, GWL_STYLE, windowStyle);
+
+	if (winDesc->centered)
+	{
+		centerWindow(winDesc);
+	}
+	else
+	{
+		RECT clientRectStyleAdjusted = { (LONG)(rect->left + clientWidthStart), (LONG)(rect->top + clientHeightStart),
+										 (LONG)(clientRectStyleAdjusted.left + getRectWidth(rect)),
+										 (LONG)(clientRectStyleAdjusted.top + getRectHeight(rect)) };
+
+		AdjustWindowRect(&clientRectStyleAdjusted, windowStyle, FALSE);
+
+		winDesc->windowedRect = { (int32_t)clientRectStyleAdjusted.left, (int32_t)clientRectStyleAdjusted.top,
+								  (int32_t)clientRectStyleAdjusted.right, (int32_t)clientRectStyleAdjusted.bottom };
+
+		SetWindowPos(
+			hwnd, HWND_NOTOPMOST, clientRectStyleAdjusted.left, clientRectStyleAdjusted.top,
+			clientRectStyleAdjusted.right - clientRectStyleAdjusted.left, clientRectStyleAdjusted.bottom - clientRectStyleAdjusted.top,
+			SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+	}
+}
+
+void setWindowSize(WindowDesc* winDesc, unsigned width, unsigned height)
+{
+	RectDesc newClientRect = { newClientRect.left = winDesc->windowedRect.left, newClientRect.top = winDesc->windowedRect.top,
+							   newClientRect.right = newClientRect.left + (int32_t)width,
+							   newClientRect.bottom = newClientRect.top + (int32_t)height };
+
+	setWindowRect(winDesc, &newClientRect);
+}
+
+void toggleBorderless(WindowDesc* winDesc, unsigned width, unsigned height)
+{
+	if (!winDesc->fullScreen)
+	{
+		winDesc->borderlessWindow = !winDesc->borderlessWindow;
+
+		bool centered = winDesc->centered;
+		winDesc->centered = false;
+		setWindowSize(winDesc, width, height);
+		winDesc->centered = centered;
+	}
+}
+
+void toggleFullscreen(WindowDesc* winDesc)
+{
+	winDesc->fullScreen = !winDesc->fullScreen;
+	adjustWindow(winDesc);
+}
+
+void centerWindow(WindowDesc* winDesc)
+{
+	UpdateWindowDescFullScreenRect(winDesc);
+
+	uint32_t fsHalfWidth = getRectWidth(&winDesc->fullscreenRect) >> 1;
+	uint32_t fsHalfHeight = getRectHeight(&winDesc->fullscreenRect) >> 1;
+	uint32_t windowWidth = getRectWidth(&winDesc->clientRect);
+	uint32_t windowHeight = getRectHeight(&winDesc->clientRect);
+	uint32_t windowHalfWidth = windowWidth >> 1;
+	uint32_t windowHalfHeight = windowHeight >> 1;
+
+	uint32_t X = fsHalfWidth - windowHalfWidth;
+	uint32_t Y = fsHalfHeight - windowHalfHeight;
+
+	RECT rect = { (LONG)(X), (LONG)(Y), (LONG)(X + windowWidth), (LONG)(Y + windowHeight) };
+
+	DWORD windowStyle = PrepareStyleMask(winDesc);
+
+	AdjustWindowRect(&rect, windowStyle, FALSE);
+
+	OffsetRectToDisplay(winDesc, &rect);
+
+	SetWindowPos(
+		(HWND)winDesc->handle.window, HWND_NOTOPMOST, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+		SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+
+	winDesc->windowedRect = { (int32_t)rect.left, (int32_t)rect.top, (int32_t)rect.right, (int32_t)rect.bottom };
+}
+
+
+void setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y)
+{
+	POINT point = { (LONG)x, (LONG)y };
+	ClientToScreen((HWND)winDesc->handle.window, &point);
+
+	SetCursorPos(point.x, point.y);
+}
+
+//------------------------------------------------------------------------
+// MONITOR AND RESOLUTION HANDLING INTERFACE FUNCTIONS
+//------------------------------------------------------------------------
+
+void getRecommendedResolution(RectDesc* rect)
+{
+	*rect = { 0, 0, min(1920, (int)(GetSystemMetrics(SM_CXSCREEN) * 0.75)), min(1080, (int)(GetSystemMetrics(SM_CYSCREEN) * 0.75)) };
+}
+
+MonitorDesc* getMonitor(uint32_t index)
+{
+	ASSERT(gMonitorCount > index);
+	return &gMonitors[index];
 }

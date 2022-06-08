@@ -95,6 +95,21 @@ typedef struct
 inline int getRectWidth(const RectDesc* rect) { return rect->right - rect->left; }
 inline int getRectHeight(const RectDesc* rect) { return rect->bottom - rect->top; }
 
+// Window handling
+void openWindow(const char* app_name, WindowDesc* winDesc);
+void setWindowRect(WindowDesc* winDesc, const RectDesc* rect);
+void setWindowSize(WindowDesc* winDesc, unsigned width, unsigned height);
+void toggleBorderless(WindowDesc* winDesc, unsigned width, unsigned height);
+void toggleFullscreen(WindowDesc* winDesc);
+void centerWindow(WindowDesc* winDesc);
+
+// Mouse and cursor handling
+void  setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y);
+
+void getRecommendedResolution(RectDesc* rect);
+MonitorDesc* getMonitor(uint32_t index);
+
+
 //------------------------------------------------------------------------
 // PLATFORM LAYER
 //------------------------------------------------------------------------
