@@ -884,6 +884,22 @@ void setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y)
 // MONITOR AND RESOLUTION HANDLING INTERFACE FUNCTIONS
 //------------------------------------------------------------------------
 
+void getDpiScale(float array[2])
+{
+	HDC hdc = ::GetDC(NULL);
+	array[0] = 0.f;
+	array[1] = 0.f;
+	const float dpi = 96.0f;
+	if (hdc)
+	{
+
+	}
+	else
+	{
+
+	}
+}
+
 void getRecommendedResolution(RectDesc* rect)
 {
 	*rect = { 0, 0, min(1920, (int)(GetSystemMetrics(SM_CXSCREEN) * 0.75)), min(1080, (int)(GetSystemMetrics(SM_CYSCREEN) * 0.75)) };

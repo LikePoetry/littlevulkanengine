@@ -1,5 +1,10 @@
 #pragma once
 
+#include "../Core/Config.h"
+
+#include <new>
+#include "../../ThirdParty/OpenSource/EASTL/utility.h"
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -17,6 +22,12 @@ extern "C"
 #ifdef __cplusplus
 }    // extern "C"
 #endif
+
+template <typename T, typename... Args>
+static T* tf_placement_new(void* ptr, Args&&... args)
+{
+	return new (ptr) T(eastl::forward<Args>(args)...);
+}
 
 #define tf_malloc(size) tf_malloc_internal(size, __FILE__, __LINE__, __FUNCTION__)
 #define tf_memalign(align, size) tf_memalign_internal(align, size, __FILE__, __LINE__, __FUNCTION__)

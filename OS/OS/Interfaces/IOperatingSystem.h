@@ -106,6 +106,9 @@ void centerWindow(WindowDesc* winDesc);
 // Mouse and cursor handling
 void  setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y);
 
+// pArray pointer to array with at least 2 elements(x,y)
+void getDpiScale(float array[2]);
+
 void getRecommendedResolution(RectDesc* rect);
 MonitorDesc* getMonitor(uint32_t index);
 
