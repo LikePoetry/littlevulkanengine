@@ -46,6 +46,8 @@ public:
 	uint32_t mHeight;
 	float2   mScaleBias;
 
+	Cmd* pCmd;
+
 	float2         mDpiScale;
 	float          mDpiScaleMin;
 };
@@ -114,7 +116,11 @@ void _Impl_FontStash::fonsImplementationRenderText(
 	if (!ctx->pCurrentTexture)
 		return;
 
-	//Cmd* pCmd = ctx->pCmd;
+	Cmd* pCmd = ctx->pCmd;
+	if(ctx->mUpdateTexture)
+	{
+		/*waitQueueIdle(pCmd->p)*/
+	}
 }
 
 void _Impl_FontStash::fonsImplementationRemoveTexture(void* userPtr) { UNREF_PARAM(userPtr); }
