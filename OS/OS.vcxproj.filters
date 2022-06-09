@@ -28,6 +28,12 @@
     <Filter Include="Dependencies\cpu_features">
       <UniqueIdentifier>{9534b053-2c50-422d-aa3a-050d852d2145}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Fonts">
+      <UniqueIdentifier>{9fff71c9-703a-486a-bab8-c94f7dc1c18b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Math">
+      <UniqueIdentifier>{e19205bf-bbcb-4130-b29c-ee0a49bb0a83}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="OS\Core\Config.h">
@@ -63,7 +69,12 @@
     <ClInclude Include="OS\Core\CPUConfig.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="OS\Math\MathTypes.h" />
+    <ClInclude Include="OS\Math\MathTypes.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="OS\Interfaces\IFont.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="OS\FileSystem\FileSystem.cpp">
@@ -90,7 +101,6 @@
     <ClCompile Include="OS\Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
-    <ClCompile Include="OS\Core\CPUConfig.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp">
       <Filter>Dependencies\EASTL</Filter>
     </ClCompile>
@@ -100,6 +110,14 @@
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c">
       <Filter>Dependencies\cpu_features</Filter>
     </ClCompile>
-    <ClCompile Include="OS\Fonts\FontSystem.cpp" />
+    <ClCompile Include="OS\Core\CPUConfig.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="OS\Fonts\FontSystem.cpp">
+      <Filter>Fonts</Filter>
+    </ClCompile>
+    <ClCompile Include="OS\Fonts\stbtt.cpp">
+      <Filter>Fonts</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

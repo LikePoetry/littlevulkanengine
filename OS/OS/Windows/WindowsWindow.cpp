@@ -892,11 +892,24 @@ void getDpiScale(float array[2])
 	const float dpi = 96.0f;
 	if (hdc)
 	{
-
+		array[0] = (UINT)(::GetDeviceCaps(hdc, LOGPIXELSX)) / dpi;
+		array[1] = static_cast<UINT>(::GetDeviceCaps(hdc, LOGPIXELSY)) / dpi;
+		::ReleaseDC(NULL, hdc);
 	}
 	else
 	{
+		typedef UINT(*GetDpiForSystemFn)();
+		static const GetDpiForSystemFn getDpiForSystem =
+			(GetDpiForSystemFn)GetProcAddress(GetModuleHandle(TEXT("User32.dll")), "GetDpiForSystem");
 
+		float dpiScale;
+		if (getDpiForSystem)
+			dpiScale = getDpiForSystem() / 96.0f;
+		else
+			dpiScale = 1.0f;
+
+		array[0] = dpiScale;
+		array[1] = dpiScale;
 	}
 }
 
