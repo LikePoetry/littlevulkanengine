@@ -56,7 +56,7 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>OS;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
@@ -72,7 +72,7 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>OS;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -89,11 +89,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="OS\Interfaces\IFont.h" />
-    <ClInclude Include="OS\Core\Config.h" />
     <ClInclude Include="OS\Core\CPUConfig.h" />
+    <ClInclude Include="OS\Core\Config.h" />
     <ClInclude Include="OS\Interfaces\IApp.h" />
     <ClInclude Include="OS\Interfaces\IFileSystem.h" />
+    <ClInclude Include="OS\Interfaces\IFont.h" />
     <ClInclude Include="OS\Interfaces\ILog.h" />
     <ClInclude Include="OS\Interfaces\IMemory.h" />
     <ClInclude Include="OS\Interfaces\IOperatingSystem.h" />
@@ -104,12 +104,13 @@
     <ClInclude Include="OS\Math\MathTypes.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
     <ClCompile Include="OS\Core\CPUConfig.cpp" />
     <ClCompile Include="OS\FileSystem\FileSystem.cpp" />
     <ClCompile Include="OS\Fonts\FontSystem.cpp" />
+    <ClCompile Include="OS\Fonts\stbtt.cpp" />
     <ClCompile Include="OS\Logging\Log.c" />
     <ClCompile Include="OS\MemoryTracking\MemoryTracking.c" />
     <ClCompile Include="OS\Windows\WindowsBase.cpp" />
@@ -117,7 +118,6 @@
     <ClCompile Include="OS\Windows\WindowsLog.c" />
     <ClCompile Include="OS\Windows\WindowsThread.c" />
     <ClCompile Include="OS\Windows\WindowsWindow.cpp" />
-    <ClCompile Include="OS\Fonts\stbtt.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

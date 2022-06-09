@@ -26,7 +26,10 @@ project "OS"
 		"%{prj.name}/OS/*/**.cpp",
 		"%{prj.name}/OS/*/**.c",
 		"%{prj.name}/OS/**.h",
-		"%{prj.name}/OS/**.cpp"
+		"%{prj.name}/OS/**.cpp",
+		"ThirdParty/OpenSource/EASTL/allocator_forge.cpp",
+		"ThirdParty/OpenSource/EASTL/assert.cpp",
+		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c"
 	}
 	
 	defines

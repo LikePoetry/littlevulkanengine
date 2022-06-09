@@ -30,14 +30,14 @@ public:
 
 	static int  fonsImplementationGenerateTexture(void* userPtr, int width, int height);
 	static void fonsImplementationModifyTexture(void* userPtr, int* rect, const unsigned char* data);
-	static void
-		fonsImplementationRenderText(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts);
+	static void fonsImplementationRenderText(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts);
 	static void fonsImplementationRemoveTexture(void* userPtr);
 
 	FONScontext* pContext;
 
 	const uint8_t* pPixels;
-	bool           mUpdateTexture;
+	//Texture* pCurrentTexture;
+	bool     mUpdateTexture;
 
 	uint32_t mWidth;
 	uint32_t mHeight;
@@ -76,7 +76,6 @@ bool platformInitFontSystem()
 	m_fFontMaxSize = min(mWidth, mHeight) / 10.0f;    // see fontstash.h, line 1271, for fontSize calculation
 
 	return success;
-	return true;
 #else
 	return true;
 #endif // ENABLE_FORGE_FONTS
@@ -108,7 +107,9 @@ void _Impl_FontStash::fonsImplementationModifyTexture(void* userPtr, int* rect, 
 void _Impl_FontStash::fonsImplementationRenderText(
 	void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts)
 {
-	
+	_Impl_FontStash* ctx = (_Impl_FontStash*)userPtr;
+	//if (!ctx->pCurrentTexture)
+	//	return;
 }
 
 void _Impl_FontStash::fonsImplementationRemoveTexture(void* userPtr) { UNREF_PARAM(userPtr); }
