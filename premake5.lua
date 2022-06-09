@@ -34,7 +34,7 @@ project "Renderer"
 	
 		includedirs
 		{
-			"%{prj.name}/",
+			"Renderer",
 			"OS",
 			"$(VULKAN_SDK)/Include"
 		}
@@ -72,8 +72,6 @@ project "OS"
 		"%{prj.name}/*/**.h",
 		"%{prj.name}/*/**.cpp",
 		"%{prj.name}/*/**.c",
-		"%{prj.name}/**.h",
-		"%{prj.name}/**.cpp",
 		"ThirdParty/OpenSource/EASTL/allocator_forge.cpp",
 		"ThirdParty/OpenSource/EASTL/assert.cpp",
 		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c"
@@ -87,7 +85,7 @@ project "OS"
 
 	includedirs
 	{
-		"%{prj.name}/",
+		"OS",
 		"Renderer",
 		"$(VULKAN_SDK)/Include"
 	}
