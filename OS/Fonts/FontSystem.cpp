@@ -6,6 +6,9 @@
 #define FONTSTASH_IMPLEMENTATION
 #include "../../ThirdParty/OpenSource/Fontstash/src/fontstash.h"
 
+
+#include "../../Renderer/Include/IRenderer.h"
+
 class _Impl_FontStash
 {
 public:
@@ -36,7 +39,7 @@ public:
 	FONScontext* pContext;
 
 	const uint8_t* pPixels;
-	//Texture* pCurrentTexture;
+	Texture* pCurrentTexture;
 	bool     mUpdateTexture;
 
 	uint32_t mWidth;
@@ -108,8 +111,10 @@ void _Impl_FontStash::fonsImplementationRenderText(
 	void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts)
 {
 	_Impl_FontStash* ctx = (_Impl_FontStash*)userPtr;
-	//if (!ctx->pCurrentTexture)
-	//	return;
+	if (!ctx->pCurrentTexture)
+		return;
+
+	//Cmd* pCmd = ctx->pCmd;
 }
 
 void _Impl_FontStash::fonsImplementationRemoveTexture(void* userPtr) { UNREF_PARAM(userPtr); }

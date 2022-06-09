@@ -57,7 +57,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>OS;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;..\Renderer;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -67,13 +67,16 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <Lib>
+      <AdditionalLibraryDirectories>%VULKAN_SDK%\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>OS;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;..\Renderer;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -87,37 +90,40 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
+    <Lib>
+      <AdditionalLibraryDirectories>%VULKAN_SDK%\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="OS\Core\CPUConfig.h" />
-    <ClInclude Include="OS\Core\Config.h" />
-    <ClInclude Include="OS\Interfaces\IApp.h" />
-    <ClInclude Include="OS\Interfaces\IFileSystem.h" />
-    <ClInclude Include="OS\Interfaces\IFont.h" />
-    <ClInclude Include="OS\Interfaces\ILog.h" />
-    <ClInclude Include="OS\Interfaces\IMemory.h" />
-    <ClInclude Include="OS\Interfaces\IOperatingSystem.h" />
-    <ClInclude Include="OS\Interfaces\IThread.h" />
-    <ClInclude Include="OS\Interfaces\ITime.h" />
-    <ClInclude Include="OS\Interfaces\IUI.h" />
-    <ClInclude Include="OS\Logging\Log.h" />
-    <ClInclude Include="OS\Math\MathTypes.h" />
+    <ClInclude Include="Core\CPUConfig.h" />
+    <ClInclude Include="Core\Config.h" />
+    <ClInclude Include="Interfaces\IApp.h" />
+    <ClInclude Include="Interfaces\IFileSystem.h" />
+    <ClInclude Include="Interfaces\IFont.h" />
+    <ClInclude Include="Interfaces\ILog.h" />
+    <ClInclude Include="Interfaces\IMemory.h" />
+    <ClInclude Include="Interfaces\IOperatingSystem.h" />
+    <ClInclude Include="Interfaces\IThread.h" />
+    <ClInclude Include="Interfaces\ITime.h" />
+    <ClInclude Include="Interfaces\IUI.h" />
+    <ClInclude Include="Logging\Log.h" />
+    <ClInclude Include="Math\MathTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
-    <ClCompile Include="OS\Core\CPUConfig.cpp" />
-    <ClCompile Include="OS\FileSystem\FileSystem.cpp" />
-    <ClCompile Include="OS\Fonts\FontSystem.cpp" />
-    <ClCompile Include="OS\Fonts\stbtt.cpp" />
-    <ClCompile Include="OS\Logging\Log.c" />
-    <ClCompile Include="OS\MemoryTracking\MemoryTracking.c" />
-    <ClCompile Include="OS\Windows\WindowsBase.cpp" />
-    <ClCompile Include="OS\Windows\WindowsFileSystem.cpp" />
-    <ClCompile Include="OS\Windows\WindowsLog.c" />
-    <ClCompile Include="OS\Windows\WindowsThread.c" />
-    <ClCompile Include="OS\Windows\WindowsWindow.cpp" />
+    <ClCompile Include="Core\CPUConfig.cpp" />
+    <ClCompile Include="FileSystem\FileSystem.cpp" />
+    <ClCompile Include="Fonts\FontSystem.cpp" />
+    <ClCompile Include="Fonts\stbtt.cpp" />
+    <ClCompile Include="Logging\Log.c" />
+    <ClCompile Include="MemoryTracking\MemoryTracking.c" />
+    <ClCompile Include="Windows\WindowsBase.cpp" />
+    <ClCompile Include="Windows\WindowsFileSystem.cpp" />
+    <ClCompile Include="Windows\WindowsLog.c" />
+    <ClCompile Include="Windows\WindowsThread.c" />
+    <ClCompile Include="Windows\WindowsWindow.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

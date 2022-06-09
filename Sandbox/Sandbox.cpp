@@ -1,4 +1,4 @@
-#include "../OS/OS/Interfaces/IApp.h"
+#include "../OS/Interfaces/IApp.h"
 
 class App :public IApp 
 {

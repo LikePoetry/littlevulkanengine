@@ -10,52 +10,6 @@ workspace "TheForge"
 
 outputdir="%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
-project "OS"
-	location "OS"
-	kind "StaticLib"
-	language "C++"
-	cppdialect "C++17"
-	staticruntime "on"
-
-	targetdir("bin/" ..outputdir.. "/%{prj.name}")
-	objdir("bin-int/" ..outputdir.. "/%{prj.name}")
-
-	files
-	{
-		"%{prj.name}/OS/*/**.h",
-		"%{prj.name}/OS/*/**.cpp",
-		"%{prj.name}/OS/*/**.c",
-		"%{prj.name}/OS/**.h",
-		"%{prj.name}/OS/**.cpp",
-		"ThirdParty/OpenSource/EASTL/allocator_forge.cpp",
-		"ThirdParty/OpenSource/EASTL/assert.cpp",
-		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c"
-	}
-	
-	defines
-	{
-		"_CRT_SECURE_NO_WARNINGS",
-		"_WINDOWS"
-	}
-
-	includedirs
-	{
-		"%{prj.name}/OS/"
-	}
-
-	filter "system:windows"
-		systemversion "latest"
-
-	filter "configurations:Debug"
-		defines ""
-		runtime "Debug"
-		symbols "on"
-
-	filter "configurations:Release"
-		defines ""
-		runtime "Release"
-		optimize "on"
-
 project "Renderer"
 		location "Renderer"
 		kind "StaticLib"
@@ -68,8 +22,8 @@ project "Renderer"
 	
 		files
 		{
-			"%{prj.name}/Renderer/*/**.h",
-			"%{prj.name}/Renderer/*/**.cpp",
+			"%{prj.name}/*/**.h",
+			"%{prj.name}/*/**.cpp",
 		}
 		
 		defines
@@ -80,7 +34,14 @@ project "Renderer"
 	
 		includedirs
 		{
-			"%{prj.name}/Renderer/"
+			"%{prj.name}/",
+			"OS",
+			"$(VULKAN_SDK)/Include"
+		}
+
+		libdirs 
+		{ 
+			"%VULKAN_SDK%/lib" 
 		}
 	
 		filter "system:windows"
@@ -95,6 +56,63 @@ project "Renderer"
 			defines ""
 			runtime "Release"
 			optimize "on"
+
+project "OS"
+	location "OS"
+	kind "StaticLib"
+	language "C++"
+	cppdialect "C++17"
+	staticruntime "on"
+
+	targetdir("bin/" ..outputdir.. "/%{prj.name}")
+	objdir("bin-int/" ..outputdir.. "/%{prj.name}")
+
+	files
+	{
+		"%{prj.name}/*/**.h",
+		"%{prj.name}/*/**.cpp",
+		"%{prj.name}/*/**.c",
+		"%{prj.name}/**.h",
+		"%{prj.name}/**.cpp",
+		"ThirdParty/OpenSource/EASTL/allocator_forge.cpp",
+		"ThirdParty/OpenSource/EASTL/assert.cpp",
+		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c"
+	}
+	
+	defines
+	{
+		"_CRT_SECURE_NO_WARNINGS",
+		"_WINDOWS"
+	}
+
+	includedirs
+	{
+		"%{prj.name}/",
+		"Renderer",
+		"$(VULKAN_SDK)/Include"
+	}
+
+	libdirs 
+	{ 
+		"%VULKAN_SDK%/lib" 
+	}
+
+	links
+	{
+	}
+
+	filter "system:windows"
+		systemversion "latest"
+
+	filter "configurations:Debug"
+		defines ""
+		runtime "Debug"
+		symbols "on"
+
+	filter "configurations:Release"
+		defines ""
+		runtime "Release"
+		optimize "on"
 
 project "Sandbox"
 
@@ -121,12 +139,20 @@ project "Sandbox"
 	includedirs
 	{
 		"%{prj.name}",
-		"OS"
+		"OS",
+		"Renderer",
+		"$(VULKAN_SDK)/Include"
+	}
+
+	libdirs 
+	{ 
+		"%VULKAN_SDK%/lib" 
 	}
 
 	links
 	{
-		"OS"
+		"OS",
+		"Renderer"
 	}
 
 	filter "system:windows"
