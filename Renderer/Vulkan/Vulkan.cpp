@@ -11,6 +11,7 @@
 
 
 
-void vk_waitQueueIdle(Queue* pQueue) { /*vkQueueWaitIdle(pQueue->mVulkan.pVkQueue);*/ }
+void vk_waitQueueIdle(Queue* pQueue) { vkQueueWaitIdle(pQueue->mVulkan.pVkQueue); }
 
+#include "../ThirdParty/OpenSource/volk/volk.c"
 #endif
