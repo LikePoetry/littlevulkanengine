@@ -119,7 +119,7 @@ void _Impl_FontStash::fonsImplementationRenderText(
 	Cmd* pCmd = ctx->pCmd;
 	if(ctx->mUpdateTexture)
 	{
-		/*waitQueueIdle(pCmd->p)*/
+		vk_waitQueueIdle(pCmd->pQueue);
 	}
 }
 

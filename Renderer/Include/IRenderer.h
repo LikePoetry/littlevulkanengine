@@ -1,6 +1,7 @@
 #pragma once
 #include "../Renderer/Include/RendererConfig.h"
 
+#include "../OS/Interfaces/ILog.h"
 #include "../OS/Interfaces/IThread.h"
 
 #include "../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
@@ -29,7 +30,10 @@ enum
 	MAX_DESCRIPTOR_POOL_SIZE_ARRAY_COUNT = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT + 1,
 };
 
+typedef void (*LogFn)(LogLevel, const char*, const char*);
+
 // Forward declarations
+typedef struct RendererContext    RendererContext;
 typedef struct Renderer           Renderer;
 typedef struct Queue              Queue;
 typedef struct Texture            Texture;
@@ -154,6 +158,56 @@ typedef struct GPUVendorPreset
 	char           mGpuDriverDate[MAX_GPU_VENDOR_STRING_LENGTH];
 } GPUVendorPreset;
 
+typedef enum ShaderTarget
+{
+	// 5.1 is supported on all DX12 hardware
+	shader_target_5_1,
+	shader_target_6_0,
+	shader_target_6_1,
+	shader_target_6_2,
+	shader_target_6_3,    //required for Raytracing
+	shader_target_6_4,    //required for VRS
+} ShaderTarget;
+
+typedef enum GpuMode
+{
+	GPU_MODE_SINGLE = 0,
+	GPU_MODE_LINKED,
+	GPU_MODE_UNLINKED,
+} GpuMode;
+
+typedef struct RendererDesc
+{
+	struct
+	{
+		const char** ppInstanceLayers;
+		const char** ppInstanceExtensions;
+		const char** ppDeviceExtensions;
+		uint32_t	mInstanceLayerCount;
+		uint32_t	mInstanceExtensionCount;
+		uint32_t	mDeviceExtensionCount;
+		/// Flag to specify whether to request all queues from the gpu or just one of each type
+		/// This will affect memory usage - Around 200 MB more used if all queues are requested
+		bool mRequestAllAvailableQueues;
+	} mVulkan;
+
+	LogFn			pLogFn;
+	ShaderTarget	mShaderTarget;
+	GpuMode			mGpuMode;
+
+	/// Required when creating unlinked multiple renderers. Optional otherwise, can be used for explicit GPU selection.
+	RendererContext* pContext;
+	uint32_t         mGpuIndex;
+
+	/// This results in new validation not possible during API calls on the CPU, by creating patched shaders that have validation added directly to the shader.
+	/// However, it can slow things down a lot, especially for applications with numerous PSOs. Time to see the first render frame may take several minutes
+	bool mEnableGPUBasedValidation;
+
+	bool mD3D11Supported;
+	bool mGLESSupported;
+
+} RendererDesc;
+
 typedef struct GPUCapBits
 {
 	bool canShaderReadFrom[TinyImageFormat_Count];
@@ -210,8 +264,8 @@ typedef struct DEFINE_ALIGNED(Renderer, 64)
 		VkPhysicalDeviceProperties2* pVkActiveGPUProperties;
 		VkDevice					pVkDevice;
 		VkDebugUtilsMessengerEXT	pVkDebugUtilsMessenger;
-		uint32_t**				pAvailableQueueCount;
-		uint32_t**				pUsedQueueCount;
+		uint32_t** pAvailableQueueCount;
+		uint32_t** pUsedQueueCount;
 		VkDescriptorPool		pEmptyDescriptorPool;
 		VkDescriptorSetLayout	pEmptyDescriptorSetLayout;
 		VkDescriptorSet			pEmptyDescriptorSet;
@@ -243,7 +297,7 @@ typedef struct DEFINE_ALIGNED(Renderer, 64)
 				uint8_t mComputeQueueFamilyIndex;
 			};
 			uint8_t mQueueFamilyIndices[3];
-		} ;
+		};
 	}mVulkan;
 
 	struct NullDescriptors* pNullDescriptors;
@@ -260,3 +314,49 @@ typedef struct DEFINE_ALIGNED(Renderer, 64)
 	uint32_t                mBuiltinShaderDefinesCount;
 
 } Renderer;
+
+typedef struct GpuInfo
+{
+	struct
+	{
+		VkPhysicalDevice             pGPU;
+		VkPhysicalDeviceProperties2  mGPUProperties;
+	} mVulkan;
+	GPUSettings mSettings;
+} GpuInfo;
+
+typedef struct DEFINE_ALIGNED(RendererContext, 64)
+{
+	struct
+	{
+		VkInstance	pVkInstance;
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+		VkDebugUtilsMessengerEXT pVkDebugUtilsMessenger;
+#else
+		VkDebugReportCallbackEXT pVkDebugReport;
+#endif
+	}mVulkan;
+
+	GpuInfo* pGpus;
+	uint32_t mGpuCount;
+}RendererContext;
+
+//#ifdef __INTELLISENSE__
+//// IntelliSense is the code completion engine in Visual Studio. When it parses the source files, __INTELLISENSE__ macro is defined.
+//// Here we trick IntelliSense into thinking that the renderer functions are not function pointers, but just regular functions.
+//// What this achieves is filtering out duplicated function names from code completion results and improving the code completion for function parameters.
+//// This dramatically improves the quality of life for Visual Studio users.
+//#define DECLARE_RENDERER_FUNCTION(ret, name, ...)                     \
+//	ret name(__VA_ARGS__);
+//#else
+//#define DECLARE_RENDERER_FUNCTION(ret, name, ...)                     \
+//	typedef API_INTERFACE ret(FORGE_CALLCONV* name##Fn)(__VA_ARGS__); \
+//	extern name##Fn       name;
+//#endif
+
+// Multiple renderer API (optional)
+
+
+// queue/fence/swapchain functions
+//DECLARE_RENDERER_FUNCTION(void, waitQueueIdle, Queue* p_queue)
+void vk_waitQueueIdle(Queue* p_queue);

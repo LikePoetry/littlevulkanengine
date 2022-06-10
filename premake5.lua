@@ -24,6 +24,8 @@ project "Renderer"
 		{
 			"%{prj.name}/*/**.h",
 			"%{prj.name}/*/**.cpp",
+			"%{prj.name}/*/**.c",
+
 		}
 		
 		defines
@@ -125,7 +127,9 @@ project "Sandbox"
 	files
 	{
 		"%{prj.name}/**.h",
-		"%{prj.name}/**.cpp"
+		"%{prj.name}/**.cpp",
+		"%{prj.name}/**.c",
+
 	}
 	
 	defines

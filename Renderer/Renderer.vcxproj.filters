@@ -26,5 +26,8 @@
     <ClCompile Include="Source\Renderer.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Vulkan\Vulkan.cpp">
+      <Filter>Vulkan</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
