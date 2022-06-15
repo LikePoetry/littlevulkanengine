@@ -205,3 +205,9 @@ void beginUpdateResource(TextureUpdateDesc* pTextureUpdate)
 	pTextureUpdate->mInternal.mMappedRange.mFlags = MAPPED_RANGE_FLAG_TEMP_BUFFER;
 	pTextureUpdate->pMappedData = pTextureUpdate->mInternal.mMappedRange.pData;
 }
+
+void endUpdateResource(TextureUpdateDesc* pTextureUpdate, SyncToken* token)
+{
+	TextureUpdateDescInternal desc = {};
+
+}

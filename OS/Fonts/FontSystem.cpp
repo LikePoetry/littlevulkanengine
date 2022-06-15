@@ -13,7 +13,7 @@
 class _Impl_FontStash
 {
 public:
-	bool init(int width_, int height_) 
+	bool init(int width_, int height_)
 	{
 		// create FONS context
 		FONSparams params;
@@ -118,7 +118,7 @@ void _Impl_FontStash::fonsImplementationRenderText(
 		return;
 
 	Cmd* pCmd = ctx->pCmd;
-	if(ctx->mUpdateTexture)
+	if (ctx->mUpdateTexture)
 	{
 		vk_waitQueueIdle(pCmd->pQueue);
 
@@ -126,7 +126,16 @@ void _Impl_FontStash::fonsImplementationRenderText(
 		TextureUpdateDesc updateDesc = {};
 		updateDesc.pTexture = ctx->pCurrentTexture;
 		beginUpdateResource(&updateDesc);
-
+		for (uint32_t r = 0; r < updateDesc.mRowCount; ++r)
+		{
+			memcmp(updateDesc.pMappedData + r * updateDesc.mDstRowStride,
+				ctx->pPixels + r * updateDesc.mSrcRowStride,
+				updateDesc.mSrcRowStride);
+		}
+		endUpdateResource(&updateDesc, &token);
+		waitForToken(&token);
+		
+		ctx->mUpdateTexture = false;
 
 	}
 }
