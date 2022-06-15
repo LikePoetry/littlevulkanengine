@@ -21,6 +21,7 @@
     <ClInclude Include="Vulkan\VulkanConfig.h">
       <Filter>Vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="Include\IResourceLoader.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Renderer.cpp">
@@ -29,5 +30,6 @@
     <ClCompile Include="Vulkan\Vulkan.cpp">
       <Filter>Vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="Source\ResourceLoader.cpp" />
   </ItemGroup>
 </Project>

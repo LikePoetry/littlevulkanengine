@@ -96,11 +96,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Include\IRenderer.h" />
+    <ClInclude Include="Include\IResourceLoader.h" />
     <ClInclude Include="Include\RendererConfig.h" />
     <ClInclude Include="Vulkan\VulkanConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Renderer.cpp" />
+    <ClCompile Include="Source\ResourceLoader.cpp" />
     <ClCompile Include="Vulkan\Vulkan.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

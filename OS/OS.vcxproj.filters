@@ -81,6 +81,8 @@
     <ClInclude Include="Math\MathTypes.h">
       <Filter>Math</Filter>
     </ClInclude>
+    <ClInclude Include="Core\Atomics.h" />
+    <ClInclude Include="Core\TextureContainers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp">

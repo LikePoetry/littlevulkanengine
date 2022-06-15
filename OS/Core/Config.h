@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 
+# define PTR_SIZE 8
+
 #define FORGE_CONSTEXPR
 
 #define UNREF_PARAM(x) (x)
@@ -9,10 +11,9 @@
 #define FORGE_CALLCONV __cdecl
 
 #include <crtdbg.h>
+#define COMPILE_ASSERT(exp) _STATIC_ASSERT(exp) 
+
 #include <BaseTsd.h>
-
-
-
 typedef SSIZE_T ssize_t;
 
 #if defined(_M_X64)

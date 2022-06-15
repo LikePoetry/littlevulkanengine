@@ -95,8 +95,10 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Core\Atomics.h" />
     <ClInclude Include="Core\CPUConfig.h" />
     <ClInclude Include="Core\Config.h" />
+    <ClInclude Include="Core\TextureContainers.h" />
     <ClInclude Include="Interfaces\IApp.h" />
     <ClInclude Include="Interfaces\IFileSystem.h" />
     <ClInclude Include="Interfaces\IFont.h" />

@@ -8,6 +8,7 @@
 
 
 #include "../../Renderer/Include/IRenderer.h"
+#include "../../Renderer/Include/IResourceLoader.h"-
 
 class _Impl_FontStash
 {
@@ -120,6 +121,13 @@ void _Impl_FontStash::fonsImplementationRenderText(
 	if(ctx->mUpdateTexture)
 	{
 		vk_waitQueueIdle(pCmd->pQueue);
+
+		SyncToken token = {};
+		TextureUpdateDesc updateDesc = {};
+		updateDesc.pTexture = ctx->pCurrentTexture;
+		beginUpdateResource(&updateDesc);
+
+
 	}
 }
 

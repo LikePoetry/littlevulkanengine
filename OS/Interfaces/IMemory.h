@@ -43,6 +43,9 @@ static T* tf_placement_new(void* ptr, Args&&... args)
 #ifndef tf_calloc
 #define tf_calloc(count, size) tf_calloc_internal(count, size, __FILE__, __LINE__, __FUNCTION__)
 #endif
+#ifndef tf_calloc_memalign
+#define tf_calloc_memalign(count, align, size) tf_calloc_memalign_internal(count, align, size, __FILE__, __LINE__, __FUNCTION__)
+#endif
 #ifndef tf_realloc
 #define tf_realloc(ptr, size) tf_realloc_internal(ptr, size, __FILE__, __LINE__, __FUNCTION__)
 #endif

@@ -31,12 +31,18 @@ extern "C"
 	void acquireMutex(Mutex* pMutex);
 	void releaseMutex(Mutex* pMutex);
 
+	typedef struct ConditionVariable
+	{
+		void* pHandle;
+	} ConditionVariable;
 
 	void setMainThread(void);
 	void setCurrentThreadName(const char* name);
 	ThreadID getCurrentThreadID(void);
 
 	void getCurrentThreadName(char* buffer, int buffer_size);
+
+	typedef void* ThreadHandle;
 #ifdef __cplusplus
 }    // extern "C"
 #endif

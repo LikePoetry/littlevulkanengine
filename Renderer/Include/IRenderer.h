@@ -6,6 +6,12 @@
 
 #include "../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
 
+#define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
+	static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b)); } \
+	static inline ENUM_TYPE operator&(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) & (TYPE)(b)); } \
+	static inline ENUM_TYPE operator|=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a | b); }                      \
+	static inline ENUM_TYPE operator&=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a & b); }
+
 // default capability levels of the renderer
 enum
 {
@@ -30,13 +36,408 @@ enum
 	MAX_DESCRIPTOR_POOL_SIZE_ARRAY_COUNT = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT + 1,
 };
 
+typedef enum QueueType
+{
+	QUEUE_TYPE_GRAPHICS = 0,
+	QUEUE_TYPE_TRANSFER,
+	QUEUE_TYPE_COMPUTE,
+	MAX_QUEUE_TYPE
+} QueueType;
+
 typedef void (*LogFn)(LogLevel, const char*, const char*);
+
+typedef enum ResourceState
+{
+	RESOURCE_STATE_UNDEFINED = 0,
+	RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER = 0x1,
+	RESOURCE_STATE_INDEX_BUFFER = 0x2,
+	RESOURCE_STATE_RENDER_TARGET = 0x4,
+	RESOURCE_STATE_UNORDERED_ACCESS = 0x8,
+	RESOURCE_STATE_DEPTH_WRITE = 0x10,
+	RESOURCE_STATE_DEPTH_READ = 0x20,
+	RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE = 0x40,
+	RESOURCE_STATE_PIXEL_SHADER_RESOURCE = 0x80,
+	RESOURCE_STATE_SHADER_RESOURCE = 0x40 | 0x80,
+	RESOURCE_STATE_STREAM_OUT = 0x100,
+	RESOURCE_STATE_INDIRECT_ARGUMENT = 0x200,
+	RESOURCE_STATE_COPY_DEST = 0x400,
+	RESOURCE_STATE_COPY_SOURCE = 0x800,
+	RESOURCE_STATE_GENERIC_READ = (((((0x1 | 0x2) | 0x40) | 0x80) | 0x200) | 0x800),
+	RESOURCE_STATE_PRESENT = 0x1000,
+	RESOURCE_STATE_COMMON = 0x2000,
+	RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE = 0x4000,
+	RESOURCE_STATE_SHADING_RATE_SOURCE = 0x8000,
+} ResourceState;
+
+/// Choosing Memory Type
+typedef enum ResourceMemoryUsage
+{
+	/// No intended memory usage specified.
+	RESOURCE_MEMORY_USAGE_UNKNOWN = 0,
+	/// Memory will be used on device only, no need to be mapped on host.
+	RESOURCE_MEMORY_USAGE_GPU_ONLY = 1,
+	/// Memory will be mapped on host. Could be used for transfer to device.
+	RESOURCE_MEMORY_USAGE_CPU_ONLY = 2,
+	/// Memory will be used for frequent (dynamic) updates from host and reads on device.
+	RESOURCE_MEMORY_USAGE_CPU_TO_GPU = 3,
+	/// Memory will be used for writing on device and readback on host.
+	RESOURCE_MEMORY_USAGE_GPU_TO_CPU = 4,
+	RESOURCE_MEMORY_USAGE_COUNT,
+	RESOURCE_MEMORY_USAGE_MAX_ENUM = 0x7FFFFFFF
+} ResourceMemoryUsage;
 
 // Forward declarations
 typedef struct RendererContext    RendererContext;
 typedef struct Renderer           Renderer;
 typedef struct Queue              Queue;
+typedef struct Buffer             Buffer;
 typedef struct Texture            Texture;
+typedef struct RenderTarget       RenderTarget;
+
+
+typedef struct IndirectDrawIndexArguments
+{
+	uint32_t mIndexCount;
+	uint32_t mInstanceCount;
+	uint32_t mStartIndex;
+	uint32_t mVertexOffset;
+	uint32_t mStartInstance;
+} IndirectDrawIndexArguments;
+
+typedef enum IndirectArgumentType
+{
+	INDIRECT_DRAW,
+	INDIRECT_DRAW_INDEX,
+	INDIRECT_DISPATCH,
+	INDIRECT_VERTEX_BUFFER,
+	INDIRECT_INDEX_BUFFER,
+	INDIRECT_CONSTANT,
+	INDIRECT_DESCRIPTOR_TABLE,         // only for vulkan
+	INDIRECT_PIPELINE,                 // only for vulkan now, probably will add to dx when it comes to xbox
+	INDIRECT_CONSTANT_BUFFER_VIEW,     // only for dx
+	INDIRECT_SHADER_RESOURCE_VIEW,     // only for dx
+	INDIRECT_UNORDERED_ACCESS_VIEW,    // only for dx
+} IndirectArgumentType;
+/************************************************/
+
+typedef enum DescriptorType
+{
+	DESCRIPTOR_TYPE_UNDEFINED = 0,
+	DESCRIPTOR_TYPE_SAMPLER = 0x01,
+	// SRV Read only texture
+	DESCRIPTOR_TYPE_TEXTURE = (DESCRIPTOR_TYPE_SAMPLER << 1),
+	/// UAV Texture
+	DESCRIPTOR_TYPE_RW_TEXTURE = (DESCRIPTOR_TYPE_TEXTURE << 1),
+	// SRV Read only buffer
+	DESCRIPTOR_TYPE_BUFFER = (DESCRIPTOR_TYPE_RW_TEXTURE << 1),
+	DESCRIPTOR_TYPE_BUFFER_RAW = (DESCRIPTOR_TYPE_BUFFER | (DESCRIPTOR_TYPE_BUFFER << 1)),
+	/// UAV Buffer
+	DESCRIPTOR_TYPE_RW_BUFFER = (DESCRIPTOR_TYPE_BUFFER << 2),
+	DESCRIPTOR_TYPE_RW_BUFFER_RAW = (DESCRIPTOR_TYPE_RW_BUFFER | (DESCRIPTOR_TYPE_RW_BUFFER << 1)),
+	/// Uniform buffer
+	DESCRIPTOR_TYPE_UNIFORM_BUFFER = (DESCRIPTOR_TYPE_RW_BUFFER << 2),
+	/// Push constant / Root constant
+	DESCRIPTOR_TYPE_ROOT_CONSTANT = (DESCRIPTOR_TYPE_UNIFORM_BUFFER << 1),
+	/// IA
+	DESCRIPTOR_TYPE_VERTEX_BUFFER = (DESCRIPTOR_TYPE_ROOT_CONSTANT << 1),
+	DESCRIPTOR_TYPE_INDEX_BUFFER = (DESCRIPTOR_TYPE_VERTEX_BUFFER << 1),
+	DESCRIPTOR_TYPE_INDIRECT_BUFFER = (DESCRIPTOR_TYPE_INDEX_BUFFER << 1),
+	/// Cubemap SRV
+	DESCRIPTOR_TYPE_TEXTURE_CUBE = (DESCRIPTOR_TYPE_TEXTURE | (DESCRIPTOR_TYPE_INDIRECT_BUFFER << 1)),
+	/// RTV / DSV per mip slice
+	DESCRIPTOR_TYPE_RENDER_TARGET_MIP_SLICES = (DESCRIPTOR_TYPE_INDIRECT_BUFFER << 2),
+	/// RTV / DSV per array slice
+	DESCRIPTOR_TYPE_RENDER_TARGET_ARRAY_SLICES = (DESCRIPTOR_TYPE_RENDER_TARGET_MIP_SLICES << 1),
+	/// RTV / DSV per depth slice
+	DESCRIPTOR_TYPE_RENDER_TARGET_DEPTH_SLICES = (DESCRIPTOR_TYPE_RENDER_TARGET_ARRAY_SLICES << 1),
+	DESCRIPTOR_TYPE_RAY_TRACING = (DESCRIPTOR_TYPE_RENDER_TARGET_DEPTH_SLICES << 1),
+	/// Subpass input (descriptor type only available in Vulkan)
+	DESCRIPTOR_TYPE_INPUT_ATTACHMENT = (DESCRIPTOR_TYPE_RAY_TRACING << 1),
+	DESCRIPTOR_TYPE_TEXEL_BUFFER = (DESCRIPTOR_TYPE_INPUT_ATTACHMENT << 1),
+	DESCRIPTOR_TYPE_RW_TEXEL_BUFFER = (DESCRIPTOR_TYPE_TEXEL_BUFFER << 1),
+	DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER = (DESCRIPTOR_TYPE_RW_TEXEL_BUFFER << 1),
+
+	/// Khronos extension ray tracing
+	DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE = (DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER << 1),
+	DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_BUILD_INPUT = (DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE << 1),
+	DESCRIPTOR_TYPE_SHADER_DEVICE_ADDRESS = (DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_BUILD_INPUT << 1),
+	DESCRIPTOR_TYPE_SHADER_BINDING_TABLE = (DESCRIPTOR_TYPE_SHADER_DEVICE_ADDRESS << 1),
+} DescriptorType;
+
+typedef enum SampleCount
+{
+	SAMPLE_COUNT_1 = 1,
+	SAMPLE_COUNT_2 = 2,
+	SAMPLE_COUNT_4 = 4,
+	SAMPLE_COUNT_8 = 8,
+	SAMPLE_COUNT_16 = 16,
+} SampleCount;
+
+typedef enum ShaderSemantic
+{
+	SEMANTIC_UNDEFINED = 0,
+	SEMANTIC_POSITION,
+	SEMANTIC_NORMAL,
+	SEMANTIC_COLOR,
+	SEMANTIC_TANGENT,
+	SEMANTIC_BITANGENT,
+	SEMANTIC_JOINTS,
+	SEMANTIC_WEIGHTS,
+	SEMANTIC_SHADING_RATE,
+	SEMANTIC_TEXCOORD0,
+	SEMANTIC_TEXCOORD1,
+	SEMANTIC_TEXCOORD2,
+	SEMANTIC_TEXCOORD3,
+	SEMANTIC_TEXCOORD4,
+	SEMANTIC_TEXCOORD5,
+	SEMANTIC_TEXCOORD6,
+	SEMANTIC_TEXCOORD7,
+	SEMANTIC_TEXCOORD8,
+	SEMANTIC_TEXCOORD9,
+} ShaderSemantic;
+
+
+typedef union ClearValue
+{
+	struct
+	{
+		float r;
+		float g;
+		float b;
+		float a;
+	};
+	struct
+	{
+		float    depth;
+		uint32_t stencil;
+	};
+} ClearValue;
+
+typedef enum BufferCreationFlags
+{
+	/// Default flag (Buffer will use aliased memory, buffer will not be cpu accessible until mapBuffer is called)
+	BUFFER_CREATION_FLAG_NONE = 0x01,
+	/// Buffer will allocate its own memory (COMMITTED resource)
+	BUFFER_CREATION_FLAG_OWN_MEMORY_BIT = 0x02,
+	/// Buffer will be persistently mapped
+	BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT = 0x04,
+	/// Use ESRAM to store this buffer
+	BUFFER_CREATION_FLAG_ESRAM = 0x08,
+	/// Flag to specify not to allocate descriptors for the resource
+	BUFFER_CREATION_FLAG_NO_DESCRIPTOR_VIEW_CREATION = 0x10,
+
+	BUFFER_CREATION_FLAG_HOST_VISIBLE = 0x100,
+	BUFFER_CREATION_FLAG_HOST_COHERENT = 0x200,
+} BufferCreationFlags;
+
+typedef enum TextureCreationFlags
+{
+	/// Default flag (Texture will use default allocation strategy decided by the api specific allocator)
+	TEXTURE_CREATION_FLAG_NONE = 0,
+	/// Texture will allocate its own memory (COMMITTED resource)
+	TEXTURE_CREATION_FLAG_OWN_MEMORY_BIT = 0x01,
+	/// Texture will be allocated in memory which can be shared among multiple processes
+	TEXTURE_CREATION_FLAG_EXPORT_BIT = 0x02,
+	/// Texture will be allocated in memory which can be shared among multiple gpus
+	TEXTURE_CREATION_FLAG_EXPORT_ADAPTER_BIT = 0x04,
+	/// Texture will be imported from a handle created in another process
+	TEXTURE_CREATION_FLAG_IMPORT_BIT = 0x08,
+	/// Use ESRAM to store this texture
+	TEXTURE_CREATION_FLAG_ESRAM = 0x10,
+	/// Use on-tile memory to store this texture
+	TEXTURE_CREATION_FLAG_ON_TILE = 0x20,
+	/// Prevent compression meta data from generating (XBox)
+	TEXTURE_CREATION_FLAG_NO_COMPRESSION = 0x40,
+	/// Force 2D instead of automatically determining dimension based on width, height, depth
+	TEXTURE_CREATION_FLAG_FORCE_2D = 0x80,
+	/// Force 3D instead of automatically determining dimension based on width, height, depth
+	TEXTURE_CREATION_FLAG_FORCE_3D = 0x100,
+	/// Display target
+	TEXTURE_CREATION_FLAG_ALLOW_DISPLAY_TARGET = 0x200,
+	/// Create an sRGB texture.
+	TEXTURE_CREATION_FLAG_SRGB = 0x400,
+	/// Create a normal map texture
+	TEXTURE_CREATION_FLAG_NORMAL_MAP = 0x800,
+	/// Fast clear
+	TEXTURE_CREATION_FLAG_FAST_CLEAR = 0x1000,
+	/// Fragment mask
+	TEXTURE_CREATION_FLAG_FRAG_MASK = 0x2000,
+	/// Doubles the amount of array layers of the texture when rendering VR. Also forces the texture to be a 2D Array texture.
+	TEXTURE_CREATION_FLAG_VR_MULTIVIEW = 0x4000,
+	/// Binds the FFR fragment density if this texture is used as a render target.
+	TEXTURE_CREATION_FLAG_VR_FOVEATED_RENDERING = 0x8000,
+} TextureCreationFlags;
+MAKE_ENUM_FLAG(uint32_t, TextureCreationFlags)
+
+typedef enum GPUPresetLevel
+{
+	GPU_PRESET_NONE = 0,
+	GPU_PRESET_OFFICE,    //This means unsupported
+	GPU_PRESET_LOW,
+	GPU_PRESET_MEDIUM,
+	GPU_PRESET_HIGH,
+	GPU_PRESET_ULTRA,
+	GPU_PRESET_COUNT
+} GPUPresetLevel;
+
+typedef struct BufferBarrier
+{
+	Buffer* pBuffer;
+	ResourceState mCurrentState;
+	ResourceState mNewState;
+	uint8_t       mBeginOnly : 1;
+	uint8_t       mEndOnly : 1;
+	uint8_t       mAcquire : 1;
+	uint8_t       mRelease : 1;
+	uint8_t       mQueueType : 5;
+} BufferBarrier;
+
+typedef struct TextureBarrier
+{
+	Texture* pTexture;
+	ResourceState mCurrentState;
+	ResourceState mNewState;
+	uint8_t       mBeginOnly : 1;
+	uint8_t       mEndOnly : 1;
+	uint8_t       mAcquire : 1;
+	uint8_t       mRelease : 1;
+	uint8_t       mQueueType : 5;
+	/// Specifiy whether following barrier targets particular subresource
+	uint8_t mSubresourceBarrier : 1;
+	/// Following values are ignored if mSubresourceBarrier is false
+	uint8_t  mMipLevel : 7;
+	uint16_t mArrayLayer;
+} TextureBarrier;
+
+typedef struct RenderTargetBarrier
+{
+	RenderTarget* pRenderTarget;
+	ResourceState mCurrentState;
+	ResourceState mNewState;
+	uint8_t       mBeginOnly : 1;
+	uint8_t       mEndOnly : 1;
+	uint8_t       mAcquire : 1;
+	uint8_t       mRelease : 1;
+	uint8_t       mQueueType : 5;
+	/// Specifiy whether following barrier targets particular subresource
+	uint8_t mSubresourceBarrier : 1;
+	/// Following values are ignored if mSubresourceBarrier is false
+	uint8_t  mMipLevel : 7;
+	uint16_t mArrayLayer;
+} RenderTargetBarrier;
+
+/// Data structure holding necessary info to create a Texture
+typedef struct TextureDesc
+{
+	/// Optimized clear value (recommended to use this same value when clearing the rendertarget)
+	ClearValue mClearValue;
+	/// Pointer to native texture handle if the texture does not own underlying resource
+	const void* pNativeHandle;
+	/// Debug name used in gpu profile
+	const char* pName;
+	/// GPU indices to share this texture
+	uint32_t* pSharedNodeIndices;
+
+	VkSamplerYcbcrConversionInfo* pVkSamplerYcbcrConversionInfo;
+
+	/// Texture creation flags (decides memory allocation strategy, sharing access,...)
+	TextureCreationFlags mFlags;
+	/// Width
+	uint32_t mWidth;
+	/// Height
+	uint32_t mHeight;
+	/// Depth (Should be 1 if not a mType is not TEXTURE_TYPE_3D)
+	uint32_t mDepth;
+	/// Texture array size (Should be 1 if texture is not a texture array or cubemap)
+	uint32_t mArraySize;
+	/// Number of mip levels
+	uint32_t mMipLevels;
+	/// Number of multisamples per pixel (currently Textures created with mUsage TEXTURE_USAGE_SAMPLED_IMAGE only support SAMPLE_COUNT_1)
+	SampleCount mSampleCount;
+	/// The image quality level. The higher the quality, the lower the performance. The valid range is between zero and the value appropriate for mSampleCount
+	uint32_t mSampleQuality;
+	///  image format
+	TinyImageFormat mFormat;
+	/// What state will the texture get created in
+	ResourceState mStartState;
+	/// Descriptor creation
+	DescriptorType mDescriptors;
+	/// Number of GPUs to share this texture
+	uint32_t mSharedNodeIndexCount;
+	/// GPU which will own this texture
+	uint32_t mNodeIndex;
+} TextureDesc;
+
+// Virtual texture page as a part of the partially resident texture
+// Contains memory bindings, offsets and status information
+struct VirtualTexturePage
+{
+	/// Miplevel for this page
+	uint32_t mipLevel;
+	/// Array layer for this page
+	uint32_t layer;
+	/// Index for this page
+	uint32_t index;
+	struct
+	{
+		/// Allocation and resource for this tile
+		void* pAllocation;
+		/// Sparse image memory bind for this page
+		VkSparseImageMemoryBind imageMemoryBind;
+		/// Byte size for this page
+		VkDeviceSize size;
+	} mVulkan;
+};
+
+typedef struct VirtualTexture
+{
+	struct
+	{
+		/// GPU memory pool for tiles
+		void* pPool;
+		/// Sparse image memory bindings of all memory-backed virtual tables
+		VkSparseImageMemoryBind* pSparseImageMemoryBinds;
+		/// Sparse opaque memory bindings for the mip tail (if present)
+		VkSparseMemoryBind* pOpaqueMemoryBinds;
+		/// GPU allocations for opaque memory binds (mip tail)
+		void** pOpaqueMemoryBindAllocations;
+		/// Pending allocation deletions
+		void** pPendingDeletedAllocations;
+		//Memory type bits for Sparse texture's memory
+		uint32_t mSparseMemoryTypeBits;
+		/// Number of opaque memory binds
+		uint32_t mOpaqueMemoryBindsCount;
+	} mVulkan;
+
+	/// Virtual Texture members
+	VirtualTexturePage* pPages;
+	/// Pending intermediate buffer deletions
+	Buffer** pPendingDeletedBuffers;
+	/// Pending intermediate buffer deletions count
+	uint32_t* pPendingDeletedBuffersCount;
+	/// Pending allocation deletions count
+	uint32_t* pPendingDeletedAllocationsCount;
+	/// Readback buffer, must be filled by app. Size = mReadbackBufferSize * imagecount
+	Buffer* pReadbackBuffer;
+	/// Original Pixel image data
+	void* pVirtualImageData;
+	///  Total pages count
+	uint32_t mVirtualPageTotalCount;
+	///  Alive pages count
+	uint32_t mVirtualPageAliveCount;
+	/// Size of the readback buffer per image
+	uint32_t mReadbackBufferSize;
+	/// Size of the readback buffer per image
+	uint32_t mPageVisibilityBufferSize;
+	/// Sparse Virtual Texture Width
+	uint16_t mSparseVirtualTexturePageWidth;
+	/// Sparse Virtual Texture Height
+	uint16_t mSparseVirtualTexturePageHeight;
+	/// Number of mip levels that are tiled
+	uint8_t mTiledMipLevelCount;
+	/// Size of the pending deletion arrays in image count (highest currentImage + 1)
+	uint8_t mPendingDeletionCount;
+} VirtualTexture;
 
 typedef struct DEFINE_ALIGNED(Texture, 64)
 {
@@ -61,7 +462,53 @@ typedef struct DEFINE_ALIGNED(Texture, 64)
 		} mVulkan;
 	};
 
+	VirtualTexture* pSvt;
+	/// Current state of the buffer
+	uint32_t mWidth : 16;
+	uint32_t mHeight : 16;
+	uint32_t mDepth : 16;
+	uint32_t mMipLevels : 5;
+	uint32_t mArraySizeMinusOne : 11;
+	uint32_t mFormat : 8;
+	/// Flags specifying which aspects (COLOR,DEPTH,STENCIL) are included in the pVkImageView
+	uint32_t mAspectMask : 4;
+	uint32_t mNodeIndex : 4;
+	uint32_t mUav : 1;
+	/// This value will be false if the underlying resource is not owned by the texture (swapchain textures,...)
+	uint32_t mOwnsImage : 1;
+	// Only applies to Vulkan but kept here as adding it inside mVulkan block increases the size of the struct and triggers assert below
+	uint32_t mLazilyAllocated : 1;
+
 } Texture;
+// One cache line
+COMPILE_ASSERT(sizeof(Texture) == 8 * sizeof(uint64_t));
+
+typedef struct DEFINE_ALIGNED(RenderTarget, 64)
+{
+	Texture* pTexture;
+	union
+	{
+		struct
+		{
+			VkImageView  pVkDescriptor;
+			VkImageView* pVkSliceDescriptors;
+			uint32_t     mId;
+		} mVulkan;
+	};
+	ClearValue      mClearValue;
+	uint32_t        mArraySize : 16;
+	uint32_t        mDepth : 16;
+	uint32_t        mWidth : 16;
+	uint32_t        mHeight : 16;
+	uint32_t        mDescriptors : 20;
+	uint32_t        mMipLevels : 10;
+	uint32_t        mSampleQuality : 5;
+	TinyImageFormat mFormat;
+	SampleCount     mSampleCount;
+	bool            mVRMultiview;
+	bool            mVRFoveatedRendering;
+} RenderTarget;
+COMPILE_ASSERT(sizeof(RenderTarget) <= 32 * sizeof(uint64_t));
 
 typedef struct CmdPool
 {
@@ -89,6 +536,103 @@ typedef struct DEFINE_ALIGNED(Cmd, 64)
 	Renderer* pRenderer;
 	Queue* pQueue;
 } Cmd;
+
+typedef struct Fence
+{
+	union
+	{
+		struct
+		{
+			VkFence pVkFence;
+			uint32_t mSubmitted : 1;
+			uint32_t mPadA;
+			uint32_t mPadB;
+			uint32_t mPadC;
+
+		} mVulkan;
+	};
+} Fence;
+
+typedef struct Semaphore
+{
+	union
+	{
+		struct
+		{
+			VkSemaphore pVkSemaphore;
+			uint32_t    mCurrentNodeIndex : 5;
+			uint32_t    mSignaled : 1;
+			uint32_t    mPadA;
+			uint64_t    mPadB;
+			uint64_t    mPadC;
+		} mVulkan;
+	};
+} Semaphore;
+
+/// Data structure holding necessary info to create a Buffer
+typedef struct BufferDesc
+{
+	/// Size of the buffer (in bytes)
+	uint64_t mSize;
+	/// Set this to specify a counter buffer for this buffer (applicable to BUFFER_USAGE_STORAGE_SRV, BUFFER_USAGE_STORAGE_UAV)
+	struct Buffer* pCounterBuffer;
+	/// Index of the first element accessible by the SRV/UAV (applicable to BUFFER_USAGE_STORAGE_SRV, BUFFER_USAGE_STORAGE_UAV)
+	uint64_t mFirstElement;
+	/// Number of elements in the buffer (applicable to BUFFER_USAGE_STORAGE_SRV, BUFFER_USAGE_STORAGE_UAV)
+	uint64_t mElementCount;
+	/// Size of each element (in bytes) in the buffer (applicable to BUFFER_USAGE_STORAGE_SRV, BUFFER_USAGE_STORAGE_UAV)
+	uint64_t mStructStride;
+	/// Debug name used in gpu profile
+	const char* pName;
+	uint32_t* pSharedNodeIndices;
+	/// Alignment
+	uint32_t mAlignment;
+	/// Decides which memory heap buffer will use (default, upload, readback)
+	ResourceMemoryUsage mMemoryUsage;
+	/// Creation flags of the buffer
+	BufferCreationFlags mFlags;
+	/// What type of queue the buffer is owned by
+	QueueType mQueueType;
+	/// What state will the buffer get created in
+	ResourceState mStartState;
+	/// ICB draw type
+	IndirectArgumentType mICBDrawType;
+	/// ICB max vertex buffers slots count
+	uint32_t mICBMaxVertexBufferBind;
+	/// ICB max vertex buffers slots count
+	uint32_t mICBMaxFragmentBufferBind;
+	/// Format of the buffer (applicable to typed storage buffers (Buffer<T>)
+	TinyImageFormat mFormat;
+	/// Flags specifying the suitable usage of this buffer (Uniform buffer, Vertex Buffer, Index Buffer,...)
+	DescriptorType mDescriptors;
+	/// The index of the GPU in SLI/Cross-Fire that owns this buffer, or the Renderer index in unlinked mode.
+	uint32_t       mNodeIndex;
+	uint32_t       mSharedNodeIndexCount;
+} BufferDesc;
+
+typedef struct DEFINE_ALIGNED(Buffer, 64)
+{
+	/// CPU address of the mapped buffer (applicable to buffers created in CPU accessible heaps (CPU, CPU_TO_GPU, GPU_TO_CPU)
+	void* pCpuMappedAddress;
+	union
+	{
+		struct
+		{
+			/// Native handle of the underlying resource
+			VkBuffer pVkBuffer;
+			/// Buffer view
+			VkBufferView pVkStorageTexelView;
+			VkBufferView pVkUniformTexelView;
+			/// Contains resource allocation info such as parent heap, offset in heap
+			struct VmaAllocation_T* pVkAllocation;
+			uint64_t mOffset;
+		} mVulkan;
+		uint64_t mSize : 32;
+		uint64_t mDescriptors : 20;
+		uint64_t mMemoryUsage : 3;
+		uint64_t mNodeIndex : 4;
+	};
+} Buffer;
 
 typedef struct Queue
 {
@@ -136,16 +680,31 @@ typedef enum ShadingRateCaps
 	SHADING_RATE_CAPS_PER_TILE = SHADING_RATE_CAPS_PER_DRAW << 1,
 } ShadingRateCaps;
 
-typedef enum GPUPresetLevel
+typedef enum VertexAttribRate
 {
-	GPU_PRESET_NONE = 0,
-	GPU_PRESET_OFFICE,    //This means unsupported
-	GPU_PRESET_LOW,
-	GPU_PRESET_MEDIUM,
-	GPU_PRESET_HIGH,
-	GPU_PRESET_ULTRA,
-	GPU_PRESET_COUNT
-} GPUPresetLevel;
+	VERTEX_ATTRIB_RATE_VERTEX = 0,
+	VERTEX_ATTRIB_RATE_INSTANCE = 1,
+	VERTEX_ATTRIB_RATE_COUNT,
+} VertexAttribRate;
+
+typedef struct VertexAttrib
+{
+	ShaderSemantic   mSemantic;
+	uint32_t         mSemanticNameLength;
+	char             mSemanticName[MAX_SEMANTIC_NAME_LENGTH];
+	TinyImageFormat  mFormat;
+	uint32_t         mBinding;
+	uint32_t         mLocation;
+	uint32_t         mOffset;
+	VertexAttribRate mRate;
+} VertexAttrib;
+
+typedef struct VertexLayout
+{
+	uint32_t     mAttribCount;
+	VertexAttrib mAttribs[MAX_VERTEX_ATTRIBS];
+	uint32_t     mStrides[MAX_VERTEX_BINDINGS];
+} VertexLayout;
 
 typedef struct GPUVendorPreset
 {
@@ -168,6 +727,8 @@ typedef enum ShaderTarget
 	shader_target_6_3,    //required for Raytracing
 	shader_target_6_4,    //required for VRS
 } ShaderTarget;
+
+
 
 typedef enum GpuMode
 {
@@ -360,3 +921,6 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 // queue/fence/swapchain functions
 //DECLARE_RENDERER_FUNCTION(void, waitQueueIdle, Queue* p_queue)
 void vk_waitQueueIdle(Queue* p_queue);
+
+
+void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffer);
