@@ -7,15 +7,135 @@
 
 #include "../Include/IRenderer.h"
 
-#include "../../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
-#include "../../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_query.h"
 
 #include "../../OS/Interfaces/ILog.h"
 #include "../../OS/Math/MathTypes.h"
 
+#include "../../ThirdParty/OpenSource/VulkanMemoryAllocator/VulkanMemoryAllocator.h"
+#include "../../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
+#include "../../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_query.h"
+
+#include "../Vulkan/VulkanCapsBuilder.h"
+
 #include "../../OS/Interfaces/IMemory.h"
 
 #define DECLARE_ZERO(type, var) type var = {};
+
+static void* VKAPI_PTR gVkAllocation(void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return tf_memalign(alignment, size);
+}
+
+static void* VKAPI_PTR
+gVkReallocation(void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return tf_realloc(pOriginal, size);
+}
+
+static void VKAPI_PTR gVkFree(void* pUserData, void* pMemory) { tf_free(pMemory); }
+
+static void VKAPI_PTR
+gVkInternalAllocation(void* pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope)
+{
+}
+
+static void VKAPI_PTR
+gVkInternalFree(void* pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope)
+{
+}
+
+VkAllocationCallbacks gVkAllocationCallbacks =
+{
+	// pUserData
+	NULL,
+	// pfnAllocation
+	gVkAllocation,
+	// pfnReallocation
+	gVkReallocation,
+	// pfnFree
+	gVkFree,
+	// pfnInternalAllocation
+	gVkInternalAllocation,
+	// pfnInternalFree
+	gVkInternalFree
+};
+
+VkBufferUsageFlags util_to_vk_buffer_usage(DescriptorType usage,bool typed)
+{
+	VkBufferUsageFlags result = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	if (usage & DESCRIPTOR_TYPE_UNIFORM_BUFFER) 
+	{
+		result |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	}
+	if (usage & DESCRIPTOR_TYPE_RW_BUFFER)
+	{
+		result |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		if (typed)
+			result |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+	}
+	if (usage & DESCRIPTOR_TYPE_BUFFER)
+	{
+		result |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		if (typed)
+			result |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+	}
+	if (usage & DESCRIPTOR_TYPE_INDEX_BUFFER)
+	{
+		result |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	}
+	if (usage & DESCRIPTOR_TYPE_VERTEX_BUFFER)
+	{
+		result |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	}
+	if (usage & DESCRIPTOR_TYPE_INDIRECT_BUFFER)
+	{
+		result |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+	}
+//#ifdef VK_RAYTRACING_AVAILABLE
+	if (usage & DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE)
+	{
+		result |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+	}
+	if (usage & DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_BUILD_INPUT)
+	{
+		result |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+	}
+	if (usage & DESCRIPTOR_TYPE_SHADER_DEVICE_ADDRESS)
+	{
+		result |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	}
+	if (usage & DESCRIPTOR_TYPE_SHADER_BINDING_TABLE)
+	{
+		result |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+	}
+//#endif
+	return result;
+}
+
+
+/************************************************************************/
+// Multi GPU Helper Functions
+/************************************************************************/
+void util_calculate_device_indices(
+	Renderer* pRenderer,
+	uint32_t nodeIndex,
+	uint32_t* pSharedNodeIndices,
+	uint32_t sharedNodeIndexCount,
+	uint32_t* pIndices) 
+{
+	for (uint32_t i = 0; i < pRenderer->mLinkedNodeCount; ++i)
+		pIndices[i] = i;
+
+	pIndices[nodeIndex] = nodeIndex;
+	/************************************************************************/
+	// Set the node indices which need sharing access to the creation node
+	// Example: Texture created on GPU0 but GPU1 will need to access it, GPU2 does not care
+	//		  pIndices = { 0, 0, 2 }
+	/************************************************************************/
+	for (uint32_t i = 0; i < sharedNodeIndexCount; ++i)
+		pIndices[pSharedNodeIndices[i]] = nodeIndex;
+}
+
 
 void vk_waitQueueIdle(Queue* pQueue)
 {

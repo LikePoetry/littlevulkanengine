@@ -7,3 +7,13 @@
 
 
 #define ENABLE_DEBUG_UTILS_EXTENSION
+
+#define CHECK_VKRESULT(exp)                                                      \
+	{                                                                            \
+		VkResult vkres = (exp);                                                  \
+		if (VK_SUCCESS != vkres)                                                 \
+		{                                                                        \
+			LOGF(eERROR, "%s: FAILED with VkResult: %d", #exp, vkres); \
+			ASSERT(false);                                                       \
+		}                                                                        \
+	}

@@ -98,6 +98,7 @@
     <ClInclude Include="Include\IRenderer.h" />
     <ClInclude Include="Include\IResourceLoader.h" />
     <ClInclude Include="Include\RendererConfig.h" />
+    <ClInclude Include="Vulkan\VulkanCapsBuilder.h" />
     <ClInclude Include="Vulkan\VulkanConfig.h" />
   </ItemGroup>
   <ItemGroup>
