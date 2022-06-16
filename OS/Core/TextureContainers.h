@@ -869,3 +869,48 @@ inline bool loadBASISTextureDesc(FileStream* pStream, TextureDesc* pOutDesc, voi
 
 	return true;
 }
+
+/************************************************************************/
+// SVT Loading
+/************************************************************************/
+struct SVT_HEADER
+{
+	uint32_t mWidth;
+	uint32_t mHeight;
+	uint32_t mMipLevels;
+	uint32_t mPageSize;
+	uint32_t mComponentCount;
+};
+
+#if defined(DIRECT3D12) || defined(VULKAN)
+inline bool loadSVTTextureDesc(FileStream* pStream, TextureDesc* pOutDesc)
+{
+#define RETURN_IF_FAILED(exp) \
+if (!(exp))                   \
+{                             \
+	return false;             \
+}
+
+	RETURN_IF_FAILED(pStream);
+
+	ssize_t svtDataSize = fsGetStreamFileSize(pStream);
+	RETURN_IF_FAILED(svtDataSize <= UINT32_MAX);
+	RETURN_IF_FAILED((svtDataSize > (ssize_t)(sizeof(SVT_HEADER))));
+
+	SVT_HEADER header = {};
+	ssize_t bytesRead = fsReadFromStream(pStream, &header, sizeof(SVT_HEADER));
+	RETURN_IF_FAILED(bytesRead == sizeof(SVT_HEADER));
+
+	TextureDesc& textureDesc = *pOutDesc;
+	textureDesc.mWidth = header.mWidth;
+	textureDesc.mHeight = header.mHeight;
+	textureDesc.mMipLevels = header.mMipLevels;
+	textureDesc.mDepth = 1;
+	textureDesc.mArraySize = 1;
+	textureDesc.mDescriptors = DESCRIPTOR_TYPE_TEXTURE;
+	textureDesc.mSampleCount = SAMPLE_COUNT_1;
+	textureDesc.mFormat = TinyImageFormat_R8G8B8A8_UNORM;
+
+	return true;
+}
+#endif

@@ -36,6 +36,12 @@ enum
 	MAX_DESCRIPTOR_POOL_SIZE_ARRAY_COUNT = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT + 1,
 };
 
+typedef enum RendererApi
+{
+	RENDERER_API_VULKAN,
+	RENDERER_API_COUNT
+} RendererApi;
+
 typedef enum QueueType
 {
 	QUEUE_TYPE_GRAPHICS = 0,
@@ -326,6 +332,12 @@ typedef struct RenderTargetBarrier
 	uint8_t  mMipLevel : 7;
 	uint16_t mArrayLayer;
 } RenderTargetBarrier;
+
+typedef struct ReadRange
+{
+	uint64_t mOffset;
+	uint64_t mSize;
+} ReadRange;
 
 /// Data structure holding necessary info to create a Texture
 typedef struct TextureDesc
@@ -928,6 +940,25 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 
 // queue/fence/swapchain functions
 //DECLARE_RENDERER_FUNCTION(void, waitQueueIdle, Queue* p_queue)
+
+typedef struct SubresourceDataDesc
+{
+	uint64_t mSrcOffset;
+	uint32_t mMipLevel;
+	uint32_t mArrayLayer;
+	uint32_t mRowPitch;
+	uint32_t mSlicePitch;
+} SubresourceDataDesc;
+
+struct VkVTPendingPageDeletion
+{
+	VmaAllocation* pAllocations;
+	uint32_t* pAllocationsCount;
+
+	Buffer** pIntermediateBuffers;
+	uint32_t* pIntermediateBuffersCount;
+};
+
 void vk_waitQueueIdle(Queue* p_queue);
 
 
@@ -935,8 +966,13 @@ void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffe
 void vk_getFenceStatus(Renderer* pRenderer, Fence* pFence, FenceStatus* pFenceStatus);
 void vk_waitForFences(Renderer* pRenderer, uint32_t fenceCount, Fence** ppFences);
 void vk_removeBuffer(Renderer* pRenderer, Buffer* pBuffer);
+void vk_addTexture(Renderer* pRenderer, const TextureDesc* pDesc, Texture** ppTexture);
+void vk_addVirtualTexture(Cmd* pCmd, const TextureDesc* pDesc, Texture** ppTexture, void* pImageData);
+void vk_fillVirtualTextureLevel(Cmd* pCmd, Texture* pTexture, uint32_t mipLevel, uint32_t currentImage);
+void vk_updateVirtualTextureMemory(Cmd* pCmd, Texture* pTexture, uint32_t imageMemoryCount);
 
 
+void vk_uploadVirtualTexturePage(Cmd* pCmd, Texture* pTexture, VirtualTexturePage* pPage, uint32_t* imageMemoryCount, uint32_t currentImage);
 // command buffer functions
 void vk_resetCmdPool(Renderer* pRenderer, CmdPool* pCmdPool);
 void vk_beginCmd(Cmd* pCmd);
@@ -944,3 +980,7 @@ void vk_cmdUpdateBuffer(Cmd* pCmd, Buffer* pBuffer, uint64_t dstOffset, Buffer* 
 void vk_cmdResourceBarrier(
 	Cmd* pCmd, uint32_t numBufferBarriers, BufferBarrier* pBufferBarriers, uint32_t numTextureBarriers, TextureBarrier* pTextureBarriers,
 	uint32_t numRtBarriers, RenderTargetBarrier* pRtBarriers);
+void vk_cmdUpdateSubresource(Cmd* pCmd, Texture* pTexture, Buffer* pSrcBuffer, const SubresourceDataDesc* pSubresourceDesc);
+
+void vk_mapBuffer(Renderer* pRenderer, Buffer* pBuffer, ReadRange* pRange);
+void vk_unmapBuffer(Renderer* pRenderer, Buffer* pBuffer);
