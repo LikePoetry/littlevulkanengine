@@ -165,12 +165,27 @@ extern "C"
 	bool fsOpenStreamFromPath(const ResourceDirectory resourceDir, const char* fileName,
 		FileMode mode, const char* password, FileStream* pOut);
 
+	/// Opens a memory buffer as a FileStream, returning a stream that must be closed with `fsCloseStream`.
+	bool fsOpenStreamFromMemory(const void* buffer, size_t bufferSize, FileMode mode, bool owner, FileStream* pOut);
+
 	/// Closes and invalidates the file stream.
 	bool fsCloseStream(FileStream* stream);
+
+	/// Gets the current seek position in the file.
+	ssize_t fsGetStreamSeekPosition(const FileStream* stream);
+
+	/// Seeks to the specified position in the file, using `baseOffset` as the reference offset.
+	bool fsSeekStream(FileStream* pStream, SeekBaseOffset baseOffset, ssize_t seekOffset);
+
+	/// Returns the number of bytes read.
+	size_t fsReadFromStream(FileStream* stream, void* outputBuffer, size_t bufferSizeInBytes);
 
 	/// Reads at most `bufferSizeInBytes` bytes from sourceBuffer and writes them into the file.
 	/// Returns the number of bytes written.
 	size_t fsWriteToStream(FileStream* stream, const void* sourceBuffer, size_t byteCount);
+
+	/// Gets the current size of the file. Returns -1 if the size is unknown or unavailable.
+	ssize_t fsGetStreamFileSize(const FileStream* stream);
 
 	/// Flushes all writes to the file stream to the underlying subsystem.
 	bool fsFlushStream(FileStream* stream);
@@ -188,6 +203,10 @@ extern "C"
 	/************************************************************************/
 	/// Appends `pathComponent` to `basePath`, where `basePath` is assumed to be a directory.
 	void fsAppendPathComponent(const char* basePath, const char* pathComponent, char* output);
+
+	/// Appends `newExtension` to `basePath`.
+	/// If `basePath` already has an extension, `newExtension` will be appended to the end.
+	void fsAppendPathExtension(const char* basePath, const char* newExtension, char* output);
 
 	/// Get `path`'s parent path, excluding the end seperator. 
 	void fsGetParentPath(const char* path, char* output);

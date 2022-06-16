@@ -6,7 +6,7 @@ typedef unsigned long ThreadID;
 #define INVALID_THREAD_ID 0
 
 #define MAX_THREAD_NAME_LENGTH 31
-
+#define TIMEOUT_INFINITE UINT32_MAX
 
 
 
@@ -35,6 +35,10 @@ extern "C"
 	{
 		void* pHandle;
 	} ConditionVariable;
+
+	void waitConditionVariable(ConditionVariable* cv, const Mutex* pMutex, uint32_t timeout);
+	void wakeOneConditionVariable(ConditionVariable* cv);
+	void wakeAllConditionVariable(ConditionVariable* cv);
 
 	void setMainThread(void);
 	void setCurrentThreadName(const char* name);

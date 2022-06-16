@@ -23,8 +23,14 @@ void acquireMutex(Mutex* mutex) { EnterCriticalSection((CRITICAL_SECTION*)&mutex
 
 void releaseMutex(Mutex* mutex) { LeaveCriticalSection((CRITICAL_SECTION*)&mutex->mHandle); }
 
+void waitConditionVariable(ConditionVariable* cv, const Mutex* pMutex, uint32_t ms)
+{
+	SleepConditionVariableCS((PCONDITION_VARIABLE)cv->pHandle, (PCRITICAL_SECTION)&pMutex->mHandle, ms);
+}
 
+void wakeOneConditionVariable(ConditionVariable* cv) { WakeConditionVariable((PCONDITION_VARIABLE)cv->pHandle); }
 
+void wakeAllConditionVariable(ConditionVariable* cv) { WakeAllConditionVariable((PCONDITION_VARIABLE)cv->pHandle); }
 static ThreadID mainThreadID = 0;
 
 void setMainThread() { mainThreadID = getCurrentThreadID(); }
@@ -37,7 +43,7 @@ char* thread_name()
 	return name;
 }
 
-void getCurrentThreadName(char* buffer,int size)
+void getCurrentThreadName(char* buffer, int size)
 {
 	const char* name = thread_name();
 	if (name[0])

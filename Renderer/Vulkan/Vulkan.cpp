@@ -60,10 +60,16 @@ VkAllocationCallbacks gVkAllocationCallbacks =
 	gVkInternalFree
 };
 
-VkBufferUsageFlags util_to_vk_buffer_usage(DescriptorType usage,bool typed)
+#define SAFE_FREE(p_var)       \
+	if (p_var)                 \
+	{                          \
+		tf_free((void*)p_var); \
+	}
+
+VkBufferUsageFlags util_to_vk_buffer_usage(DescriptorType usage, bool typed)
 {
 	VkBufferUsageFlags result = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	if (usage & DESCRIPTOR_TYPE_UNIFORM_BUFFER) 
+	if (usage & DESCRIPTOR_TYPE_UNIFORM_BUFFER)
 	{
 		result |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	}
@@ -91,7 +97,7 @@ VkBufferUsageFlags util_to_vk_buffer_usage(DescriptorType usage,bool typed)
 	{
 		result |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 	}
-//#ifdef VK_RAYTRACING_AVAILABLE
+	//#ifdef VK_RAYTRACING_AVAILABLE
 	if (usage & DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE)
 	{
 		result |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
@@ -108,10 +114,59 @@ VkBufferUsageFlags util_to_vk_buffer_usage(DescriptorType usage,bool typed)
 	{
 		result |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
 	}
-//#endif
+	//#endif
 	return result;
 }
 
+VkAccessFlags util_to_vk_access_flags(ResourceState state)
+{
+	VkAccessFlags ret = 0;
+	if (state & RESOURCE_STATE_COPY_SOURCE)
+	{
+		ret |= VK_ACCESS_TRANSFER_READ_BIT;
+	}
+	if (state & RESOURCE_STATE_COPY_DEST)
+	{
+		ret |= VK_ACCESS_TRANSFER_WRITE_BIT;
+	}
+	if (state & RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)
+	{
+		ret |= VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+	}
+	if (state & RESOURCE_STATE_INDEX_BUFFER)
+	{
+		ret |= VK_ACCESS_INDEX_READ_BIT;
+	}
+	if (state & RESOURCE_STATE_UNORDERED_ACCESS)
+	{
+		ret |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+	}
+	if (state & RESOURCE_STATE_INDIRECT_ARGUMENT)
+	{
+		ret |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+	}
+	if (state & RESOURCE_STATE_RENDER_TARGET)
+	{
+		ret |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	}
+	if (state & RESOURCE_STATE_DEPTH_WRITE)
+	{
+		ret |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	}
+	if (state & RESOURCE_STATE_SHADER_RESOURCE)
+	{
+		ret |= VK_ACCESS_SHADER_READ_BIT;
+	}
+	if (state & RESOURCE_STATE_PRESENT)
+	{
+		ret |= VK_ACCESS_MEMORY_READ_BIT;
+	}
+	if (state & RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE)
+	{
+		ret |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+	}
+	return ret;
+}
 
 /************************************************************************/
 // Multi GPU Helper Functions
@@ -121,7 +176,7 @@ void util_calculate_device_indices(
 	uint32_t nodeIndex,
 	uint32_t* pSharedNodeIndices,
 	uint32_t sharedNodeIndexCount,
-	uint32_t* pIndices) 
+	uint32_t* pIndices)
 {
 	for (uint32_t i = 0; i < pRenderer->mLinkedNodeCount; ++i)
 		pIndices[i] = i;
@@ -291,6 +346,322 @@ void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffe
 	pBuffer->mDescriptors = pDesc->mDescriptors;
 
 	*ppBuffer = pBuffer;
+}
+
+void vk_getFenceStatus(Renderer* pRenderer, Fence* pFence, FenceStatus* pFenceStatus)
+{
+	*pFenceStatus = FENCE_STATUS_COMPLETE;
+	if (pFence->mVulkan.mSubmitted)
+	{
+		VkResult vkRes = vkGetFenceStatus(pRenderer->mVulkan.pVkDevice, pFence->mVulkan.pVkFence);
+		if (vkRes == VK_SUCCESS)
+		{
+			vkResetFences(pRenderer->mVulkan.pVkDevice, 1, &pFence->mVulkan.pVkFence);
+			pFence->mVulkan.mSubmitted = false;
+		}
+
+		*pFenceStatus = vkRes == VK_SUCCESS ? FENCE_STATUS_COMPLETE : FENCE_STATUS_INCOMPLETE;
+	}
+	else
+	{
+		*pFenceStatus = FENCE_STATUS_NOTSUBMITTED;
+	}
+}
+
+void vk_waitForFences(Renderer* pRenderer, uint32_t fenceCount, Fence** ppFences)
+{
+	ASSERT(pRenderer);
+	ASSERT(fenceCount);
+	ASSERT(ppFences);
+
+	VkFence* fences = (VkFence*)alloca(fenceCount * sizeof(VkFence));
+	uint32_t numValidFences = 0;
+	for (uint32_t i = 0; i < fenceCount; ++i)
+	{
+		if (ppFences[i]->mVulkan.mSubmitted)
+			fences[numValidFences++] = ppFences[i]->mVulkan.pVkFence;
+	}
+
+	if (numValidFences)
+	{
+		CHECK_VKRESULT(vkWaitForFences(pRenderer->mVulkan.pVkDevice, numValidFences, fences, VK_TRUE, UINT64_MAX));
+		CHECK_VKRESULT(vkResetFences(pRenderer->mVulkan.pVkDevice, numValidFences, fences));
+	}
+
+	for (uint32_t i = 0; i < fenceCount; ++i)
+		ppFences[i]->mVulkan.mSubmitted = false;
+}
+
+void vk_removeBuffer(Renderer* pRenderer, Buffer* pBuffer)
+{
+	ASSERT(pRenderer);
+	ASSERT(pBuffer);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pBuffer->mVulkan.pVkBuffer);
+	if (pBuffer->mVulkan.pVkUniformTexelView)
+	{
+		vkDestroyBufferView(pRenderer->mVulkan.pVkDevice, pBuffer->mVulkan.pVkUniformTexelView, &gVkAllocationCallbacks);
+		pBuffer->mVulkan.pVkUniformTexelView = VK_NULL_HANDLE;
+	}
+	if (pBuffer->mVulkan.pVkStorageTexelView)
+	{
+		vkDestroyBufferView(pRenderer->mVulkan.pVkDevice, pBuffer->mVulkan.pVkStorageTexelView, &gVkAllocationCallbacks);
+		pBuffer->mVulkan.pVkStorageTexelView = VK_NULL_HANDLE;
+	}
+
+	vmaDestroyBuffer(pRenderer->mVulkan.pVmaAllocator, pBuffer->mVulkan.pVkBuffer, pBuffer->mVulkan.pVkAllocation);
+
+	SAFE_FREE(pBuffer);
+}
+
+void vk_resetCmdPool(Renderer* pRenderer, CmdPool* pCmdPool)
+{
+	ASSERT(pRenderer);
+	ASSERT(pCmdPool);
+
+	CHECK_VKRESULT(vkResetCommandPool(pRenderer->mVulkan.pVkDevice, pCmdPool->pVkCmdPool, 0));
+}
+
+void vk_beginCmd(Cmd* pCmd)
+{
+	ASSERT(pCmd);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	DECLARE_ZERO(VkCommandBufferBeginInfo, begin_info);
+	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	begin_info.pNext = NULL;
+	begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	begin_info.pInheritanceInfo = NULL;
+
+	VkDeviceGroupCommandBufferBeginInfoKHR deviceGroupBeginInfo = { VK_STRUCTURE_TYPE_DEVICE_GROUP_COMMAND_BUFFER_BEGIN_INFO_KHR };
+	deviceGroupBeginInfo.pNext = NULL;
+	if (pCmd->pRenderer->mGpuMode == GPU_MODE_LINKED)
+	{
+		deviceGroupBeginInfo.deviceMask = (1 << pCmd->mVulkan.mNodeIndex);
+		begin_info.pNext = &deviceGroupBeginInfo;
+	}
+
+	CHECK_VKRESULT(vkBeginCommandBuffer(pCmd->mVulkan.pVkCmdBuf, &begin_info));
+
+	// Reset CPU side data
+	pCmd->mVulkan.pBoundPipelineLayout = NULL;
+}
+
+void vk_cmdUpdateBuffer(Cmd* pCmd, Buffer* pBuffer, uint64_t dstOffset, Buffer* pSrcBuffer, uint64_t srcOffset, uint64_t size)
+{
+	ASSERT(pCmd);
+	ASSERT(pSrcBuffer);
+	ASSERT(pSrcBuffer->mVulkan.pVkBuffer);
+	ASSERT(pBuffer);
+	ASSERT(pBuffer->mVulkan.pVkBuffer);
+	ASSERT(srcOffset + size <= pSrcBuffer->mSize);
+	ASSERT(dstOffset + size <= pBuffer->mSize);
+
+	DECLARE_ZERO(VkBufferCopy, region);
+	region.srcOffset = srcOffset;
+	region.dstOffset = dstOffset;
+	region.size = (VkDeviceSize)size;
+	vkCmdCopyBuffer(pCmd->mVulkan.pVkCmdBuf, pSrcBuffer->mVulkan.pVkBuffer, pBuffer->mVulkan.pVkBuffer, 1, &region);
+}
+
+void vk_cmdResourceBarrier(
+	Cmd* pCmd, uint32_t numBufferBarriers, BufferBarrier* pBufferBarriers, uint32_t numTextureBarriers, TextureBarrier* pTextureBarriers,
+	uint32_t numRtBarriers, RenderTargetBarrier* pRtBarriers)
+{
+	VkImageMemoryBarrier* imageBarriers =
+		(numTextureBarriers + numRtBarriers)
+		? (VkImageMemoryBarrier*)alloca((numTextureBarriers + numRtBarriers) * sizeof(VkImageMemoryBarrier))
+		: NULL;
+	uint32_t imageBarrierCount = 0;
+	VkBufferMemoryBarrier* bufferBarriers =
+		numBufferBarriers
+		? (VkBufferMemoryBarrier*)alloca(numBufferBarriers * sizeof(VkBufferMemoryBarrier))
+		: NULL;
+	uint32_t bufferBarrierCount = 0;
+	VkAccessFlags srcAccessFlags = 0;
+	VkAccessFlags dstAccessFlags = 0;
+
+	for (uint32_t i = 0; i < numBufferBarriers; ++i)
+	{
+		BufferBarrier* pTrans = &pBufferBarriers[i];
+		Buffer* pBuffer = pTrans->pBuffer;
+		VkBufferMemoryBarrier* pBufferBarrier = NULL;
+
+		if (RESOURCE_STATE_UNORDERED_ACCESS == pTrans->mCurrentState && RESOURCE_STATE_UNORDERED_ACCESS == pTrans->mNewState)
+		{
+			pBufferBarrier = &bufferBarriers[bufferBarrierCount++];             //-V522
+			pBufferBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;    //-V522
+			pBufferBarrier->pNext = NULL;
+
+			pBufferBarrier->srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			pBufferBarrier->dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+		}
+		else
+		{
+			pBufferBarrier = &bufferBarriers[bufferBarrierCount++];
+			pBufferBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+			pBufferBarrier->pNext = NULL;
+
+			pBufferBarrier->srcAccessMask = util_to_vk_access_flags(pTrans->mCurrentState);
+			pBufferBarrier->dstAccessMask = util_to_vk_access_flags(pTrans->mNewState);
+		}
+
+		if (pBufferBarrier)
+		{
+			pBufferBarrier->buffer = pBuffer->mVulkan.pVkBuffer;
+			pBufferBarrier->size = VK_WHOLE_SIZE;
+			pBufferBarrier->offset = 0;
+
+			if (pTrans->mAcquire)
+			{
+				pBufferBarrier->srcQueueFamilyIndex = pCmd->pRenderer->mVulkan.mQueueFamilyIndices[pTrans->mQueueType];
+				pBufferBarrier->dstQueueFamilyIndex = pCmd->pQueue->mVulkan.mVkQueueFamilyIndex;
+			}
+			else if (pTrans->mRelease)
+			{
+				pBufferBarrier->srcQueueFamilyIndex = pCmd->pQueue->mVulkan.mVkQueueFamilyIndex;
+				pBufferBarrier->dstQueueFamilyIndex = pCmd->pRenderer->mVulkan.mQueueFamilyIndices[pTrans->mQueueType];
+			}
+			else
+			{
+				pBufferBarrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				pBufferBarrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			}
+
+			srcAccessFlags |= pBufferBarrier->srcAccessMask;
+			dstAccessFlags |= pBufferBarrier->dstAccessMask;
+		}
+	}
+
+	for (uint32_t i = 0; i < numTextureBarriers; ++i)
+	{
+		TextureBarrier* pTrans = &pTextureBarriers[i];
+		Texture* pTexture = pTrans->pTexture;
+		VkImageMemoryBarrier* pImageBarrier = NULL;
+
+		if (RESOURCE_STATE_UNORDERED_ACCESS == pTrans->mCurrentState && RESOURCE_STATE_UNORDERED_ACCESS == pTrans->mNewState)
+		{
+			pImageBarrier = &imageBarriers[imageBarrierCount++];              //-V522
+			pImageBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;    //-V522
+			pImageBarrier->pNext = NULL;
+
+			pImageBarrier->srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			pImageBarrier->dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+			pImageBarrier->oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			pImageBarrier->newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		}
+		else
+		{
+			pImageBarrier = &imageBarriers[imageBarrierCount++];
+			pImageBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			pImageBarrier->pNext = NULL;
+
+			pImageBarrier->srcAccessMask = util_to_vk_access_flags(pTrans->mCurrentState);
+			pImageBarrier->dstAccessMask = util_to_vk_access_flags(pTrans->mNewState);
+			pImageBarrier->oldLayout = util_to_vk_image_layout(pTrans->mCurrentState);
+			pImageBarrier->newLayout = util_to_vk_image_layout(pTrans->mNewState);
+		}
+
+		if (pImageBarrier)
+		{
+			pImageBarrier->image = pTexture->mVulkan.pVkImage;
+			pImageBarrier->subresourceRange.aspectMask = (VkImageAspectFlags)pTexture->mAspectMask;
+			pImageBarrier->subresourceRange.baseMipLevel = pTrans->mSubresourceBarrier ? pTrans->mMipLevel : 0;
+			pImageBarrier->subresourceRange.levelCount = pTrans->mSubresourceBarrier ? 1 : VK_REMAINING_MIP_LEVELS;
+			pImageBarrier->subresourceRange.baseArrayLayer = pTrans->mSubresourceBarrier ? pTrans->mArrayLayer : 0;
+			pImageBarrier->subresourceRange.layerCount = pTrans->mSubresourceBarrier ? 1 : VK_REMAINING_ARRAY_LAYERS;
+
+			if (pTrans->mAcquire && pTrans->mCurrentState != RESOURCE_STATE_UNDEFINED)
+			{
+				pImageBarrier->srcQueueFamilyIndex = pCmd->pRenderer->mVulkan.mQueueFamilyIndices[pTrans->mQueueType];
+				pImageBarrier->dstQueueFamilyIndex = pCmd->pQueue->mVulkan.mVkQueueFamilyIndex;
+			}
+			else if (pTrans->mRelease && pTrans->mCurrentState != RESOURCE_STATE_UNDEFINED)
+			{
+				pImageBarrier->srcQueueFamilyIndex = pCmd->pQueue->mVulkan.mVkQueueFamilyIndex;
+				pImageBarrier->dstQueueFamilyIndex = pCmd->pRenderer->mVulkan.mQueueFamilyIndices[pTrans->mQueueType];
+			}
+			else
+			{
+				pImageBarrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				pImageBarrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			}
+
+			srcAccessFlags |= pImageBarrier->srcAccessMask;
+			dstAccessFlags |= pImageBarrier->dstAccessMask;
+		}
+	}
+
+	for (uint32_t i = 0; i < numRtBarriers; ++i)
+	{
+		RenderTargetBarrier* pTrans = &pRtBarriers[i];
+		Texture* pTexture = pTrans->pRenderTarget->pTexture;
+		VkImageMemoryBarrier* pImageBarrier = NULL;
+
+		if (RESOURCE_STATE_UNORDERED_ACCESS == pTrans->mCurrentState && RESOURCE_STATE_UNORDERED_ACCESS == pTrans->mNewState)
+		{
+			pImageBarrier = &imageBarriers[imageBarrierCount++];
+			pImageBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			pImageBarrier->pNext = NULL;
+
+			pImageBarrier->srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			pImageBarrier->dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+			pImageBarrier->oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			pImageBarrier->newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		}
+		else
+		{
+			pImageBarrier = &imageBarriers[imageBarrierCount++];
+			pImageBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			pImageBarrier->pNext = NULL;
+
+			pImageBarrier->srcAccessMask = util_to_vk_access_flags(pTrans->mCurrentState);
+			pImageBarrier->dstAccessMask = util_to_vk_access_flags(pTrans->mNewState);
+			pImageBarrier->oldLayout = util_to_vk_image_layout(pTrans->mCurrentState);
+			pImageBarrier->newLayout = util_to_vk_image_layout(pTrans->mNewState);
+		}
+
+		if (pImageBarrier)
+		{
+			pImageBarrier->image = pTexture->mVulkan.pVkImage;
+			pImageBarrier->subresourceRange.aspectMask = (VkImageAspectFlags)pTexture->mAspectMask;
+			pImageBarrier->subresourceRange.baseMipLevel = pTrans->mSubresourceBarrier ? pTrans->mMipLevel : 0;
+			pImageBarrier->subresourceRange.levelCount = pTrans->mSubresourceBarrier ? 1 : VK_REMAINING_MIP_LEVELS;
+			pImageBarrier->subresourceRange.baseArrayLayer = pTrans->mSubresourceBarrier ? pTrans->mArrayLayer : 0;
+			pImageBarrier->subresourceRange.layerCount = pTrans->mSubresourceBarrier ? 1 : VK_REMAINING_ARRAY_LAYERS;
+
+			if (pTrans->mAcquire && pTrans->mCurrentState != RESOURCE_STATE_UNDEFINED)
+			{
+				pImageBarrier->srcQueueFamilyIndex = pCmd->pRenderer->mVulkan.mQueueFamilyIndices[pTrans->mQueueType];
+				pImageBarrier->dstQueueFamilyIndex = pCmd->pQueue->mVulkan.mVkQueueFamilyIndex;
+			}
+			else if (pTrans->mRelease && pTrans->mCurrentState != RESOURCE_STATE_UNDEFINED)
+			{
+				pImageBarrier->srcQueueFamilyIndex = pCmd->pQueue->mVulkan.mVkQueueFamilyIndex;
+				pImageBarrier->dstQueueFamilyIndex = pCmd->pRenderer->mVulkan.mQueueFamilyIndices[pTrans->mQueueType];
+			}
+			else
+			{
+				pImageBarrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				pImageBarrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			}
+
+			srcAccessFlags |= pImageBarrier->srcAccessMask;
+			dstAccessFlags |= pImageBarrier->dstAccessMask;
+		}
+	}
+
+	VkPipelineStageFlags srcStageMask =
+		util_determine_pipeline_stage_flags(pCmd->pRenderer, srcAccessFlags, (QueueType)pCmd->mVulkan.mType);
+	VkPipelineStageFlags dstStageMask =
+		util_determine_pipeline_stage_flags(pCmd->pRenderer, dstAccessFlags, (QueueType)pCmd->mVulkan.mType);
+
+	if (bufferBarrierCount || imageBarrierCount)
+	{
+		vkCmdPipelineBarrier(
+			pCmd->mVulkan.pVkCmdBuf, srcStageMask, dstStageMask, 0, 0, NULL, bufferBarrierCount, bufferBarriers, imageBarrierCount,
+			imageBarriers);
+	}
 }
 
 #include "../ThirdParty/OpenSource/volk/volk.c"

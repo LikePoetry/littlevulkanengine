@@ -3,6 +3,10 @@
 #include "../Interfaces/ILog.h"
 #include "../Interfaces/IMemory.h"
 
+#define MEMORY_STREAM_GROW_SIZE 4096
+#define STREAM_COPY_BUFFER_SIZE 4096
+#define STREAM_FIND_BUFFER_SIZE 1024
+
 bool PlatformOpenFile(ResourceDirectory resourceDir, const char* fileName, FileMode mode, FileStream* pOut);
 
 typedef struct ResourceDirectoryInfo
@@ -14,6 +18,143 @@ typedef struct ResourceDirectoryInfo
 } ResourceDirectoryInfo;
 
 static ResourceDirectoryInfo gResourceDirectories[RD_COUNT] = {};
+
+/************************************************************************/
+// Memory Stream Functions
+/************************************************************************/
+static inline FORGE_CONSTEXPR size_t MemoryStreamAvailableSize(FileStream* pStream, size_t requestedSize)
+{
+	return min((ssize_t)requestedSize, max((ssize_t)pStream->mSize - (ssize_t)pStream->mMemory.mCursor, (ssize_t)0));
+}
+
+static bool MemoryStreamClose(FileStream* pStream)
+{
+	MemoryStream* mem = &pStream->mMemory;
+	if (mem->mOwner)
+	{
+		tf_free(mem->pBuffer);
+	}
+
+	return true;
+}
+
+static size_t MemoryStreamRead(FileStream* pStream, void* outputBuffer, size_t bufferSizeInBytes)
+{
+	if (!(pStream->mMode & FM_READ))
+	{
+		LOGF(LogLevel::eWARNING, "Attempting to read from stream that doesn't have FM_READ flag.");
+		return 0;
+	}
+
+	if ((ssize_t)pStream->mMemory.mCursor >= pStream->mSize)
+	{
+		return 0;
+	}
+
+	size_t bytesToRead = MemoryStreamAvailableSize(pStream, bufferSizeInBytes);
+	memcpy(outputBuffer, pStream->mMemory.pBuffer + pStream->mMemory.mCursor, bytesToRead);
+	pStream->mMemory.mCursor += bytesToRead;
+	return bytesToRead;
+}
+
+static size_t MemoryStreamWrite(FileStream* pStream, const void* sourceBuffer, size_t byteCount)
+{
+	if (!(pStream->mMode & (FM_WRITE | FM_APPEND)))
+	{
+		LOGF(LogLevel::eWARNING, "Attempting to write to stream that doesn't have FM_WRITE or FM_APPEND flags.");
+		return 0;
+	}
+
+	if (pStream->mMemory.mCursor > (size_t)pStream->mSize)
+	{
+		LOGF(eWARNING, "Creating discontinuity in initialized memory in memory stream.");
+	}
+
+
+	size_t availableCapacity = 0;
+	if (pStream->mMemory.mCapacity >= pStream->mMemory.mCursor)
+		availableCapacity = pStream->mMemory.mCapacity - pStream->mMemory.mCursor;
+
+	if (byteCount > availableCapacity)
+	{
+		size_t newCapacity = pStream->mMemory.mCursor + byteCount;
+		newCapacity = MEMORY_STREAM_GROW_SIZE *
+			(newCapacity / MEMORY_STREAM_GROW_SIZE +
+				(newCapacity % MEMORY_STREAM_GROW_SIZE == 0 ? 0 : 1));
+		void* newBuffer = tf_realloc(pStream->mMemory.pBuffer, newCapacity);
+		if (!newBuffer)
+		{
+			LOGF(eERROR, "Failed to reallocate memory stream buffer with new capacity %lu.", (unsigned long)newCapacity);
+			return 0;
+		}
+		pStream->mMemory.pBuffer = (uint8_t*)newBuffer;
+		pStream->mMemory.mCapacity = newCapacity;
+	}
+	memcpy(pStream->mMemory.pBuffer + pStream->mMemory.mCursor, sourceBuffer, byteCount);
+	pStream->mMemory.mCursor += byteCount;
+	pStream->mSize = max(pStream->mSize, (ssize_t)pStream->mMemory.mCursor);
+	return byteCount;
+}
+
+
+static bool MemoryStreamSeek(FileStream* pStream, SeekBaseOffset baseOffset, ssize_t seekOffset)
+{
+	switch (baseOffset)
+	{
+	case SBO_START_OF_FILE:
+	{
+		if (seekOffset < 0 || seekOffset > pStream->mSize)
+		{
+			return false;
+		}
+		pStream->mMemory.mCursor = seekOffset;
+	}
+	break;
+	case SBO_CURRENT_POSITION:
+	{
+		ssize_t newPosition = (ssize_t)pStream->mMemory.mCursor + seekOffset;
+		if (newPosition < 0 || newPosition > pStream->mSize)
+		{
+			return false;
+		}
+		pStream->mMemory.mCursor = (size_t)newPosition;
+	}
+	break;
+
+	case SBO_END_OF_FILE:
+	{
+		ssize_t newPosition = (ssize_t)pStream->mSize + seekOffset;
+		if (newPosition < 0 || newPosition > pStream->mSize)
+		{
+			return false;
+		}
+		pStream->mMemory.mCursor = (size_t)newPosition;
+	}
+	break;
+	}
+	return true;
+}
+
+static ssize_t MemoryStreamGetSeekPosition(const FileStream* pStream)
+{
+	return pStream->mMemory.mCursor;
+}
+
+static ssize_t MemoryStreamGetSize(const FileStream* pStream)
+{
+	return pStream->mSize;
+}
+
+static bool MemoryStreamFlush(FileStream*)
+{
+	// No-op.
+	return true;
+}
+
+static bool MemoryStreamIsAtEnd(const FileStream* pStream)
+{
+	return (ssize_t)pStream->mMemory.mCursor == pStream->mSize;
+}
 
 /***********************************/
 // File stream Functions
@@ -247,6 +388,45 @@ void fsAppendPathComponent(const char* basePath, const char* pathComponent, char
 	output[newPathLength] = '\0';
 }
 
+void fsAppendPathExtension(const char* basePath, const char* extension, char* output)
+{
+	size_t       extensionLength = strlen(extension);
+	const size_t baseLength = strlen(basePath);
+	const size_t maxPathLength = baseLength + extensionLength + 1;    // + 1 due to a possible added directory slash.
+
+	LOGF_IF(LogLevel::eERROR, maxPathLength >= FS_MAX_PATH, "Extension path length '%d' greater than FS_MAX_PATH", maxPathLength);
+	ASSERT(maxPathLength < FS_MAX_PATH);
+
+	strncpy(output, basePath, baseLength);
+
+	if (extensionLength == 0)
+	{
+		return;
+	}
+
+	const char directorySeparator = fsGetDirectorySeparator();
+	const char forwardSlash = '/';    // Forward slash is accepted on all platforms as a path component.
+
+	// Extension validation
+	for (size_t i = 0; i < extensionLength; i += 1)
+	{
+		LOGF_IF(
+			LogLevel::eERROR, extension[i] == directorySeparator || extension[i] == forwardSlash,
+			"Extension '%s' contains directory specifiers", extension);
+		ASSERT(extension[i] != directorySeparator && extension[i] != forwardSlash);
+	}
+	LOGF_IF(LogLevel::eERROR, extension[extensionLength - 1] == '.', "Extension '%s' ends with a '.' character", extension);
+
+	if (extension[0] == '.')
+	{
+		extension += 1;
+		extensionLength -= 1;
+	}
+
+	strncat(output, ".", 1);
+	strncat(output, extension, extensionLength);
+}
+
 void fsGetParentPath(const char* path, char* output)
 {
 	size_t pathLength = strlen(path);
@@ -331,6 +511,73 @@ void fsSetPathForResourceDir(IFileSystem* pIO, ResourceMount mount, ResourceDire
 
 }
 
+/************************************************************************/
+// File IO
+/************************************************************************/
+static IFileSystem gMemoryFileIO =
+{
+	NULL,
+	MemoryStreamClose,
+	MemoryStreamRead,
+	MemoryStreamWrite,
+	MemoryStreamSeek,
+	MemoryStreamGetSeekPosition,
+	MemoryStreamGetSize,
+	MemoryStreamFlush,
+	MemoryStreamIsAtEnd
+};
+
+static IFileSystem gSystemFileIO =
+{
+	FileStreamOpen,
+	FileStreamClose,
+	FileStreamRead,
+	FileStreamWrite,
+	FileStreamSeek,
+	FileStreamGetSeekPosition,
+	FileStreamGetSize,
+	FileStreamFlush,
+	FileStreamIsAtEnd
+};
+
+IFileSystem* pSystemFileIO = &gSystemFileIO;
+
+bool fsOpenStreamFromMemory(const void* buffer, size_t bufferSize, FileMode mode, bool owner, FileStream* pOut)
+{
+	FileStream stream = {};
+
+	size_t size = buffer ? bufferSize : 0;
+	size_t capacity = bufferSize;
+	// Move cursor to the end for appending buffer
+	size_t cursor = (mode & FM_APPEND) ? size : 0;
+
+	// For write and append streams we have to own the memory as we might need to resize it
+	if ((mode & (FM_WRITE | FM_APPEND)) && (!owner || !buffer))
+	{
+		// make capacity multiple of MEMORY_STREAM_GROW_SIZE
+		capacity = MEMORY_STREAM_GROW_SIZE *
+			(capacity / MEMORY_STREAM_GROW_SIZE +
+				(capacity % MEMORY_STREAM_GROW_SIZE == 0 ? 0 : 1));
+		void* newBuffer = tf_malloc(capacity);
+		ASSERT(newBuffer);
+		if (buffer)
+			memcpy(newBuffer, buffer, size);
+
+		buffer = newBuffer;
+		owner = true;
+	}
+
+	stream.pIO = &gMemoryFileIO;
+	stream.mMemory.pBuffer = (uint8_t*)buffer;
+	stream.mMemory.mCursor = cursor;
+	stream.mMemory.mCapacity = capacity;
+	stream.mMemory.mOwner = owner;
+	stream.mSize = size;
+	stream.mMode = mode;
+	*pOut = stream;
+	return true;
+}
+
 /// Opens the file at `filePath` using the mode `mode`, returning a new FileStream that can be used
 /// to read from or modify the file. May return NULL if the file could not be opened.
 bool fsOpenStreamFromPath(const ResourceDirectory resourceDir, const char* fileName,
@@ -346,10 +593,30 @@ bool fsOpenStreamFromPath(const ResourceDirectory resourceDir, const char* fileN
 	return io->Open(io, resourceDir, fileName, mode, password, pOut);
 }
 
+
+
 /// Closes and invalidates the file stream.
 bool fsCloseStream(FileStream* pStream)
 {
 	return pStream->pIO->Close(pStream);
+}
+
+/// Gets the current seek position in the file.
+ssize_t fsGetStreamSeekPosition(const FileStream* pStream)
+{
+	return pStream->pIO->GetSeekPosition(pStream);
+}
+
+/// Seeks to the specified position in the file, using `baseOffset` as the reference offset.
+bool fsSeekStream(FileStream* pStream, SeekBaseOffset baseOffset, ssize_t seekOffset)
+{
+	return pStream->pIO->Seek(pStream, baseOffset, seekOffset);
+}
+
+/// Returns the number of bytes read.
+size_t fsReadFromStream(FileStream* pStream, void* pOutputBuffer, size_t bufferSizeInBytes)
+{
+	return pStream->pIO->Read(pStream, pOutputBuffer, bufferSizeInBytes);
 }
 
 /// Reads at most `bufferSizeInBytes` bytes from sourceBuffer and writes them into the file.
@@ -357,6 +624,12 @@ bool fsCloseStream(FileStream* pStream)
 size_t fsWriteToStream(FileStream* pStream, const void* pSourceBuffer, size_t byteCount)
 {
 	return pStream->pIO->Write(pStream, pSourceBuffer, byteCount);
+}
+
+/// Gets the current size of the file. Returns -1 if the size is unknown or unavailable.
+ssize_t fsGetStreamFileSize(const FileStream* pStream)
+{
+	return pStream->pIO->GetFileSize(pStream);
 }
 
 /// Flushes all writes to the file stream to the underlying subsystem.

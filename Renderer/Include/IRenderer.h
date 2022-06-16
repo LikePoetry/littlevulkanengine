@@ -163,6 +163,7 @@ typedef enum DescriptorType
 	DESCRIPTOR_TYPE_SHADER_DEVICE_ADDRESS = (DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_BUILD_INPUT << 1),
 	DESCRIPTOR_TYPE_SHADER_BINDING_TABLE = (DESCRIPTOR_TYPE_SHADER_DEVICE_ADDRESS << 1),
 } DescriptorType;
+MAKE_ENUM_FLAG(uint32_t, DescriptorType)
 
 typedef enum SampleCount
 {
@@ -523,7 +524,7 @@ typedef struct DEFINE_ALIGNED(Cmd, 64)
 	{
 		struct
 		{
-			VkCommandBuffer pVkCmdBuffer;
+			VkCommandBuffer pVkCmdBuf;
 			VkRenderPass pVkActiveRenderPass;
 			VkPipelineLayout pBoundPipelineLayout;
 			uint32_t mNodeIndex : 4;
@@ -531,11 +532,18 @@ typedef struct DEFINE_ALIGNED(Cmd, 64)
 			uint32_t mPadA;
 			CmdPool* pCmdPool;
 			uint64_t mPadB[9];
-		};
+		}mVulkan;
 	};
 	Renderer* pRenderer;
 	Queue* pQueue;
 } Cmd;
+
+typedef enum FenceStatus
+{
+	FENCE_STATUS_COMPLETE = 0,
+	FENCE_STATUS_INCOMPLETE,
+	FENCE_STATUS_NOTSUBMITTED,
+} FenceStatus;
 
 typedef struct Fence
 {
@@ -924,3 +932,15 @@ void vk_waitQueueIdle(Queue* p_queue);
 
 
 void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffer);
+void vk_getFenceStatus(Renderer* pRenderer, Fence* pFence, FenceStatus* pFenceStatus);
+void vk_waitForFences(Renderer* pRenderer, uint32_t fenceCount, Fence** ppFences);
+void vk_removeBuffer(Renderer* pRenderer, Buffer* pBuffer);
+
+
+// command buffer functions
+void vk_resetCmdPool(Renderer* pRenderer, CmdPool* pCmdPool);
+void vk_beginCmd(Cmd* pCmd);
+void vk_cmdUpdateBuffer(Cmd* pCmd, Buffer* pBuffer, uint64_t dstOffset, Buffer* pSrcBuffer, uint64_t srcOffset, uint64_t size);
+void vk_cmdResourceBarrier(
+	Cmd* pCmd, uint32_t numBufferBarriers, BufferBarrier* pBufferBarriers, uint32_t numTextureBarriers, TextureBarrier* pTextureBarriers,
+	uint32_t numRtBarriers, RenderTargetBarrier* pRtBarriers);

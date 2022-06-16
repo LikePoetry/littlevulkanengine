@@ -133,9 +133,9 @@ void _Impl_FontStash::fonsImplementationRenderText(
 				updateDesc.mSrcRowStride);
 		}
 		endUpdateResource(&updateDesc, &token);
-		waitForToken(&token);
-		
-		ctx->mUpdateTexture = false;
+		//waitForToken(&token);
+		//
+		//ctx->mUpdateTexture = false;
 
 	}
 }
