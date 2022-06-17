@@ -114,6 +114,7 @@
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
     <ClCompile Include="Core\CPUConfig.cpp" />
     <ClCompile Include="FileSystem\FileSystem.cpp" />

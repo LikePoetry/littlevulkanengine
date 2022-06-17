@@ -25,7 +25,11 @@ project "Renderer"
 			"%{prj.name}/*/**.h",
 			"%{prj.name}/*/**.cpp",
 			"%{prj.name}/*/**.c",
-
+			"ThirdParty/OpenSource/meshoptimizer/src/allocator.cpp",
+			"ThirdParty/OpenSource/meshoptimizer/src/indexgenerator.cpp",
+			"ThirdParty/OpenSource/meshoptimizer/src/overdrawoptimizer.cpp",
+			"ThirdParty/OpenSource/meshoptimizer/src/vcacheoptimizer.cpp",
+			"ThirdParty/OpenSource/meshoptimizer/src/vfetchoptimizer.cpp",
 		}
 		
 		defines
@@ -76,7 +80,8 @@ project "OS"
 		"%{prj.name}/*/**.c",
 		"ThirdParty/OpenSource/EASTL/allocator_forge.cpp",
 		"ThirdParty/OpenSource/EASTL/assert.cpp",
-		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c"
+		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c",
+		"ThirdParty/OpenSource/basis_universal/transcoder/basisu_transcoder.cpp"
 	}
 	
 	defines

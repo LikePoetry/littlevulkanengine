@@ -4,7 +4,7 @@
 
 #ifdef __cplusplus
 #include <new>
-//#include "../../ThirdParty/OpenSource/EASTL/utility.h"
+#include "../../ThirdParty/OpenSource/EASTL/utility.h"
 #else
 #include <stdint.h>
 #endif

@@ -1,5 +1,7 @@
 #include "../Interfaces/IFileSystem.h"
 
+#include "../Math/MathTypes.h"
+
 #include "../Interfaces/ILog.h"
 #include "../Interfaces/IMemory.h"
 
@@ -268,21 +270,6 @@ bool FileStreamIsAtEnd(const FileStream* pFile)
 	return feof(pFile->pFile) != 0;
 }
 
-static IFileSystem gSystemFileIO =
-{
-	FileStreamOpen,
-	FileStreamClose,
-	FileStreamRead,
-	FileStreamWrite,
-	FileStreamSeek,
-	FileStreamGetSeekPosition,
-	FileStreamGetSize,
-	FileStreamFlush,
-	FileStreamIsAtEnd
-};
-
-IFileSystem* pSystemFileIO = &gSystemFileIO;
-
 /*****************************************************************/
 // Platform independent filename,extension functions
 /****************************************************************/
@@ -452,6 +439,27 @@ void fsGetParentPath(const char* path, char* output)
 	return;
 }
 
+/// Returns `path`'s extension, excluding the '.'.
+void fsGetPathExtension(const char* path, char* output)
+{
+	size_t pathLength = strlen(path);
+	ASSERT(pathLength != 0);
+	const char* dotLocation = strrchr(path, '.');
+	if (dotLocation == NULL)
+	{
+		return;
+	}
+	dotLocation += 1;
+	const size_t extensionLength = strlen(dotLocation);
+	const char   directorySeparator = fsGetDirectorySeparator();
+	const char   forwardSlash = '/';    // Forward slash is accepted on all platforms as a path component.
+	if (extensionLength == 0 || dotLocation[0] == forwardSlash || dotLocation[0] == directorySeparator)    // Make sure it is not "../"
+	{
+		return;
+	}
+	strncpy(output, dotLocation, extensionLength);
+	output[extensionLength] = '\0';
+}
 /************************************************************************/
 // Platform independent directory queries
 /************************************************************************/

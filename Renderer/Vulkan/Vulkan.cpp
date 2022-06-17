@@ -587,6 +587,18 @@ void vk_waitQueueIdle(Queue* pQueue)
 	vkQueueWaitIdle(pQueue->mVulkan.pVkQueue);
 }
 
+void vk_removeQueue(Renderer* pRenderer, Queue* pQueue) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pQueue);
+
+	const uint32_t     nodeIndex = pRenderer->mGpuMode == GPU_MODE_LINKED ? pQueue->mNodeIndex : 0;
+	const VkQueueFlags queueFlags = pQueue->mVulkan.mFlags;
+	--pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueFlags];
+
+	SAFE_FREE(pQueue);
+}
+
 void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffer)
 {
 	ASSERT(pRenderer);
@@ -1905,6 +1917,112 @@ void vk_cmdUpdateSubresource(Cmd* pCmd, Texture* pTexture, Buffer* pSrcBuffer, c
 	}
 }
 
+void vk_cmdCopySubresource(Cmd* pCmd, Buffer* pDstBuffer, Texture* pTexture, const SubresourceDataDesc* pSubresourceDesc)
+{
+	const TinyImageFormat fmt = (TinyImageFormat)pTexture->mFormat;
+	const bool            isSinglePlane = TinyImageFormat_IsSinglePlane(fmt);
+
+	if (isSinglePlane)
+	{
+		const uint32_t width = max<uint32_t>(1, pTexture->mWidth >> pSubresourceDesc->mMipLevel);
+		const uint32_t height = max<uint32_t>(1, pTexture->mHeight >> pSubresourceDesc->mMipLevel);
+		const uint32_t depth = max<uint32_t>(1, pTexture->mDepth >> pSubresourceDesc->mMipLevel);
+		const uint32_t numBlocksWide = pSubresourceDesc->mRowPitch / (TinyImageFormat_BitSizeOfBlock(fmt) >> 3);
+		const uint32_t numBlocksHigh = (pSubresourceDesc->mSlicePitch / pSubresourceDesc->mRowPitch);
+
+		VkBufferImageCopy copy = {};
+		copy.bufferOffset = pSubresourceDesc->mSrcOffset;
+		copy.bufferRowLength = numBlocksWide * TinyImageFormat_WidthOfBlock(fmt);
+		copy.bufferImageHeight = numBlocksHigh * TinyImageFormat_HeightOfBlock(fmt);
+		copy.imageSubresource.aspectMask = (VkImageAspectFlags)pTexture->mAspectMask;
+		copy.imageSubresource.mipLevel = pSubresourceDesc->mMipLevel;
+		copy.imageSubresource.baseArrayLayer = pSubresourceDesc->mArrayLayer;
+		copy.imageSubresource.layerCount = 1;
+		copy.imageOffset.x = 0;
+		copy.imageOffset.y = 0;
+		copy.imageOffset.z = 0;
+		copy.imageExtent.width = width;
+		copy.imageExtent.height = height;
+		copy.imageExtent.depth = depth;
+
+		vkCmdCopyImageToBuffer(
+			pCmd->mVulkan.pVkCmdBuf, pTexture->mVulkan.pVkImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, pDstBuffer->mVulkan.pVkBuffer, 1,
+			&copy);
+	}
+	else
+	{
+		const uint32_t width = pTexture->mWidth;
+		const uint32_t height = pTexture->mHeight;
+		const uint32_t depth = pTexture->mDepth;
+		const uint32_t numOfPlanes = TinyImageFormat_NumOfPlanes(fmt);
+
+		uint64_t          offset = pSubresourceDesc->mSrcOffset;
+		VkBufferImageCopy bufferImagesCopy[MAX_PLANE_COUNT];
+
+		for (uint32_t i = 0; i < numOfPlanes; ++i)
+		{
+			VkBufferImageCopy& copy = bufferImagesCopy[i];
+			copy.bufferOffset = offset;
+			copy.bufferRowLength = 0;
+			copy.bufferImageHeight = 0;
+			copy.imageSubresource.aspectMask = (VkImageAspectFlagBits)(VK_IMAGE_ASPECT_PLANE_0_BIT << i);
+			copy.imageSubresource.mipLevel = pSubresourceDesc->mMipLevel;
+			copy.imageSubresource.baseArrayLayer = pSubresourceDesc->mArrayLayer;
+			copy.imageSubresource.layerCount = 1;
+			copy.imageOffset.x = 0;
+			copy.imageOffset.y = 0;
+			copy.imageOffset.z = 0;
+			copy.imageExtent.width = TinyImageFormat_PlaneWidth(fmt, i, width);
+			copy.imageExtent.height = TinyImageFormat_PlaneHeight(fmt, i, height);
+			copy.imageExtent.depth = depth;
+			offset += copy.imageExtent.width * copy.imageExtent.height * TinyImageFormat_PlaneSizeOfBlock(fmt, i);
+		}
+
+		vkCmdCopyImageToBuffer(
+			pCmd->mVulkan.pVkCmdBuf, pTexture->mVulkan.pVkImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, pDstBuffer->mVulkan.pVkBuffer,
+			numOfPlanes, bufferImagesCopy);
+	}
+}
+
+void vk_endCmd(Cmd* pCmd)
+{
+	ASSERT(pCmd);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	if (pCmd->mVulkan.pVkActiveRenderPass)
+	{
+		vkCmdEndRenderPass(pCmd->mVulkan.pVkCmdBuf);
+	}
+
+	pCmd->mVulkan.pVkActiveRenderPass = VK_NULL_HANDLE;
+
+	CHECK_VKRESULT(vkEndCommandBuffer(pCmd->mVulkan.pVkCmdBuf));
+}
+
+void vk_removeCmd(Renderer* pRenderer, Cmd* pCmd)
+{
+	ASSERT(pRenderer);
+	ASSERT(pCmd);
+	ASSERT(VK_NULL_HANDLE != pCmd->pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	vkFreeCommandBuffers(pRenderer->mVulkan.pVkDevice, pCmd->mVulkan.pCmdPool->pVkCmdPool, 1, &(pCmd->mVulkan.pVkCmdBuf));
+
+	SAFE_FREE(pCmd);
+}
+
+void vk_removeCmdPool(Renderer* pRenderer, CmdPool* pCmdPool)
+{
+	ASSERT(pRenderer);
+	ASSERT(pCmdPool);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pCmdPool->pVkCmdPool);
+
+	vkDestroyCommandPool(pRenderer->mVulkan.pVkDevice, pCmdPool->pVkCmdPool, &gVkAllocationCallbacks);
+
+	SAFE_FREE(pCmdPool);
+}
+
 /************************************************************************/
 // Buffer Functions
 /************************************************************************/
@@ -1926,6 +2044,145 @@ void vk_unmapBuffer(Renderer* pRenderer, Buffer* pBuffer)
 
 	vmaUnmapMemory(pRenderer->mVulkan.pVmaAllocator, pBuffer->mVulkan.pVkAllocation);
 	pBuffer->pCpuMappedAddress = NULL;
+}
+
+void vk_queueSubmit(Queue* pQueue, const QueueSubmitDesc* pDesc)
+{
+	ASSERT(pQueue);
+	ASSERT(pDesc);
+
+	uint32_t    cmdCount = pDesc->mCmdCount;
+	Cmd** ppCmds = pDesc->ppCmds;
+	Fence* pFence = pDesc->pSignalFence;
+	uint32_t    waitSemaphoreCount = pDesc->mWaitSemaphoreCount;
+	Semaphore** ppWaitSemaphores = pDesc->ppWaitSemaphores;
+	uint32_t    signalSemaphoreCount = pDesc->mSignalSemaphoreCount;
+	Semaphore** ppSignalSemaphores = pDesc->ppSignalSemaphores;
+
+	ASSERT(cmdCount > 0);
+	ASSERT(ppCmds);
+	if (waitSemaphoreCount > 0)
+	{
+		ASSERT(ppWaitSemaphores);
+	}
+	if (signalSemaphoreCount > 0)
+	{
+		ASSERT(ppSignalSemaphores);
+	}
+
+	ASSERT(VK_NULL_HANDLE != pQueue->mVulkan.pVkQueue);
+
+	VkCommandBuffer* cmds = (VkCommandBuffer*)alloca(cmdCount * sizeof(VkCommandBuffer));
+	for (uint32_t i = 0; i < cmdCount; ++i)
+	{
+		cmds[i] = ppCmds[i]->mVulkan.pVkCmdBuf;
+	}
+
+	VkSemaphore* wait_semaphores = waitSemaphoreCount ? (VkSemaphore*)alloca(waitSemaphoreCount * sizeof(VkSemaphore)) : NULL;
+	VkPipelineStageFlags* wait_masks = (VkPipelineStageFlags*)alloca(waitSemaphoreCount * sizeof(VkPipelineStageFlags));
+	uint32_t              waitCount = 0;
+	for (uint32_t i = 0; i < waitSemaphoreCount; ++i)
+	{
+		if (ppWaitSemaphores[i]->mVulkan.mSignaled)
+		{
+			wait_semaphores[waitCount] = ppWaitSemaphores[i]->mVulkan.pVkSemaphore;    //-V522
+			wait_masks[waitCount] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+			++waitCount;
+
+			ppWaitSemaphores[i]->mVulkan.mSignaled = false;
+		}
+	}
+
+	VkSemaphore* signal_semaphores = signalSemaphoreCount ? (VkSemaphore*)alloca(signalSemaphoreCount * sizeof(VkSemaphore)) : NULL;
+	uint32_t     signalCount = 0;
+	for (uint32_t i = 0; i < signalSemaphoreCount; ++i)
+	{
+		if (!ppSignalSemaphores[i]->mVulkan.mSignaled)
+		{
+			signal_semaphores[signalCount] = ppSignalSemaphores[i]->mVulkan.pVkSemaphore;    //-V522
+			ppSignalSemaphores[i]->mVulkan.mCurrentNodeIndex = pQueue->mNodeIndex;
+			ppSignalSemaphores[i]->mVulkan.mSignaled = true;
+			++signalCount;
+		}
+	}
+
+	DECLARE_ZERO(VkSubmitInfo, submit_info);
+	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit_info.pNext = NULL;
+	submit_info.waitSemaphoreCount = waitCount;
+	submit_info.pWaitSemaphores = wait_semaphores;
+	submit_info.pWaitDstStageMask = wait_masks;
+	submit_info.commandBufferCount = cmdCount;
+	submit_info.pCommandBuffers = cmds;
+	submit_info.signalSemaphoreCount = signalCount;
+	submit_info.pSignalSemaphores = signal_semaphores;
+
+	VkDeviceGroupSubmitInfo deviceGroupSubmitInfo = { VK_STRUCTURE_TYPE_DEVICE_GROUP_SUBMIT_INFO_KHR };
+	if (pQueue->mVulkan.mGpuMode == GPU_MODE_LINKED)
+	{
+		uint32_t* pVkDeviceMasks = NULL;
+		uint32_t* pSignalIndices = NULL;
+		uint32_t* pWaitIndices = NULL;
+		deviceGroupSubmitInfo.pNext = NULL;
+		deviceGroupSubmitInfo.commandBufferCount = submit_info.commandBufferCount;
+		deviceGroupSubmitInfo.signalSemaphoreCount = submit_info.signalSemaphoreCount;
+		deviceGroupSubmitInfo.waitSemaphoreCount = submit_info.waitSemaphoreCount;
+
+		pVkDeviceMasks = (uint32_t*)alloca(deviceGroupSubmitInfo.commandBufferCount * sizeof(uint32_t));
+		pSignalIndices = (uint32_t*)alloca(deviceGroupSubmitInfo.signalSemaphoreCount * sizeof(uint32_t));
+		pWaitIndices = (uint32_t*)alloca(deviceGroupSubmitInfo.waitSemaphoreCount * sizeof(uint32_t));
+
+		for (uint32_t i = 0; i < deviceGroupSubmitInfo.commandBufferCount; ++i)
+		{
+			pVkDeviceMasks[i] = (1 << ppCmds[i]->mVulkan.mNodeIndex);
+		}
+		for (uint32_t i = 0; i < deviceGroupSubmitInfo.signalSemaphoreCount; ++i)
+		{
+			pSignalIndices[i] = pQueue->mNodeIndex;
+		}
+		for (uint32_t i = 0; i < deviceGroupSubmitInfo.waitSemaphoreCount; ++i)
+		{
+			pWaitIndices[i] = ppWaitSemaphores[i]->mVulkan.mCurrentNodeIndex;
+		}
+
+		deviceGroupSubmitInfo.pCommandBufferDeviceMasks = pVkDeviceMasks;
+		deviceGroupSubmitInfo.pSignalSemaphoreDeviceIndices = pSignalIndices;
+		deviceGroupSubmitInfo.pWaitSemaphoreDeviceIndices = pWaitIndices;
+		submit_info.pNext = &deviceGroupSubmitInfo;
+	}
+
+	// Lightweight lock to make sure multiple threads dont use the same queue simultaneously
+	// Many setups have just one queue family and one queue. In this case, async compute, async transfer doesn't exist and we end up using
+	// the same queue for all three operations
+	MutexLock lock(*pQueue->mVulkan.pSubmitMutex);
+	CHECK_VKRESULT(vkQueueSubmit(pQueue->mVulkan.pVkQueue, 1, &submit_info, pFence ? pFence->mVulkan.pVkFence : VK_NULL_HANDLE));
+
+	if (pFence)
+		pFence->mVulkan.mSubmitted = true;
+}
+
+void vk_removeSemaphore(Renderer* pRenderer, Semaphore* pSemaphore)
+{
+	ASSERT(pRenderer);
+	ASSERT(pSemaphore);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pSemaphore->mVulkan.pVkSemaphore);
+
+	vkDestroySemaphore(pRenderer->mVulkan.pVkDevice, pSemaphore->mVulkan.pVkSemaphore, &gVkAllocationCallbacks);
+
+	SAFE_FREE(pSemaphore);
+}
+
+void vk_removeFence(Renderer* pRenderer, Fence* pFence)
+{
+	ASSERT(pRenderer);
+	ASSERT(pFence);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pFence->mVulkan.pVkFence);
+
+	vkDestroyFence(pRenderer->mVulkan.pVkDevice, pFence->mVulkan.pVkFence, &gVkAllocationCallbacks);
+
+	SAFE_FREE(pFence);
 }
 
 #include "../ThirdParty/OpenSource/volk/volk.c"

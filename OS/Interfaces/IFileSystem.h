@@ -211,6 +211,8 @@ extern "C"
 	/// Get `path`'s parent path, excluding the end seperator. 
 	void fsGetParentPath(const char* path, char* output);
 
+	/// Returns `path`'s extension, excluding the '.'.
+	void fsGetPathExtension(const char* path, char* output);
 	/************************************************************************/
 	// MARK: - Directory queries
 	/************************************************************************/

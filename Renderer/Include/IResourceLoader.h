@@ -245,3 +245,5 @@ extern ResourceLoaderDesc gDefaultResourceLoaderDesc;
 
 void beginUpdateResource(TextureUpdateDesc* pTextureDesc);
 void endUpdateResource(TextureUpdateDesc* pTexture, SyncToken* token);
+
+SyncToken getLastTokenCompleted();

@@ -7,6 +7,7 @@
 #include "../Interfaces/IMemory.h"
 #include "../Interfaces/IFileSystem.h"
 
+#include "../../Renderer/Include/IRenderer.h"
 // App Data
 static IApp* pApp = nullptr;
 static WindowDesc* gWindowDesc = nullptr;
@@ -14,6 +15,9 @@ static uint8_t gResetScenario = RESET_SCENARIO_NONE;
 
 /// CPU
 static CpuInfo gCpu;
+
+// Renderer.cpp
+extern RendererApi gSelectedRendererApi;
 
 // WindowsWindow.cpp
 extern IApp* pWindowAppRef;

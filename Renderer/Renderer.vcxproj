@@ -102,6 +102,11 @@
     <ClInclude Include="Vulkan\VulkanConfig.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\allocator.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\indexgenerator.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\overdrawoptimizer.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\vcacheoptimizer.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\vfetchoptimizer.cpp" />
     <ClCompile Include="Source\Renderer.cpp" />
     <ClCompile Include="Source\ResourceLoader.cpp" />
     <ClCompile Include="Vulkan\Vulkan.cpp" />

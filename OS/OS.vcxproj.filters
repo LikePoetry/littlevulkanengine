@@ -31,6 +31,12 @@
     <Filter Include="ThirdParty\OpenSource\EASTL">
       <UniqueIdentifier>{8AA85B30-F6B5-8916-7F9C-8501EBA855CD}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ThirdParty\OpenSource\basis_universal">
+      <UniqueIdentifier>{FB387A6F-67FD-785F-3063-A9299CE61495}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\basis_universal\transcoder">
+      <UniqueIdentifier>{BF3574A6-ABDE-DBD5-D474-F754C07CF616}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ThirdParty\OpenSource\cpu_features">
       <UniqueIdentifier>{37F49876-2330-9CE0-8C42-B4D7789D44FB}</UniqueIdentifier>
     </Filter>
@@ -42,10 +48,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Core\Atomics.h">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="Core\CPUConfig.h">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="Core\Config.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\TextureContainers.h">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="Interfaces\IApp.h">
@@ -81,8 +93,6 @@
     <ClInclude Include="Math\MathTypes.h">
       <Filter>Math</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Atomics.h" />
-    <ClInclude Include="Core\TextureContainers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp">
@@ -90,6 +100,9 @@
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp">
       <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp">
+      <Filter>ThirdParty\OpenSource\basis_universal\transcoder</Filter>
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c">
       <Filter>ThirdParty\OpenSource\cpu_features\src</Filter>

@@ -8,6 +8,16 @@
 #include "../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_bits.h"
 #include "../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_apis.h"
 
+#if defined(ENABLE_MESHOPTIMIZER)
+#include "../ThirdParty/OpenSource/meshoptimizer/src/meshoptimizer.h"
+#endif
+
+#define TINYKTX_IMPLEMENTATION
+#include "../ThirdParty/OpenSource/tinyktx/tinyktx.h"
+
+#define CGLTF_IMPLEMENTATION
+#include "../ThirdParty/OpenSource/cgltf/cgltf.h"
+
 #include "../Include/IRenderer.h"
 #include "../Include/IResourceLoader.h"
 
@@ -25,9 +35,185 @@ enum
 	MAPPED_RANGE_FLAG_TEMP_BUFFER = (1 << 1),
 };
 
+
 extern RendererApi gSelectedRendererApi;
 
+static FORGE_CONSTEXPR const bool gUma = false;
+
 #define MAX_FRAMES 3U
+
+/************************************************************************/
+// Surface Utils
+/************************************************************************/
+
+static inline constexpr ShaderSemantic util_cgltf_attrib_type_to_semantic(cgltf_attribute_type type, uint32_t index)
+{
+	switch (type)
+	{
+	case cgltf_attribute_type_position: return SEMANTIC_POSITION;
+	case cgltf_attribute_type_normal: return SEMANTIC_NORMAL;
+	case cgltf_attribute_type_tangent: return SEMANTIC_TANGENT;
+	case cgltf_attribute_type_color: return SEMANTIC_COLOR;
+	case cgltf_attribute_type_joints: return SEMANTIC_JOINTS;
+	case cgltf_attribute_type_weights: return SEMANTIC_WEIGHTS;
+	case cgltf_attribute_type_texcoord: return (ShaderSemantic)(SEMANTIC_TEXCOORD0 + index);
+	default: return SEMANTIC_TEXCOORD0;
+	}
+}
+
+static inline constexpr TinyImageFormat util_cgltf_type_to_image_format(cgltf_type type, cgltf_component_type compType)
+{
+	switch (type)
+	{
+	case cgltf_type_scalar:
+		if (cgltf_component_type_r_8 == compType)
+			return TinyImageFormat_R8_SINT;
+		else if (cgltf_component_type_r_16 == compType)
+			return TinyImageFormat_R16_SINT;
+		else if (cgltf_component_type_r_16u == compType)
+			return TinyImageFormat_R16_UINT;
+		else if (cgltf_component_type_r_32f == compType)
+			return TinyImageFormat_R32_SFLOAT;
+		else if (cgltf_component_type_r_32u == compType)
+			return TinyImageFormat_R32_UINT;
+	case cgltf_type_vec2:
+		if (cgltf_component_type_r_8 == compType)
+			return TinyImageFormat_R8G8_SINT;
+		else if (cgltf_component_type_r_16 == compType)
+			return TinyImageFormat_R16G16_SINT;
+		else if (cgltf_component_type_r_16u == compType)
+			return TinyImageFormat_R16G16_UINT;
+		else if (cgltf_component_type_r_32f == compType)
+			return TinyImageFormat_R32G32_SFLOAT;
+		else if (cgltf_component_type_r_32u == compType)
+			return TinyImageFormat_R32G32_UINT;
+	case cgltf_type_vec3:
+		if (cgltf_component_type_r_8 == compType)
+			return TinyImageFormat_R8G8B8_SINT;
+		else if (cgltf_component_type_r_16 == compType)
+			return TinyImageFormat_R16G16B16_SINT;
+		else if (cgltf_component_type_r_16u == compType)
+			return TinyImageFormat_R16G16B16_UINT;
+		else if (cgltf_component_type_r_32f == compType)
+			return TinyImageFormat_R32G32B32_SFLOAT;
+		else if (cgltf_component_type_r_32u == compType)
+			return TinyImageFormat_R32G32B32_UINT;
+	case cgltf_type_vec4:
+		if (cgltf_component_type_r_8 == compType)
+			return TinyImageFormat_R8G8B8A8_SINT;
+		else if (cgltf_component_type_r_16 == compType)
+			return TinyImageFormat_R16G16B16A16_SINT;
+		else if (cgltf_component_type_r_16u == compType)
+			return TinyImageFormat_R16G16B16A16_UINT;
+		else if (cgltf_component_type_r_32f == compType)
+			return TinyImageFormat_R32G32B32A32_SFLOAT;
+		else if (cgltf_component_type_r_32u == compType)
+			return TinyImageFormat_R32G32B32A32_UINT;
+		// #NOTE: Not applicable to vertex formats
+	case cgltf_type_mat2:
+	case cgltf_type_mat3:
+	case cgltf_type_mat4:
+	default: return TinyImageFormat_UNDEFINED;
+	}
+}
+
+#define F16_EXPONENT_BITS 0x1F
+#define F16_EXPONENT_SHIFT 10
+#define F16_EXPONENT_BIAS 15
+#define F16_MANTISSA_BITS 0x3ff
+#define F16_MANTISSA_SHIFT (23 - F16_EXPONENT_SHIFT)
+#define F16_MAX_EXPONENT (F16_EXPONENT_BITS << F16_EXPONENT_SHIFT)
+
+static inline uint16_t util_float_to_half(float val)
+{
+	uint32_t f32 = (*(uint32_t*)&val);
+	uint16_t f16 = 0;
+	/* Decode IEEE 754 little-endian 32-bit floating-point value */
+	int sign = (f32 >> 16) & 0x8000;
+	/* Map exponent to the range [-127,128] */
+	int exponent = ((f32 >> 23) & 0xff) - 127;
+	int mantissa = f32 & 0x007fffff;
+	if (exponent == 128)
+	{ /* Infinity or NaN */
+		f16 = (uint16_t)(sign | F16_MAX_EXPONENT);
+		if (mantissa)
+			f16 |= (mantissa & F16_MANTISSA_BITS);
+	}
+	else if (exponent > 15)
+	{ /* Overflow - flush to Infinity */
+		f16 = (unsigned short)(sign | F16_MAX_EXPONENT);
+	}
+	else if (exponent > -15)
+	{ /* Representable value */
+		exponent += F16_EXPONENT_BIAS;
+		mantissa >>= F16_MANTISSA_SHIFT;
+		f16 = (unsigned short)(sign | exponent << F16_EXPONENT_SHIFT | mantissa);
+	}
+	else
+	{
+		f16 = (unsigned short)sign;
+	}
+	return f16;
+}
+
+static inline void util_pack_float2_to_half2(uint32_t count, uint32_t stride, uint32_t offset, const uint8_t* src, uint8_t* dst)
+{
+	struct f2
+	{
+		float x;
+		float y;
+	};
+	f2* f = (f2*)src;
+	for (uint32_t e = 0; e < count; ++e)
+	{
+		*(uint32_t*)(dst + e * sizeof(uint32_t) + offset) =
+			((util_float_to_half(f[e].x) & 0x0000FFFF) | ((util_float_to_half(f[e].y) << 16) & 0xFFFF0000));
+	}
+}
+
+static inline uint32_t util_float2_to_unorm2x16(const float* v)
+{
+	uint32_t x = (uint32_t)round(clamp(v[0], 0, 1) * 65535.0f);
+	uint32_t y = (uint32_t)round(clamp(v[1], 0, 1) * 65535.0f);
+	return ((uint32_t)0x0000FFFF & x) | ((y << 16) & (uint32_t)0xFFFF0000);
+}
+
+#define OCT_WRAP(v, w) ((1.0f - abs((w))) * ((v) >= 0.0f ? 1.0f : -1.0f))
+
+static inline void util_pack_float3_direction_to_half2(uint32_t count, uint32_t stride, uint32_t offset, const uint8_t* src, uint8_t* dst)
+{
+	struct f3
+	{
+		float x;
+		float y;
+		float z;
+	};
+	for (uint32_t e = 0; e < count; ++e)
+	{
+		f3    f = *(f3*)(src + e * stride);
+		float absLength = (abs(f.x) + abs(f.y) + abs(f.z));
+		f3    enc = {};
+		if (absLength)
+		{
+			enc.x = f.x / absLength;
+			enc.y = f.y / absLength;
+			enc.z = f.z / absLength;
+			if (enc.z < 0)
+			{
+				float oldX = enc.x;
+				enc.x = OCT_WRAP(enc.x, enc.y);
+				enc.y = OCT_WRAP(enc.y, oldX);
+			}
+			enc.x = enc.x * 0.5f + 0.5f;
+			enc.y = enc.y * 0.5f + 0.5f;
+			*(uint32_t*)(dst + e * sizeof(uint32_t) + offset) = util_float2_to_unorm2x16(&enc.x);
+		}
+		else
+		{
+			*(uint32_t*)(dst + e * sizeof(uint32_t) + offset) = 0;
+		}
+	}
+}
 
 /************************************************************************/
 // Internal Structures
@@ -153,6 +339,70 @@ struct ResourceLoader
 
 static ResourceLoader* pResourceLoader = NULL;
 
+/************************************************************************/
+// Internal Functions
+/************************************************************************/
+/// Return a new staging buffer
+static MappedMemoryRange allocateUploadMemory(Renderer* pRenderer, uint64_t memoryRequirement, uint32_t alignment)
+{
+	Buffer* buffer;
+	{
+		//LOGF(LogLevel::eINFO, "Allocating temporary staging buffer. Required allocation size of %llu is larger than the staging buffer capacity of %llu", memoryRequirement, size);
+		buffer = {};
+		BufferDesc bufferDesc = {};
+		bufferDesc.mSize = memoryRequirement;
+		bufferDesc.mAlignment = alignment;
+		bufferDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_ONLY;
+		bufferDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
+		bufferDesc.mNodeIndex = pRenderer->mUnlinkedRendererIndex;
+		vk_addBuffer(pRenderer, &bufferDesc, &buffer);
+	}
+	return { (uint8_t*)buffer->pCpuMappedAddress, buffer, 0, memoryRequirement };
+}
+
+static void cleanupCopyEngine(Renderer* pRenderer, CopyEngine* pCopyEngine)
+{
+	for (uint32_t i = 0; i < pCopyEngine->bufferCount; ++i)
+	{
+		CopyResourceSet& resourceSet = pCopyEngine->resourceSets[i];
+		vk_removeBuffer(pRenderer, resourceSet.mBuffer);
+
+		vk_removeSemaphore(pRenderer, resourceSet.pCopyCompletedSemaphore);
+
+		vk_removeCmd(pRenderer, resourceSet.pCmd);
+		vk_removeCmdPool(pRenderer, resourceSet.pCmdPool);
+		vk_removeFence(pRenderer, resourceSet.pFence);
+
+		if (!resourceSet.mTempBuffers.empty())
+			LOGF(eINFO, "Was not cleaned up %d", i);
+		for (Buffer*& buffer : resourceSet.mTempBuffers)
+		{
+			vk_removeBuffer(pRenderer, buffer);
+		}
+		pCopyEngine->resourceSets[i].mTempBuffers.set_capacity(0);
+	}
+
+	tf_free(pCopyEngine->resourceSets);
+
+	vk_removeQueue(pRenderer, pCopyEngine->pQueue);
+}
+
+static bool waitCopyEngineSet(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, bool wait)
+{
+	ASSERT(!pCopyEngine->isRecording);
+	CopyResourceSet& resourceSet = pCopyEngine->resourceSets[activeSet];
+	bool completed = true;
+
+	FenceStatus status;
+	vk_getFenceStatus(pRenderer, resourceSet.pFence, &status);
+	completed = status != FENCE_STATUS_INCOMPLETE;
+	if (wait && !completed)
+	{
+		vk_waitForFences(pRenderer, 1, &resourceSet.pFence);
+	}
+	return completed;
+}
+
 static uint32_t util_get_texture_row_alignment(Renderer* pRenderer)
 {
 	return max(1u, pRenderer->pActiveGpuSettings->mUploadBufferTextureRowAlignment);
@@ -188,6 +438,31 @@ static Cmd* acquireCmd(CopyEngine* pCopyEngine, size_t activeSet)
 		pCopyEngine->isRecording = true;
 	}
 	return resourceSet.pCmd;
+}
+
+static void streamerFlush(CopyEngine* pCopyEngine, size_t activeSet)
+{
+	if (pCopyEngine->isRecording)
+	{
+		CopyResourceSet& resourceSet = pCopyEngine->resourceSets[activeSet];
+		vk_endCmd(resourceSet.pCmd);
+		QueueSubmitDesc submitDesc = {};
+		submitDesc.mCmdCount = 1;
+		submitDesc.ppCmds = &resourceSet.pCmd;
+		submitDesc.mSignalSemaphoreCount = 1;
+		submitDesc.ppSignalSemaphores = &resourceSet.pCopyCompletedSemaphore;
+		submitDesc.pSignalFence = resourceSet.pFence;
+		if (!pCopyEngine->mWaitSemaphores.empty())
+		{
+			submitDesc.mWaitSemaphoreCount = (uint32_t)pCopyEngine->mWaitSemaphores.size();
+			submitDesc.ppWaitSemaphores = &pCopyEngine->mWaitSemaphores[0];
+			pCopyEngine->mWaitSemaphores.clear();
+		}
+		{
+			vk_queueSubmit(pCopyEngine->pQueue, &submitDesc);
+		}
+		pCopyEngine->isRecording = false;
+	}
 }
 
 static MappedMemoryRange allocateStagingMemory(uint64_t memoryRequirement, uint32_t alignment, uint32_t nodeIndex)
@@ -228,6 +503,20 @@ static MappedMemoryRange allocateStagingMemory(uint64_t memoryRequirement, uint3
 	return range;
 }
 
+static void freeAllUploadMemory()
+{
+	for (size_t i = 0; i < MAX_MULTIPLE_GPUS; ++i)
+	{
+		for (UpdateRequest& request : pResourceLoader->mRequestQueue[i])
+		{
+			if (request.pUploadBuffer)
+			{
+				vk_removeBuffer(pResourceLoader->ppRenderers[i], request.pUploadBuffer);
+			}
+		}
+	}
+}
+
 static UploadFunctionResult updateTexture(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, const TextureUpdateDescInternal& texUpdateDesc)
 {
 	// When this call comes from updateResource, staging buffer data is already filled
@@ -257,7 +546,7 @@ static UploadFunctionResult updateTexture(Renderer* pRenderer, CopyEngine* pCopy
 		: allocateStagingMemory(requiredSize, sliceAlignment, texture->mNodeIndex);
 	uint64_t          offset = 0;
 
-	if (!upload.pData) 
+	if (!upload.pData)
 	{
 		return UPLOAD_FUNCTION_RESULT_STAGING_BUFFER_FULL;
 	}
@@ -787,7 +1076,7 @@ static UploadFunctionResult loadGeometry(Renderer* pRenderer, CopyEngine* pCopyE
 		indexBufferDesc.mStructStride = indexStride;
 		indexBufferDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_GPU_ONLY;
 		indexBufferDesc.mStartState = gUma ? RESOURCE_STATE_INDEX_BUFFER : indexBufferDesc.mStartState;
-		addBuffer(pRenderer, &indexBufferDesc, &geom->pIndexBuffer);
+		vk_addBuffer(pRenderer, &indexBufferDesc, &geom->pIndexBuffer);
 
 		indexUpdateDesc.mSize = indexCount * indexStride;
 		indexUpdateDesc.pBuffer = geom->pIndexBuffer;
@@ -816,7 +1105,7 @@ static UploadFunctionResult loadGeometry(Renderer* pRenderer, CopyEngine* pCopyE
 			vertexBufferDesc.mStructStride = vertexStrides[i];
 			vertexBufferDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_GPU_ONLY;
 			vertexBufferDesc.mStartState = gUma ? RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER : vertexBufferDesc.mStartState;
-			addBuffer(pRenderer, &vertexBufferDesc, &geom->pVertexBuffers[bufferCounter]);
+			vk_addBuffer(pRenderer, &vertexBufferDesc, &geom->pVertexBuffers[bufferCounter]);
 
 			geom->mVertexStrides[bufferCounter] = vertexStrides[i];
 
@@ -1178,6 +1467,69 @@ static UploadFunctionResult loadGeometry(Renderer* pRenderer, CopyEngine* pCopyE
 
 	return uploadResult;
 }
+
+static UploadFunctionResult copyTexture(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, TextureCopyDesc& pTextureCopy)
+{
+	Texture* texture = pTextureCopy.pTexture;
+	const TinyImageFormat fmt = (TinyImageFormat)texture->mFormat;
+
+	Cmd* cmd = acquireCmd(pCopyEngine, activeSet);
+
+	if (pTextureCopy.pWaitSemaphore)
+		pCopyEngine->mWaitSemaphores.push_back(pTextureCopy.pWaitSemaphore);
+	if (gSelectedRendererApi == RENDERER_API_VULKAN)
+	{
+		TextureBarrier barrier = { texture, pTextureCopy.mTextureState, RESOURCE_STATE_COPY_SOURCE };
+		barrier.mAcquire = 1;
+		barrier.mQueueType = pTextureCopy.mQueueType;
+		vk_cmdResourceBarrier(cmd, 0, NULL, 1, &barrier, 0, NULL);
+	}
+	uint32_t numBytes = 0;
+	uint32_t rowBytes = 0;
+	uint32_t numRows = 0;
+
+	bool ret = util_get_surface_info(texture->mWidth, texture->mHeight, fmt, &numBytes, &rowBytes, &numRows);
+	if (!ret)
+	{
+		return UPLOAD_FUNCTION_RESULT_INVALID_REQUEST;
+	}
+
+	SubresourceDataDesc subresourceDesc = {};
+	subresourceDesc.mArrayLayer = pTextureCopy.mTextureArrayLayer;
+	subresourceDesc.mMipLevel = pTextureCopy.mTextureMipLevel;
+	subresourceDesc.mSrcOffset = pTextureCopy.mBufferOffset;
+	const uint32_t sliceAlignment = util_get_texture_subresource_alignment(pRenderer, fmt);
+	const uint32_t rowAlignment = util_get_texture_row_alignment(pRenderer);
+	uint32_t subRowPitch = round_up(rowBytes, rowAlignment);
+	uint32_t subSlicePitch = round_up(subRowPitch * numRows, sliceAlignment);
+	subresourceDesc.mRowPitch = subRowPitch;
+	subresourceDesc.mSlicePitch = subSlicePitch;
+	vk_cmdCopySubresource(cmd, pTextureCopy.pBuffer, pTextureCopy.pTexture, &subresourceDesc);
+
+
+	return UPLOAD_FUNCTION_RESULT_COMPLETED;
+
+}
+
+static void queueTextureUpdate(ResourceLoader* pLoader, TextureUpdateDescInternal* pTextureUpdate, SyncToken* token)
+{
+	ASSERT(pTextureUpdate->mRange.pBuffer);
+
+	uint32_t nodeIndex = pTextureUpdate->pTexture->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pTextureUpdate));
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	pLoader->mRequestQueue[nodeIndex].back().pUploadBuffer =
+		(pTextureUpdate->mRange.mFlags & MAPPED_RANGE_FLAG_TEMP_BUFFER) ? pTextureUpdate->mRange.pBuffer : NULL;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
+
 /************************************************************************/
 // Internal Resource Loader Implementation
 /************************************************************************/
@@ -1354,62 +1706,6 @@ static void streamerThreadFunc(void* pThreadData)
 	freeAllUploadMemory();
 }
 
-/************************************************************************/
-// Internal Functions
-/************************************************************************/
-/// Return a new staging buffer
-static MappedMemoryRange allocateUploadMemory(Renderer* pRenderer, uint64_t memoryRequirement, uint32_t alignment)
-{
-	Buffer* buffer;
-	{
-		//LOGF(LogLevel::eINFO, "Allocating temporary staging buffer. Required allocation size of %llu is larger than the staging buffer capacity of %llu", memoryRequirement, size);
-		buffer = {};
-		BufferDesc bufferDesc = {};
-		bufferDesc.mSize = memoryRequirement;
-		bufferDesc.mAlignment = alignment;
-		bufferDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_ONLY;
-		bufferDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
-		bufferDesc.mNodeIndex = pRenderer->mUnlinkedRendererIndex;
-		vk_addBuffer(pRenderer, &bufferDesc, &buffer);
-	}
-	return { (uint8_t*)buffer->pCpuMappedAddress, buffer, 0, memoryRequirement };
-}
-
-static bool waitCopyEngineSet(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, bool wait)
-{
-	ASSERT(!pCopyEngine->isRecording);
-	CopyResourceSet& resourceSet = pCopyEngine->resourceSets[activeSet];
-	bool completed = true;
-
-	FenceStatus status;
-	vk_getFenceStatus(pRenderer, resourceSet.pFence, &status);
-	completed = status != FENCE_STATUS_INCOMPLETE;
-	if (wait && !completed)
-	{
-		vk_waitForFences(pRenderer, 1, &resourceSet.pFence);
-	}
-	return completed;
-}
-
-static void queueTextureUpdate(ResourceLoader* pLoader, TextureUpdateDescInternal* pTextureUpdate, SyncToken* token)
-{
-	ASSERT(pTextureUpdate->mRange.pBuffer);
-
-	uint32_t nodeIndex = pTextureUpdate->pTexture->mNodeIndex;
-	acquireMutex(&pLoader->mQueueMutex);
-
-	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
-
-	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pTextureUpdate));
-	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
-	pLoader->mRequestQueue[nodeIndex].back().pUploadBuffer =
-		(pTextureUpdate->mRange.mFlags & MAPPED_RANGE_FLAG_TEMP_BUFFER) ? pTextureUpdate->mRange.pBuffer : NULL;
-	releaseMutex(&pLoader->mQueueMutex);
-	wakeOneConditionVariable(&pLoader->mQueueCond);
-	if (token)
-		*token = max(t, *token);
-}
-
 void beginUpdateResource(TextureUpdateDesc* pTextureUpdate)
 {
 	const Texture* texture = pTextureUpdate->pTexture;
@@ -1457,4 +1753,9 @@ void endUpdateResource(TextureUpdateDesc* pTextureUpdate, SyncToken* token)
 	{
 		streamerThreadFunc(pResourceLoader);
 	}
+}
+
+SyncToken getLastTokenCompleted()
+{
+	return tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted);
 }

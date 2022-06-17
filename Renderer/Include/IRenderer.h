@@ -6,6 +6,8 @@
 
 #include "../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
 
+#include "../../ThirdParty/OpenSource/VulkanMemoryAllocator/VulkanMemoryAllocator.h"
+
 #define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
 	static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b)); } \
 	static inline ENUM_TYPE operator&(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) & (TYPE)(b)); } \
@@ -179,6 +181,12 @@ typedef enum SampleCount
 	SAMPLE_COUNT_8 = 8,
 	SAMPLE_COUNT_16 = 16,
 } SampleCount;
+
+typedef enum IndexType
+{
+	INDEX_TYPE_UINT32 = 0,
+	INDEX_TYPE_UINT16,
+} IndexType;
 
 typedef enum ShaderSemantic
 {
@@ -796,6 +804,11 @@ typedef struct GPUCapBits
 	bool canRenderTargetWriteTo[TinyImageFormat_Count];
 } GPUCapBits;
 
+typedef enum DefaultResourceAlignment
+{
+	RESOURCE_BUFFER_ALIGNMENT = 4U,
+} DefaultResourceAlignment;
+
 typedef enum WaveOpsSupportFlags
 {
 	WAVE_OPS_SUPPORT_FLAG_NONE = 0x0,
@@ -941,6 +954,18 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 // queue/fence/swapchain functions
 //DECLARE_RENDERER_FUNCTION(void, waitQueueIdle, Queue* p_queue)
 
+typedef struct QueueSubmitDesc
+{
+	Cmd** ppCmds;
+	Fence* pSignalFence;
+	Semaphore** ppWaitSemaphores;
+	Semaphore** ppSignalSemaphores;
+	uint32_t    mCmdCount;
+	uint32_t    mWaitSemaphoreCount;
+	uint32_t    mSignalSemaphoreCount;
+	bool        mSubmitDone;
+} QueueSubmitDesc;
+
 typedef struct SubresourceDataDesc
 {
 	uint64_t mSrcOffset;
@@ -960,7 +985,7 @@ struct VkVTPendingPageDeletion
 };
 
 void vk_waitQueueIdle(Queue* p_queue);
-
+void vk_removeQueue(Renderer* pRenderer, Queue* pQueue);
 
 void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffer);
 void vk_getFenceStatus(Renderer* pRenderer, Fence* pFence, FenceStatus* pFenceStatus);
@@ -981,6 +1006,16 @@ void vk_cmdResourceBarrier(
 	Cmd* pCmd, uint32_t numBufferBarriers, BufferBarrier* pBufferBarriers, uint32_t numTextureBarriers, TextureBarrier* pTextureBarriers,
 	uint32_t numRtBarriers, RenderTargetBarrier* pRtBarriers);
 void vk_cmdUpdateSubresource(Cmd* pCmd, Texture* pTexture, Buffer* pSrcBuffer, const SubresourceDataDesc* pSubresourceDesc);
+void vk_cmdCopySubresource(Cmd* pCmd, Buffer* pDstBuffer, Texture* pTexture, const SubresourceDataDesc* pSubresourceDesc);
+void vk_endCmd(Cmd* pCmd);
+void vk_removeCmd(Renderer* pRenderer, Cmd* pCmd);
+void vk_removeCmdPool(Renderer* pRenderer, CmdPool* pCmdPool);
 
 void vk_mapBuffer(Renderer* pRenderer, Buffer* pBuffer, ReadRange* pRange);
 void vk_unmapBuffer(Renderer* pRenderer, Buffer* pBuffer);
+
+void vk_queueSubmit(Queue* pQueue, const QueueSubmitDesc* pDesc);
+
+void vk_removeSemaphore(Renderer* pRenderer, Semaphore* pSemaphore);
+
+void vk_removeFence(Renderer* pRenderer, Fence* pFence);

@@ -7,6 +7,18 @@
     <Filter Include="Source">
       <UniqueIdentifier>{56EB95D1-428D-C0A7-2B48-D4FB178947F8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ThirdParty">
+      <UniqueIdentifier>{107145F9-FC28-8746-6530-60A251072237}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource">
+      <UniqueIdentifier>{E22582C4-4E92-3DBF-1786-D51C83B15F27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\meshoptimizer">
+      <UniqueIdentifier>{410D273E-ADC6-91E8-3626-ACC2A2DE4758}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\meshoptimizer\src">
+      <UniqueIdentifier>{D88399E9-4413-5BD4-4D0F-3CECB91D96E0}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Vulkan">
       <UniqueIdentifier>{D6EAFCD8-C28C-27AF-AB47-3B039788AEFF}</UniqueIdentifier>
     </Filter>
@@ -15,28 +27,43 @@
     <ClInclude Include="Include\IRenderer.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="Include\RendererConfig.h">
+    <ClInclude Include="Include\IResourceLoader.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="Vulkan\VulkanConfig.h">
-      <Filter>Vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="Include\IResourceLoader.h">
+    <ClInclude Include="Include\RendererConfig.h">
       <Filter>Include</Filter>
     </ClInclude>
     <ClInclude Include="Vulkan\VulkanCapsBuilder.h">
       <Filter>Vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="Vulkan\VulkanConfig.h">
+      <Filter>Vulkan</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\allocator.cpp">
+      <Filter>ThirdParty\OpenSource\meshoptimizer\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\indexgenerator.cpp">
+      <Filter>ThirdParty\OpenSource\meshoptimizer\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\overdrawoptimizer.cpp">
+      <Filter>ThirdParty\OpenSource\meshoptimizer\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\vcacheoptimizer.cpp">
+      <Filter>ThirdParty\OpenSource\meshoptimizer\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\vfetchoptimizer.cpp">
+      <Filter>ThirdParty\OpenSource\meshoptimizer\src</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Renderer.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ResourceLoader.cpp">
       <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="Vulkan\Vulkan.cpp">
       <Filter>Vulkan</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\ResourceLoader.cpp">
-      <Filter>Source</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

@@ -49,4 +49,17 @@ extern "C"
 	typedef void* ThreadHandle;
 #ifdef __cplusplus
 }    // extern "C"
+
+struct MutexLock
+{
+	MutexLock(Mutex& rhs) : mMutex(rhs) { acquireMutex(&rhs); }
+	~MutexLock() { releaseMutex(&mMutex); }
+
+	/// Prevent copy construction.
+	MutexLock(const MutexLock& rhs) = delete;
+	/// Prevent assignment.
+	MutexLock& operator=(const MutexLock& rhs) = delete;
+
+	Mutex& mMutex;
+};
 #endif

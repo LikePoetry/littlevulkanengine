@@ -8,6 +8,7 @@ typedef volatile ALIGNAS(PTR_SIZE) uintptr_t tfrg_atomicptr_t;
 #include <windows.h>
 #include <intrin.h>
 
+#define tfrg_memorybarrier_acquire() _ReadWriteBarrier()
 #define tfrg_memorybarrier_release() _ReadWriteBarrier()
 
 #define tfrg_atomic64_load_relaxed(pVar) (*(pVar))
@@ -18,4 +19,11 @@ static inline uint64_t tfrg_atomic64_store_release(tfrg_atomic64_t* pVar, uint64
 {
 	tfrg_memorybarrier_release();
 	return tfrg_atomic64_store_relaxed(pVar, val);
+}
+
+static inline uint64_t tfrg_atomic64_load_acquire(tfrg_atomic64_t* pVar)
+{
+	uint64_t value = tfrg_atomic64_load_relaxed(pVar);
+	tfrg_memorybarrier_acquire();
+	return value;
 }

@@ -8,7 +8,7 @@
 
 
 #include "../../Renderer/Include/IRenderer.h"
-#include "../../Renderer/Include/IResourceLoader.h"-
+#include "../../Renderer/Include/IResourceLoader.h"
 
 class _Impl_FontStash
 {
