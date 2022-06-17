@@ -94,13 +94,27 @@ typedef enum ResourceMemoryUsage
 	RESOURCE_MEMORY_USAGE_MAX_ENUM = 0x7FFFFFFF
 } ResourceMemoryUsage;
 
+typedef enum PipelineType
+{
+	PIPELINE_TYPE_UNDEFINED = 0,
+	PIPELINE_TYPE_COMPUTE,
+	PIPELINE_TYPE_GRAPHICS,
+	PIPELINE_TYPE_RAYTRACING,
+	PIPELINE_TYPE_COUNT,
+} PipelineType;
+
 // Forward declarations
 typedef struct RendererContext    RendererContext;
 typedef struct Renderer           Renderer;
 typedef struct Queue              Queue;
+typedef struct Pipeline           Pipeline;
 typedef struct Buffer             Buffer;
 typedef struct Texture            Texture;
 typedef struct RenderTarget       RenderTarget;
+typedef struct DescriptorSet      DescriptorSet;
+typedef struct DescriptorIndexMap DescriptorIndexMap;
+
+typedef struct AccelerationStructure AccelerationStructure;
 
 
 typedef struct IndirectDrawIndexArguments
@@ -531,6 +545,151 @@ typedef struct DEFINE_ALIGNED(RenderTarget, 64)
 } RenderTarget;
 COMPILE_ASSERT(sizeof(RenderTarget) <= 32 * sizeof(uint64_t));
 
+typedef struct DEFINE_ALIGNED(Sampler, 16)
+{
+	union
+	{
+		struct
+		{
+			/// Native handle of the underlying resource
+			VkSampler                    pVkSampler;
+			VkSamplerYcbcrConversion     pVkSamplerYcbcrConversion;
+			VkSamplerYcbcrConversionInfo mVkSamplerYcbcrConversionInfo;
+		} mVulkan;
+	};
+} Sampler;
+
+typedef enum DescriptorUpdateFrequency
+{
+	DESCRIPTOR_UPDATE_FREQ_NONE = 0,
+	DESCRIPTOR_UPDATE_FREQ_PER_FRAME,
+	DESCRIPTOR_UPDATE_FREQ_PER_BATCH,
+	DESCRIPTOR_UPDATE_FREQ_PER_DRAW,
+	DESCRIPTOR_UPDATE_FREQ_COUNT,
+} DescriptorUpdateFrequency;
+
+typedef struct DEFINE_ALIGNED(DescriptorInfo, 16)
+{
+	const char* pName;
+	uint32_t    mType : 21;
+	uint32_t    mDim : 4;
+	uint32_t    mRootDescriptor : 1;
+	uint32_t    mStaticSampler : 1;
+	uint32_t    mUpdateFrequency : 3;
+	uint32_t    mSize;
+	uint32_t    mHandleIndex;
+	union
+	{
+		uint32_t mVkType;
+		uint32_t mReg : 20;
+		uint32_t mVkStages : 8;
+	} mVulkan;
+} DescriptorInfo;
+COMPILE_ASSERT(sizeof(DescriptorInfo) == 4 * sizeof(uint64_t));
+
+typedef struct DEFINE_ALIGNED(RootSignature, 64)
+{
+	/// Number of descriptors declared in the root signature layout
+	uint32_t mDescriptorCount;
+	/// Graphics or Compute
+	PipelineType mPipelineType;
+	/// Array of all descriptors declared in the root signature layout
+	DescriptorInfo* pDescriptors;
+	/// Translates hash of descriptor name to descriptor index in pDescriptors array
+	DescriptorIndexMap* pDescriptorNameToIndexMap;
+	union
+	{
+		struct
+		{
+			VkPipelineLayout            pPipelineLayout;
+			VkDescriptorSetLayout       mVkDescriptorSetLayouts[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint32_t                    mVkCumulativeDescriptorCounts[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint32_t                    mCumulativeDescriptorSizes[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint8_t                     mVkDynamicDescriptorCounts[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			VkDescriptorPoolSize        mPoolSizes[DESCRIPTOR_UPDATE_FREQ_COUNT][MAX_DESCRIPTOR_POOL_SIZE_ARRAY_COUNT];
+			uint8_t                     mPoolSizeCount[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			VkDescriptorPool            pEmptyDescriptorPool[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			VkDescriptorSet             pEmptyDescriptorSet[DESCRIPTOR_UPDATE_FREQ_COUNT];
+		} mVulkan;
+	};
+} RootSignature;
+COMPILE_ASSERT(sizeof(RootSignature) <= 72 * sizeof(uint64_t));
+
+typedef struct DescriptorDataRange
+{
+	uint32_t mOffset;
+	uint32_t mSize;
+} DescriptorDataRange;
+
+typedef struct DescriptorData
+{
+	/// User can either set name of descriptor or index (index in pRootSignature->pDescriptors array)
+	/// Name of descriptor
+	const char* pName;
+	/// Number of array entries to update (array size of ppTextures/ppBuffers/...)
+	uint32_t    mCount;
+	/// Dst offset into the array descriptor (useful for updating few entries in a large array)
+	// Example: to update 6th entry in a bindless texture descriptor, mArrayOffset will be 6 and mCount will be 1)
+	uint32_t    mArrayOffset : 20;
+	// Index in pRootSignature->pDescriptors array - Cache index using getDescriptorIndexFromName to avoid using string checks at runtime
+	uint32_t    mIndex : 10;
+	uint32_t    mBindByIndex : 1;
+	uint32_t    mExtractBuffer : 1;
+
+	union
+	{
+		// Range to bind (buffer offset, size)
+		DescriptorDataRange* pRanges;
+		// Descriptor set buffer extraction options
+		uint32_t                mDescriptorSetBufferIndex;
+		struct
+		{
+			// When binding UAV, control the mip slice to to bind for UAV (example - generating mipmaps in a compute shader)
+			uint16_t            mUAVMipSlice;
+			// Binds entire mip chain as array of UAV
+			bool                mBindMipChain;
+		};
+		// Binds stencil only descriptor instead of color/depth
+		bool                    mBindStencilResource;
+	};
+	/// Array of resources containing descriptor handles or constant to be used in ring buffer memory - DescriptorRange can hold only one resource type array
+	union
+	{
+		/// Array of texture descriptors (srv and uav textures)
+		Texture** ppTextures;
+		/// Array of sampler descriptors
+		Sampler** ppSamplers;
+		/// Array of buffer descriptors (srv, uav and cbv buffers)
+		Buffer** ppBuffers;
+		/// Array of pipeline descriptors
+		Pipeline** ppPipelines;
+		/// DescriptorSet buffer extraction
+		DescriptorSet** ppDescriptorSet;
+		/// Custom binding (raytracing acceleration structure ...)
+		AccelerationStructure** ppAccelerationStructures;
+	};
+} DescriptorData;
+
+typedef struct DEFINE_ALIGNED(DescriptorSet, 64)
+{
+	union
+	{
+		struct
+		{
+			VkDescriptorSet* pHandles;
+			const RootSignature* pRootSignature;
+			uint8_t* pDescriptorData;
+			struct DynamicUniformData* pDynamicUniformData;
+			VkDescriptorPool             pDescriptorPool;
+			uint32_t                     mMaxSets;
+			uint8_t                      mDynamicOffsetCount;
+			uint8_t                      mUpdateFrequency;
+			uint8_t                      mNodeIndex;
+			uint8_t                      mPadA;
+		} mVulkan;
+	};
+} DescriptorSet;
+
 typedef struct CmdPool
 {
 	VkCommandPool pVkCmdPool;
@@ -935,6 +1094,23 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 	uint32_t mGpuCount;
 }RendererContext;
 
+typedef struct DEFINE_ALIGNED(Pipeline, 64)
+{
+	union
+	{
+		struct
+		{
+			VkPipeline   pVkPipeline;
+			PipelineType mType;
+			uint32_t     mShaderStageCount;
+			//In DX12 this information is stored in ID3D12StateObject.
+			//But for Vulkan we need to store it manually
+			const char** ppShaderStageNames;
+			uint64_t     mPadB[4];
+		} mVulkan;
+	};
+} Pipeline;
+
 //#ifdef __INTELLISENSE__
 //// IntelliSense is the code completion engine in Visual Studio. When it parses the source files, __INTELLISENSE__ macro is defined.
 //// Here we trick IntelliSense into thinking that the renderer functions are not function pointers, but just regular functions.
@@ -1007,6 +1183,13 @@ void vk_cmdResourceBarrier(
 	uint32_t numRtBarriers, RenderTargetBarrier* pRtBarriers);
 void vk_cmdUpdateSubresource(Cmd* pCmd, Texture* pTexture, Buffer* pSrcBuffer, const SubresourceDataDesc* pSubresourceDesc);
 void vk_cmdCopySubresource(Cmd* pCmd, Buffer* pDstBuffer, Texture* pTexture, const SubresourceDataDesc* pSubresourceDesc);
+void vk_cmdBindPipeline(Cmd* pCmd, Pipeline* pPipeline);
+void vk_cmdBindDescriptorSetWithRootCbvs(Cmd* pCmd, uint32_t index, DescriptorSet* pDescriptorSet, uint32_t count, const DescriptorData* pParams);
+void vk_cmdBindDescriptorSet(Cmd* pCmd, uint32_t index, DescriptorSet* pDescriptorSet);
+void vk_cmdBindPushConstants(Cmd* pCmd, RootSignature* pRootSignature, uint32_t paramIndex, const void* pConstants);
+void vk_cmdBindVertexBuffer(Cmd* pCmd, uint32_t bufferCount, Buffer** ppBuffers, const uint32_t* pStrides, const uint64_t* pOffsets);
+
+void vk_cmdDraw(Cmd* pCmd, uint32_t vertex_count, uint32_t first_vertex);
 void vk_endCmd(Cmd* pCmd);
 void vk_removeCmd(Renderer* pRenderer, Cmd* pCmd);
 void vk_removeCmdPool(Renderer* pRenderer, CmdPool* pCmdPool);

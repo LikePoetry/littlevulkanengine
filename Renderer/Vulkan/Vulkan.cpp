@@ -7,6 +7,11 @@
 
 #include "../Include/IRenderer.h"
 
+#include "../../ThirdParty/OpenSource/EASTL/vector.h"
+#include "../../ThirdParty/OpenSource/EASTL/functional.h"
+#include "../../ThirdParty/OpenSource/EASTL/sort.h"
+#include "../../ThirdParty/OpenSource/EASTL/string_hash_map.h"
+
 
 #include "../../OS/Interfaces/ILog.h"
 #include "../../OS/Math/MathTypes.h"
@@ -43,6 +48,44 @@ static void VKAPI_PTR
 gVkInternalFree(void* pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope)
 {
 }
+
+using DescriptorNameToIndexMap = eastl::string_hash_map<uint32_t>;
+
+struct DynamicUniformData
+{
+	VkBuffer pBuffer;
+	uint32_t mOffset;
+	uint32_t mSize;
+};
+/************************************************************************/
+// Descriptor Set Structure
+/************************************************************************/
+typedef struct DescriptorIndexMap
+{
+	eastl::string_hash_map<uint32_t> mMap;
+} DescriptorIndexMap;
+
+static const DescriptorInfo* get_descriptor(const RootSignature* pRootSignature, const char* pResName)
+{
+	DescriptorNameToIndexMap::const_iterator it = pRootSignature->pDescriptorNameToIndexMap->mMap.find(pResName);
+	if (it != pRootSignature->pDescriptorNameToIndexMap->mMap.end())
+	{
+		return &pRootSignature->pDescriptors[it->second];
+	}
+	else
+	{
+		LOGF(LogLevel::eERROR, "Invalid descriptor param (%s)", pResName);
+		return NULL;
+	}
+}
+/************************************************************************/
+/************************************************************************/
+VkPipelineBindPoint gPipelineBindPoint[PIPELINE_TYPE_COUNT] = 
+{ 
+	VK_PIPELINE_BIND_POINT_MAX_ENUM, VK_PIPELINE_BIND_POINT_COMPUTE,
+	VK_PIPELINE_BIND_POINT_GRAPHICS,
+	VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+};
 
 VkAllocationCallbacks gVkAllocationCallbacks =
 {
@@ -1547,6 +1590,19 @@ void vk_updateVirtualTextureMemory(Cmd* pCmd, Texture* pTexture, uint32_t imageM
 	}
 }
 
+#if defined(ENABLE_GRAPHICS_DEBUG)
+#define VALIDATE_DESCRIPTOR(descriptor, ...)                                                            \
+	if (!(descriptor))                                                                                  \
+	{                                                                                                   \
+		eastl::string msg = __FUNCTION__ + eastl::string(" : ") + eastl::string().sprintf(__VA_ARGS__); \
+		LOGF(LogLevel::eERROR, msg.c_str());                                                            \
+		_FailedAssert(__FILE__, __LINE__, msg.c_str());                                                 \
+		continue;                                                                                       \
+	}
+#else
+#define VALIDATE_DESCRIPTOR(descriptor, ...)
+#endif
+
 void vk_uploadVirtualTexturePage(Cmd* pCmd, Texture* pTexture, VirtualTexturePage* pPage, uint32_t* imageMemoryCount, uint32_t currentImage)
 {
 	Buffer* pIntermediateBuffer = NULL;
@@ -1599,6 +1655,7 @@ void vk_uploadVirtualTexturePage(Cmd* pCmd, Texture* pTexture, VirtualTexturePag
 	}
 }
 
+static const uint32_t VK_MAX_ROOT_DESCRIPTORS = 32;
 
 void vk_resetCmdPool(Renderer* pRenderer, CmdPool* pCmdPool)
 {
@@ -1982,6 +2039,168 @@ void vk_cmdCopySubresource(Cmd* pCmd, Buffer* pDstBuffer, Texture* pTexture, con
 			pCmd->mVulkan.pVkCmdBuf, pTexture->mVulkan.pVkImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, pDstBuffer->mVulkan.pVkBuffer,
 			numOfPlanes, bufferImagesCopy);
 	}
+}
+
+void vk_cmdBindPipeline(Cmd* pCmd, Pipeline* pPipeline)
+{
+	ASSERT(pCmd);
+	ASSERT(pPipeline);
+	ASSERT(pCmd->mVulkan.pVkCmdBuf != VK_NULL_HANDLE);
+
+	VkPipelineBindPoint pipeline_bind_point = gPipelineBindPoint[pPipeline->mVulkan.mType];
+	vkCmdBindPipeline(pCmd->mVulkan.pVkCmdBuf, pipeline_bind_point, pPipeline->mVulkan.pVkPipeline);
+}
+
+void vk_cmdBindDescriptorSetWithRootCbvs(Cmd* pCmd, uint32_t index, DescriptorSet* pDescriptorSet, uint32_t count, const DescriptorData* pParams)
+{
+	ASSERT(pCmd);
+	ASSERT(pDescriptorSet);
+	ASSERT(pParams);
+	const RootSignature* pRootSignature = pDescriptorSet->mVulkan.pRootSignature;
+	uint32_t offsets[VK_MAX_ROOT_DESCRIPTORS] = {};
+
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const DescriptorData* pParam = pParams + i;
+		uint32_t              paramIndex = pParam->mBindByIndex ? pParam->mIndex : UINT32_MAX;
+
+		const DescriptorInfo* pDesc =
+			(paramIndex != UINT32_MAX) ? (pRootSignature->pDescriptors + paramIndex) : get_descriptor(pRootSignature, pParam->pName);
+		if (paramIndex != UINT32_MAX)
+		{
+			VALIDATE_DESCRIPTOR(pDesc, "Invalid descriptor with param index (%u)", paramIndex);
+		}
+		else
+		{
+			VALIDATE_DESCRIPTOR(pDesc, "Invalid descriptor with param name (%s)", pParam->pName);
+		}
+
+#if defined(ENABLE_GRAPHICS_DEBUG)
+		const uint32_t maxRange = DESCRIPTOR_TYPE_UNIFORM_BUFFER == pDesc->mType ?    //-V522
+			pCmd->pRenderer->mVulkan.pVkActiveGPUProperties->properties.limits.maxUniformBufferRange :
+			pCmd->pRenderer->mVulkan.pVkActiveGPUProperties->properties.limits.maxStorageBufferRange;
+#endif
+
+		VALIDATE_DESCRIPTOR(pDesc->mRootDescriptor, "Descriptor (%s) - must be a root cbv", pDesc->pName);
+		VALIDATE_DESCRIPTOR(pParam->mCount <= 1, "Descriptor (%s) - cmdBindDescriptorSetWithRootCbvs does not support arrays", pDesc->pName);
+		VALIDATE_DESCRIPTOR(pParam->pRanges, "Descriptor (%s) - pRanges must be provided for cmdBindDescriptorSetWithRootCbvs", pDesc->pName);
+
+		DescriptorDataRange range = pParam->pRanges[0];
+		VALIDATE_DESCRIPTOR(range.mSize, "Descriptor (%s) - pRanges->mSize is zero", pDesc->pName);
+		VALIDATE_DESCRIPTOR(
+			range.mSize <= maxRange,
+			"Descriptor (%s) - pRanges->mSize is %ull which exceeds max size %u", pDesc->pName, range.mSize,
+			maxRange);
+
+		offsets[pDesc->mHandleIndex] = range.mOffset; //-V522
+		DynamicUniformData* pData = &pDescriptorSet->mVulkan.pDynamicUniformData[index * pDescriptorSet->mVulkan.mDynamicOffsetCount + pDesc->mHandleIndex];
+		if (pData->pBuffer != pParam->ppBuffers[0]->mVulkan.pVkBuffer || range.mSize != pData->mSize)
+		{
+			*pData = { pParam->ppBuffers[0]->mVulkan.pVkBuffer, 0, range.mSize };
+
+			VkDescriptorBufferInfo bufferInfo = { pData->pBuffer, 0, (VkDeviceSize)pData->mSize };
+			VkWriteDescriptorSet writeSet = {};
+			writeSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeSet.pNext = NULL;
+			writeSet.descriptorCount = 1;
+			writeSet.descriptorType = (VkDescriptorType)pDesc->mVulkan.mVkType;
+			writeSet.dstArrayElement = 0;
+			writeSet.dstBinding = pDesc->mVulkan.mReg;
+			writeSet.dstSet = pDescriptorSet->mVulkan.pHandles[index];
+			writeSet.pBufferInfo = &bufferInfo;
+			vkUpdateDescriptorSets(pCmd->pRenderer->mVulkan.pVkDevice, 1, &writeSet, 0, NULL);
+		}
+	}
+
+	vkCmdBindDescriptorSets(
+		pCmd->mVulkan.pVkCmdBuf, gPipelineBindPoint[pRootSignature->mPipelineType], pRootSignature->mVulkan.pPipelineLayout,
+		pDescriptorSet->mVulkan.mUpdateFrequency, 1, &pDescriptorSet->mVulkan.pHandles[index],
+		pDescriptorSet->mVulkan.mDynamicOffsetCount, offsets);
+}
+
+void vk_cmdBindDescriptorSet(Cmd* pCmd, uint32_t index, DescriptorSet* pDescriptorSet)
+{
+	ASSERT(pCmd);
+	ASSERT(pDescriptorSet);
+	ASSERT(pDescriptorSet->mVulkan.pHandles);
+	ASSERT(index < pDescriptorSet->mVulkan.mMaxSets);
+
+	const RootSignature* pRootSignature = pDescriptorSet->mVulkan.pRootSignature;
+
+	if (pCmd->mVulkan.pBoundPipelineLayout != pRootSignature->mVulkan.pPipelineLayout)
+	{
+		pCmd->mVulkan.pBoundPipelineLayout = pRootSignature->mVulkan.pPipelineLayout;
+
+		// Vulkan requires to bind all descriptor sets upto the highest set number even if they are empty
+		// Example: If shader uses only set 2, we still have to bind empty sets for set=0 and set=1
+		for (uint32_t setIndex = 0; setIndex < DESCRIPTOR_UPDATE_FREQ_COUNT; ++setIndex)
+		{
+			if (pRootSignature->mVulkan.pEmptyDescriptorSet[setIndex] != VK_NULL_HANDLE)
+			{
+				vkCmdBindDescriptorSets(
+					pCmd->mVulkan.pVkCmdBuf, gPipelineBindPoint[pRootSignature->mPipelineType], pRootSignature->mVulkan.pPipelineLayout,
+					setIndex, 1, &pRootSignature->mVulkan.pEmptyDescriptorSet[setIndex], 0, NULL);
+			}
+		}
+	}
+
+	static uint32_t offsets[VK_MAX_ROOT_DESCRIPTORS] = {};
+
+	vkCmdBindDescriptorSets(
+		pCmd->mVulkan.pVkCmdBuf, gPipelineBindPoint[pRootSignature->mPipelineType], pRootSignature->mVulkan.pPipelineLayout,
+		pDescriptorSet->mVulkan.mUpdateFrequency, 1, &pDescriptorSet->mVulkan.pHandles[index],
+		pDescriptorSet->mVulkan.mDynamicOffsetCount, offsets);
+}
+
+void vk_cmdBindPushConstants(Cmd* pCmd, RootSignature* pRootSignature, uint32_t paramIndex, const void* pConstants)
+{
+	ASSERT(pCmd);
+	ASSERT(pConstants);
+	ASSERT(pRootSignature);
+	ASSERT(paramIndex >= 0 && paramIndex < pRootSignature->mDescriptorCount);
+
+	const DescriptorInfo* pDesc = pRootSignature->pDescriptors + paramIndex;
+	ASSERT(pDesc);
+	ASSERT(DESCRIPTOR_TYPE_ROOT_CONSTANT == pDesc->mType);
+
+	vkCmdPushConstants(
+		pCmd->mVulkan.pVkCmdBuf, pRootSignature->mVulkan.pPipelineLayout, pDesc->mVulkan.mVkStages, 0, pDesc->mSize, pConstants);
+}
+
+void vk_cmdBindVertexBuffer(Cmd* pCmd, uint32_t bufferCount, Buffer** ppBuffers, const uint32_t* pStrides, const uint64_t* pOffsets)
+{
+	UNREF_PARAM(pStrides);
+
+	ASSERT(pCmd);
+	ASSERT(0 != bufferCount);
+	ASSERT(ppBuffers);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+	ASSERT(pStrides);
+
+	const uint32_t max_buffers = pCmd->pRenderer->mVulkan.pVkActiveGPUProperties->properties.limits.maxVertexInputBindings;
+	uint32_t       capped_buffer_count = bufferCount > max_buffers ? max_buffers : bufferCount;
+
+	// No upper bound for this, so use 64 for now
+	ASSERT(capped_buffer_count < 64);
+
+	DECLARE_ZERO(VkBuffer, buffers[64]);
+	DECLARE_ZERO(VkDeviceSize, offsets[64]);
+
+	for (uint32_t i = 0; i < capped_buffer_count; ++i)
+	{
+		buffers[i] = ppBuffers[i]->mVulkan.pVkBuffer;
+		offsets[i] = (pOffsets ? pOffsets[i] : 0);
+	}
+
+	vkCmdBindVertexBuffers(pCmd->mVulkan.pVkCmdBuf, 0, capped_buffer_count, buffers, offsets);
+}
+
+void vk_cmdDraw(Cmd* pCmd, uint32_t vertex_count, uint32_t first_vertex)
+{
+	ASSERT(pCmd);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	vkCmdDraw(pCmd->mVulkan.pVkCmdBuf, vertex_count, 1, first_vertex, 0);
 }
 
 void vk_endCmd(Cmd* pCmd)

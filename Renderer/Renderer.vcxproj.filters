@@ -39,6 +39,7 @@
     <ClInclude Include="Vulkan\VulkanConfig.h">
       <Filter>Vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="Include\IRay.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\allocator.cpp">
@@ -65,5 +66,6 @@
     <ClCompile Include="Vulkan\Vulkan.cpp">
       <Filter>Vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="Vulkan\VulkanRaytracing.cpp" />
   </ItemGroup>
 </Project>

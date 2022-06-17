@@ -95,6 +95,7 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Include\IRay.h" />
     <ClInclude Include="Include\IRenderer.h" />
     <ClInclude Include="Include\IResourceLoader.h" />
     <ClInclude Include="Include\RendererConfig.h" />
@@ -110,6 +111,7 @@
     <ClCompile Include="Source\Renderer.cpp" />
     <ClCompile Include="Source\ResourceLoader.cpp" />
     <ClCompile Include="Vulkan\Vulkan.cpp" />
+    <ClCompile Include="Vulkan\VulkanRaytracing.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

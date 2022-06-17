@@ -243,7 +243,11 @@ typedef struct ResourceLoaderDesc
 
 extern ResourceLoaderDesc gDefaultResourceLoaderDesc;
 
+void beginUpdateResource(BufferUpdateDesc* pBufferDesc);
 void beginUpdateResource(TextureUpdateDesc* pTextureDesc);
+void endUpdateResource(BufferUpdateDesc* pBuffer, SyncToken* token);
 void endUpdateResource(TextureUpdateDesc* pTexture, SyncToken* token);
 
 SyncToken getLastTokenCompleted();
+bool      isTokenCompleted(const SyncToken* token);
+void      waitForToken(const SyncToken* token);

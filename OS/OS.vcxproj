@@ -98,8 +98,10 @@
     <ClInclude Include="Core\Atomics.h" />
     <ClInclude Include="Core\CPUConfig.h" />
     <ClInclude Include="Core\Config.h" />
+    <ClInclude Include="Core\RingBuffer.h" />
     <ClInclude Include="Core\TextureContainers.h" />
     <ClInclude Include="Interfaces\IApp.h" />
+    <ClInclude Include="Interfaces\ICameraController.h" />
     <ClInclude Include="Interfaces\IFileSystem.h" />
     <ClInclude Include="Interfaces\IFont.h" />
     <ClInclude Include="Interfaces\ILog.h" />
@@ -116,6 +118,7 @@
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
+    <ClCompile Include="Camera\CameraController.cpp" />
     <ClCompile Include="Core\CPUConfig.cpp" />
     <ClCompile Include="FileSystem\FileSystem.cpp" />
     <ClCompile Include="Fonts\FontSystem.cpp" />

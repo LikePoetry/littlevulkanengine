@@ -93,6 +93,8 @@
     <ClInclude Include="Math\MathTypes.h">
       <Filter>Math</Filter>
     </ClInclude>
+    <ClInclude Include="Core\RingBuffer.h" />
+    <ClInclude Include="Interfaces\ICameraController.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp">
@@ -140,5 +142,6 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
+    <ClCompile Include="Camera\CameraController.cpp" />
   </ItemGroup>
 </Project>

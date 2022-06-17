@@ -1706,6 +1706,70 @@ static void streamerThreadFunc(void* pThreadData)
 	freeAllUploadMemory();
 }
 
+static void queueBufferUpdate(ResourceLoader* pLoader, BufferUpdateDesc* pBufferUpdate, SyncToken* token)
+{
+	uint32_t nodeIndex = pBufferUpdate->pBuffer->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pBufferUpdate));
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	pLoader->mRequestQueue[nodeIndex].back().pUploadBuffer = (pBufferUpdate->mInternal.mMappedRange.mFlags & MAPPED_RANGE_FLAG_TEMP_BUFFER)
+		? pBufferUpdate->mInternal.mMappedRange.pBuffer
+		: NULL;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
+
+static void waitForToken(ResourceLoader* pLoader, const SyncToken* token)
+{
+	if (pLoader->mDesc.mSingleThreaded)
+	{
+		return;
+	}
+	acquireMutex(&pLoader->mTokenMutex);
+	while (!isTokenCompleted(token))
+	{
+		waitConditionVariable(&pLoader->mTokenCond, &pLoader->mTokenMutex, TIMEOUT_INFINITE);
+	}
+	releaseMutex(&pLoader->mTokenMutex);
+}
+
+void beginUpdateResource(BufferUpdateDesc* pBufferUpdate)
+{
+	Buffer* pBuffer = pBufferUpdate->pBuffer;
+	ASSERT(pBuffer);
+
+	uint64_t size = pBufferUpdate->mSize > 0 ? pBufferUpdate->mSize : (pBufferUpdate->pBuffer->mSize - pBufferUpdate->mDstOffset);
+	ASSERT(pBufferUpdate->mDstOffset + size <= pBuffer->mSize);
+
+	ResourceMemoryUsage memoryUsage = (ResourceMemoryUsage)pBufferUpdate->pBuffer->mMemoryUsage;
+	if (gUma || memoryUsage != RESOURCE_MEMORY_USAGE_GPU_ONLY)
+	{
+		bool map = !pBuffer->pCpuMappedAddress;
+		if (map)
+		{
+			vk_mapBuffer(pResourceLoader->ppRenderers[pBuffer->mNodeIndex], pBuffer, NULL);
+		}
+
+		pBufferUpdate->mInternal.mMappedRange = { (uint8_t*)pBuffer->pCpuMappedAddress + pBufferUpdate->mDstOffset, pBuffer };
+		pBufferUpdate->pMappedData = pBufferUpdate->mInternal.mMappedRange.pData;
+		pBufferUpdate->mInternal.mMappedRange.mFlags = map ? MAPPED_RANGE_FLAG_UNMAP_BUFFER : 0;
+	}
+	else
+	{
+		// We need to use a staging buffer.
+		MappedMemoryRange range = allocateUploadMemory(pResourceLoader->ppRenderers[pBuffer->mNodeIndex], size, RESOURCE_BUFFER_ALIGNMENT);
+		pBufferUpdate->pMappedData = range.pData;
+
+		pBufferUpdate->mInternal.mMappedRange = range;
+		pBufferUpdate->mInternal.mMappedRange.mFlags = MAPPED_RANGE_FLAG_TEMP_BUFFER;
+	}
+}
+
 void beginUpdateResource(TextureUpdateDesc* pTextureUpdate)
 {
 	const Texture* texture = pTextureUpdate->pTexture;
@@ -1735,6 +1799,28 @@ void beginUpdateResource(TextureUpdateDesc* pTextureUpdate)
 	pTextureUpdate->pMappedData = pTextureUpdate->mInternal.mMappedRange.pData;
 }
 
+void endUpdateResource(BufferUpdateDesc* pBufferUpdate, SyncToken* token)
+{
+	if (pBufferUpdate->mInternal.mMappedRange.mFlags & MAPPED_RANGE_FLAG_UNMAP_BUFFER)
+	{
+		vk_unmapBuffer(pResourceLoader->ppRenderers[pBufferUpdate->pBuffer->mNodeIndex], pBufferUpdate->pBuffer);
+	}
+
+	ResourceMemoryUsage memoryUsage = (ResourceMemoryUsage)pBufferUpdate->pBuffer->mMemoryUsage;
+	if (!gUma && memoryUsage == RESOURCE_MEMORY_USAGE_GPU_ONLY)
+	{
+		queueBufferUpdate(pResourceLoader, pBufferUpdate, token);
+	}
+
+	// Restore the state to before the beginUpdateResource call.
+	pBufferUpdate->pMappedData = NULL;
+	pBufferUpdate->mInternal = {};
+	if (pResourceLoader->mDesc.mSingleThreaded)
+	{
+		streamerThreadFunc(pResourceLoader);
+	}
+}
+
 void endUpdateResource(TextureUpdateDesc* pTextureUpdate, SyncToken* token)
 {
 	TextureUpdateDescInternal desc = {};
@@ -1759,3 +1845,10 @@ SyncToken getLastTokenCompleted()
 {
 	return tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted);
 }
+
+bool      isTokenCompleted(const SyncToken* token)
+{
+	return *token <= tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted);
+}
+
+void waitForToken(const SyncToken* token) { waitForToken(pResourceLoader, token); }

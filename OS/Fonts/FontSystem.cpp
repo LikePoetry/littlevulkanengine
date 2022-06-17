@@ -6,6 +6,7 @@
 #define FONTSTASH_IMPLEMENTATION
 #include "../../ThirdParty/OpenSource/Fontstash/src/fontstash.h"
 
+#include "../Core/RingBuffer.h"
 
 #include "../../Renderer/Include/IRenderer.h"
 #include "../../Renderer/Include/IResourceLoader.h"
@@ -47,10 +48,21 @@ public:
 	uint32_t mHeight;
 	float2   mScaleBias;
 
+	CameraMatrix mProjView;
+	mat4 mWorldMat;
 	Cmd* pCmd;
 
+	RootSignature* pRootSignature;
+	DescriptorSet* pDescriptorSets;
+	Pipeline* pPipelines[2];
+
+
+	GPURingBuffer* pUniformRingBuffer;
+	GPURingBuffer* pMeshRingBuffer;
 	float2         mDpiScale;
 	float          mDpiScaleMin;
+	uint32_t       mRootConstantIndex;
+	bool           mText3D;
 };
 
 
@@ -133,10 +145,75 @@ void _Impl_FontStash::fonsImplementationRenderText(
 				updateDesc.mSrcRowStride);
 		}
 		endUpdateResource(&updateDesc, &token);
-		//waitForToken(&token);
-		//
-		//ctx->mUpdateTexture = false;
+		waitForToken(&token);
 
+		ctx->mUpdateTexture = false;
+	}
+
+	GPURingBufferOffset buffer = getGPURingBufferOffset(ctx->pMeshRingBuffer, nverts * sizeof(float4));
+	BufferUpdateDesc update = { buffer.pBuffer,buffer.mOffset };
+	beginUpdateResource(&update);
+	float4* vtx = (float4*)update.pMappedData;
+	// build vertices
+	for (int impl = 0; impl < nverts; impl++)
+	{
+		vtx[impl].setX(verts[impl * 2 + 0]);
+		vtx[impl].setY(verts[impl * 2 + 1]);
+		vtx[impl].setZ(tcoords[impl * 2 + 0]);
+		vtx[impl].setW(tcoords[impl * 2 + 1]);
+	}
+	endUpdateResource(&update, NULL);
+
+	// extract color
+	float4 color = unpackA8B8G8R8_SRGB(*colors);
+
+	uint32_t pipelineIndex = ctx->mText3D ? 1 : 0;
+	Pipeline* pPipeline = ctx->pPipelines[pipelineIndex];
+	ASSERT(pPipeline);
+
+	vk_cmdBindPipeline(pCmd, pPipeline);
+
+	struct UniformData
+	{
+		float4 color;
+		float2 scaleBias;
+	} data;
+
+	data.color = color;
+	data.scaleBias = ctx->mScaleBias;
+
+	if(ctx->mText3D)
+	{
+		mat4 mvp = (ctx->mProjView * ctx->mWorldMat).getPrimaryMatrix();
+		data.color = color;
+		data.scaleBias.x = -data.scaleBias.x;
+
+		GPURingBufferOffset uniformBlock = getGPURingBufferOffset(ctx->pUniformRingBuffer, sizeof(mvp));
+		BufferUpdateDesc    updateDesc = { uniformBlock.pBuffer, uniformBlock.mOffset };
+		beginUpdateResource(&updateDesc);
+		*((mat4*)updateDesc.pMappedData) = mvp;
+		endUpdateResource(&updateDesc, NULL);
+
+		const uint32_t size = sizeof(mvp);
+		const uint32_t stride = sizeof(float4);
+
+		DescriptorDataRange range = { (uint32_t)uniformBlock.mOffset, size };
+		DescriptorData params[1] = {};
+		params[0].pName = "uniformBlock_rootcbv";
+		params[0].ppBuffers = &uniformBlock.pBuffer;
+		params[0].pRanges = &range;
+		vk_cmdBindDescriptorSetWithRootCbvs(pCmd, 0, ctx->pDescriptorSets, 1, params);
+		vk_cmdBindPushConstants(pCmd, ctx->pRootSignature, ctx->mRootConstantIndex, &data);
+		vk_cmdBindVertexBuffer(pCmd, 1, &buffer.pBuffer, &stride, &buffer.mOffset);
+		vk_cmdDraw(pCmd, nverts, 0);
+	}
+	else
+	{
+		const uint32_t stride = sizeof(float4);
+		vk_cmdBindDescriptorSet(pCmd, 0, ctx->pDescriptorSets);
+		vk_cmdBindPushConstants(pCmd, ctx->pRootSignature, ctx->mRootConstantIndex, &data);
+		vk_cmdBindVertexBuffer(pCmd, 1, &buffer.pBuffer, &stride, &buffer.mOffset);
+		vk_cmdDraw(pCmd, nverts, 0);
 	}
 }
 

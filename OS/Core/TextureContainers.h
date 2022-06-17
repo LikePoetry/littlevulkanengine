@@ -798,6 +798,77 @@ inline bool loadBASISTextureDesc(FileStream* pStream, TextureDesc* pOutDesc, voi
 		basisTextureFormat = basist::transcoder_texture_format::cTFBC5_RG;
 	}
 
+	decoder.start_transcoding(basisData, (uint32_t)memSize);
+
+	uint32_t requiredSize = util_get_surface_size(textureDesc.mFormat,
+		textureDesc.mWidth, textureDesc.mHeight, textureDesc.mDepth, 1, 1,
+		0, textureDesc.mMipLevels,
+		0, textureDesc.mArraySize);
+	void* startData = tf_malloc(requiredSize);
+	uint8_t* data = (uint8_t*)startData;
+
+	for (uint32_t s = 0; s < fileinfo.m_total_images; ++s)
+	{
+		uint32_t w = textureDesc.mWidth;
+		uint32_t h = textureDesc.mHeight;
+		uint32_t d = textureDesc.mDepth;
+
+		for (uint32_t m = 0; m < fileinfo.m_image_mipmap_levels[s]; ++m)
+		{
+			uint32_t rowPitch = 0;
+			uint32_t numBytes = 0;
+			if (!util_get_surface_info(w, h, textureDesc.mFormat, &numBytes, &rowPitch, NULL))
+			{
+				return false;
+			}
+
+			uint32_t rowPitchInBlocks = rowPitch / (TinyImageFormat_BitSizeOfBlock(textureDesc.mFormat) >> 3);
+			basist::basisu_image_level_info level_info;
+
+			if (!decoder.get_image_level_info(basisData, (uint32_t)memSize, level_info, s, m))
+			{
+				LOGF(LogLevel::eERROR, "Failed retrieving image level information (%u %u)!\n", s, m);
+				tf_free(basisData);
+				tf_free(startData);
+				return false;
+			}
+
+			if (!decoder.transcode_image_level(basisData, (uint32_t)memSize, s, m, data,
+				(uint32_t)(rowPitchInBlocks * imageinfo.m_num_blocks_y), basisTextureFormat, 0, rowPitchInBlocks))
+			{
+				LOGF(LogLevel::eERROR, "Failed transcoding image level (%u %u)!", s, m);
+				tf_free(basisData);
+				tf_free(startData);
+				return false;
+			}
+
+			data += numBytes;
+
+			w = w >> 1;
+			h = h >> 1;
+			d = d >> 1;
+			if (w == 0)
+			{
+				w = 1;
+			}
+			if (h == 0)
+			{
+				h = 1;
+			}
+			if (d == 0)
+			{
+				d = 1;
+			}
+		}
+	}
+
+	tf_free(basisData);
+
+	*ppOutData = startData;
+	*pOutDataSize = requiredSize;
+
+	return true;
+
 }
 
 /************************************************************************/
