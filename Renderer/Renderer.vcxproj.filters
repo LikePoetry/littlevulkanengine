@@ -13,6 +13,9 @@
     <Filter Include="ThirdParty\OpenSource">
       <UniqueIdentifier>{E22582C4-4E92-3DBF-1786-D51C83B15F27}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ThirdParty\OpenSource\imgui">
+      <UniqueIdentifier>{CC94FF32-38A2-2D19-C188-29042D95F9CF}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ThirdParty\OpenSource\meshoptimizer">
       <UniqueIdentifier>{410D273E-ADC6-91E8-3626-ACC2A2DE4758}</UniqueIdentifier>
     </Filter>
@@ -24,6 +27,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imconfig.h">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui.h">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\IRay.h">
+      <Filter>Include</Filter>
+    </ClInclude>
     <ClInclude Include="Include\IRenderer.h">
       <Filter>Include</Filter>
     </ClInclude>
@@ -39,9 +54,23 @@
     <ClInclude Include="Vulkan\VulkanConfig.h">
       <Filter>Vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="Include\IRay.h" />
+    <ClInclude Include="IShaderReflection.h">
+      <Filter>Include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_demo.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_draw.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\allocator.cpp">
       <Filter>ThirdParty\OpenSource\meshoptimizer\src</Filter>
     </ClCompile>
@@ -66,6 +95,8 @@
     <ClCompile Include="Vulkan\Vulkan.cpp">
       <Filter>Vulkan</Filter>
     </ClCompile>
-    <ClCompile Include="Vulkan\VulkanRaytracing.cpp" />
+    <ClCompile Include="Vulkan\VulkanRaytracing.cpp">
+      <Filter>Vulkan</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -6,6 +6,7 @@
 #include "../Interfaces/ILog.h"
 #include "../Interfaces/IMemory.h"
 #include "../Interfaces/IFileSystem.h"
+#include "../Interfaces/ITime.h"
 
 #include "../../Renderer/Include/IRenderer.h"
 // App Data
@@ -15,6 +16,9 @@ static uint8_t gResetScenario = RESET_SCENARIO_NONE;
 
 /// CPU
 static CpuInfo gCpu;
+
+// UI
+static uint32_t     gSelectedApiIndex = 0;
 
 // Renderer.cpp
 extern RendererApi gSelectedRendererApi;
@@ -60,7 +64,16 @@ bool initBaseSubsystems()
 	return true;
 }
 
+//------------------------------------------------------------------------
+// PLATFORM LAYER USER INTERFACE
+//------------------------------------------------------------------------
+void setupPlatformUI(int32_t width,int32_t height)
+{
+	gSelectedApiIndex = gSelectedRendererApi;
 
+	// WINDOW AND RESOLUTION CONTROL
+	extern void platformSetupWindowSystemUI(IApp*);
+}
 
 //------------------------------------------------------------------------
 // APP ENTRY POINT
@@ -138,6 +151,14 @@ int WindowsMain(int argc, char** argv, IApp* app)
 	{
 		if (!initBaseSubsystems())
 			return EXIT_FAILURE;
+
+		Timer t;
+		initTimer(&t);
+
+		if (!pApp->Init())
+			return EXIT_FAILURE;
+
+		setupPlatformUI(pSettings->mWidth, pSettings->mHeight);
 	}
 
 	return 0;

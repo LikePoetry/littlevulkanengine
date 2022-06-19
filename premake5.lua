@@ -30,6 +30,13 @@ project "Renderer"
 			"ThirdParty/OpenSource/meshoptimizer/src/overdrawoptimizer.cpp",
 			"ThirdParty/OpenSource/meshoptimizer/src/vcacheoptimizer.cpp",
 			"ThirdParty/OpenSource/meshoptimizer/src/vfetchoptimizer.cpp",
+			"ThirdParty/OpenSource/imgui/imconfig.h",
+			"ThirdParty/OpenSource/imgui/imgui.cpp",
+			"ThirdParty/OpenSource/imgui/imgui.h",
+			"ThirdParty/OpenSource/imgui/imgui_demo.cpp",
+			"ThirdParty/OpenSource/imgui/imgui_draw.cpp",
+			"ThirdParty/OpenSource/imgui/imgui_internal.h",
+			"ThirdParty/OpenSource/imgui/imgui_widgets.cpp"
 		}
 		
 		defines

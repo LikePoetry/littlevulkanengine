@@ -104,6 +104,7 @@
     <ClInclude Include="Interfaces\ICameraController.h" />
     <ClInclude Include="Interfaces\IFileSystem.h" />
     <ClInclude Include="Interfaces\IFont.h" />
+    <ClInclude Include="Interfaces\IInput.h" />
     <ClInclude Include="Interfaces\ILog.h" />
     <ClInclude Include="Interfaces\IMemory.h" />
     <ClInclude Include="Interfaces\IOperatingSystem.h" />
@@ -120,15 +121,19 @@
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
     <ClCompile Include="Camera\CameraController.cpp" />
     <ClCompile Include="Core\CPUConfig.cpp" />
+    <ClCompile Include="Core\Timer.c" />
     <ClCompile Include="FileSystem\FileSystem.cpp" />
     <ClCompile Include="Fonts\FontSystem.cpp" />
     <ClCompile Include="Fonts\stbtt.cpp" />
     <ClCompile Include="Logging\Log.c" />
     <ClCompile Include="MemoryTracking\MemoryTracking.c" />
+    <ClCompile Include="UI\UI.cpp" />
+    <ClCompile Include="WindowSystem\WindowSystem.cpp" />
     <ClCompile Include="Windows\WindowsBase.cpp" />
     <ClCompile Include="Windows\WindowsFileSystem.cpp" />
     <ClCompile Include="Windows\WindowsLog.c" />
     <ClCompile Include="Windows\WindowsThread.c" />
+    <ClCompile Include="Windows\WindowsTime.c" />
     <ClCompile Include="Windows\WindowsWindow.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

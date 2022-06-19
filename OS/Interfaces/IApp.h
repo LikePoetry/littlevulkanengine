@@ -5,7 +5,7 @@
 class IApp
 {
 public:
-
+	virtual bool Init() = 0;
 	virtual const char* GetName() = 0;
 
 	struct Settings

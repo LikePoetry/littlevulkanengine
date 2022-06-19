@@ -187,6 +187,29 @@ typedef enum DescriptorType
 } DescriptorType;
 MAKE_ENUM_FLAG(uint32_t, DescriptorType)
 
+typedef enum ShaderStage
+{
+	SHADER_STAGE_NONE = 0,
+	SHADER_STAGE_VERT = 0X00000001,
+	SHADER_STAGE_TESC = 0X00000002,
+	SHADER_STAGE_TESE = 0X00000004,
+	SHADER_STAGE_GEOM = 0X00000008,
+	SHADER_STAGE_FRAG = 0X00000010,
+	SHADER_STAGE_COMP = 0X00000020,
+	SHADER_STAGE_RAYTRACING = 0X00000040,
+	SHADER_STAGE_ALL_GRAPHICS =
+	((uint32_t)SHADER_STAGE_VERT | (uint32_t)SHADER_STAGE_TESC | (uint32_t)SHADER_STAGE_TESE | (uint32_t)SHADER_STAGE_GEOM |
+		(uint32_t)SHADER_STAGE_FRAG),
+	SHADER_STAGE_HULL = SHADER_STAGE_TESC,
+	SHADER_STAGE_DOMN = SHADER_STAGE_TESE,
+	SHADER_STAGE_COUNT = 7,
+} ShaderStage;
+MAKE_ENUM_FLAG(uint32_t, ShaderStage)
+
+// This include is placed here because it uses data types defined previously in this file
+// and forward enums are not allowed for some compilers (Xcode).
+#include "IShaderReflection.h"
+
 typedef enum SampleCount
 {
 	SAMPLE_COUNT_1 = 1,
@@ -1094,6 +1117,24 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 	uint32_t mGpuCount;
 }RendererContext;
 
+typedef struct Shader
+{
+	ShaderStage mStage : 31;
+	bool mIsMultiviewVR : 1;
+	uint32_t mNumThreadsPerGroup[3];
+	union
+	{
+		struct
+		{
+			VkShaderModule* pShaderModules;
+			char** pEntryNames;
+			VkSpecializationInfo* pSpecializationInfo;
+		} mVulkan;
+		PipelineReflection* pReflection;
+	};
+
+} Shader;
+
 typedef struct DEFINE_ALIGNED(Pipeline, 64)
 {
 	union
@@ -1110,6 +1151,24 @@ typedef struct DEFINE_ALIGNED(Pipeline, 64)
 		} mVulkan;
 	};
 } Pipeline;
+
+typedef enum PipelineCacheFlags
+{
+	PIPELINE_CACHE_FLAG_NONE = 0x0,
+	PIPELINE_CACHE_FLAG_EXTERNALLY_SYNCHRONIZED = 0x1,
+} PipelineCacheFlags;
+MAKE_ENUM_FLAG(uint32_t, PipelineCacheFlags);
+
+typedef struct PipelineCache
+{
+	union 
+	{
+		struct 
+		{
+			VkPipelineCache pCache;
+		} mVulkan;
+	};
+} PipelineCache;
 
 //#ifdef __INTELLISENSE__
 //// IntelliSense is the code completion engine in Visual Studio. When it parses the source files, __INTELLISENSE__ macro is defined.

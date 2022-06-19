@@ -11,6 +11,12 @@
 #include "../../Renderer/Include/IRenderer.h"
 #include "../../Renderer/Include/IResourceLoader.h"
 
+#include "../../ThirdParty/OpenSource/EASTL/vector.h"
+#include "../../ThirdParty/OpenSource/EASTL/string.h"
+#include "../../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_query.h"
+
+#include "../Interfaces/IMemory.h"
+
 class _Impl_FontStash
 {
 public:
@@ -47,6 +53,10 @@ public:
 	uint32_t mWidth;
 	uint32_t mHeight;
 	float2   mScaleBias;
+
+	eastl::vector<void*>         mFontBuffers;
+	eastl::vector<uint32_t>      mFontBufferSizes;
+	eastl::vector<eastl::string> mFontNames;
 
 	CameraMatrix mProjView;
 	mat4 mWorldMat;
@@ -99,6 +109,22 @@ bool platformInitFontSystem()
 #endif // ENABLE_FORGE_FONTS
 }
 
+void* fntGetRawFontData(uint32_t fontID)
+{
+	if (fontID < impl->mFontBuffers.size())
+		return impl->mFontBuffers[fontID];
+	else
+		return NULL;
+}
+
+uint32_t fntGetRawFontDataSize(uint32_t fontID)
+{
+	if (fontID < impl->mFontBufferSizes.size())
+		return impl->mFontBufferSizes[fontID];
+	else
+		return UINT_MAX;
+	
+}
 
 // --  FONS renderer implementation --
 int _Impl_FontStash::fonsImplementationGenerateTexture(void* userPtr, int width, int height)
