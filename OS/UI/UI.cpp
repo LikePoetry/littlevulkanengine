@@ -48,7 +48,7 @@ bool addImguiFont(void* pFontBuffer, uint32_t fontBufferSize, void* pFontGlyphRa
 	int width, height, bytesPerPixel;
 	unsigned char* pixels = NULL;
 
-	if(pFontBuffer==NULL)
+	if (pFontBuffer == NULL)
 	{
 		*pFont = (uintptr_t)io.Fonts->AddFontDefault();
 	}
@@ -60,10 +60,43 @@ bool addImguiFont(void* pFontBuffer, uint32_t fontBufferSize, void* pFontGlyphRa
 			fontSize * min(pUserInterface->dpiScale[0], pUserInterface->dpiScale[1]), &config,
 			(const ImWchar*)pFontGlyphRanges);
 
-
-
+		if (font != NULL)
+		{
+			io.FontDefault = font;
+			*pFont = (uintptr_t)font;
+		}
+		else
+		{
+			*pFont = (uintptr_t)io.Fonts->AddFontDefault();
+		}
+		
 
 	}
+
+	io.Fonts->Build();
+	io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &bytesPerPixel);
+	// At this point you've got the texture data and you need to upload that your your graphic system:
+	// After we have created the texture, store its pointer/identifier (_in whichever format your engine uses_) in 'io.Fonts->TexID'.
+	// This will be passed back to your via the renderer. Basically ImTextureID == void*. Read FAQ below for details about ImTextureID.
+
+	Texture* pTexture = NULL;
+	SyncToken token = {};
+	TextureLoadDesc loadDesc = {};
+	TextureDesc textureDesc = {};
+	textureDesc.mArraySize = 1;
+	textureDesc.mDepth = 1;
+	textureDesc.mDescriptors = DESCRIPTOR_TYPE_TEXTURE;
+	textureDesc.mFormat = TinyImageFormat_R8G8B8A8_UNORM;
+	textureDesc.mHeight = height;
+	textureDesc.mMipLevels = 1;
+	textureDesc.mSampleCount = SAMPLE_COUNT_1;
+	textureDesc.mStartState = RESOURCE_STATE_COMMON;
+	textureDesc.mWidth = width;
+	textureDesc.pName = "ImGui Font Texture";
+	loadDesc.pDesc = &textureDesc;
+	loadDesc.ppTexture = &pTexture;
+	addResource(&loadDesc, &token);
+
 
 	return true;
 }
