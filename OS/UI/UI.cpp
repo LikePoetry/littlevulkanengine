@@ -33,6 +33,8 @@ typedef struct UserInterface
 	uint32_t				frameIdx = 0;
 
 	Shader* pShaderTextured = NULL;
+	DescriptorSet* pDescriptorSetUniforms = NULL;
+	DescriptorSet* pDescriptorSetTexture = NULL;
 
 } UserInterface;
 
@@ -69,7 +71,7 @@ bool addImguiFont(void* pFontBuffer, uint32_t fontBufferSize, void* pFontGlyphRa
 		{
 			*pFont = (uintptr_t)io.Fonts->AddFontDefault();
 		}
-		
+
 
 	}
 
@@ -96,7 +98,24 @@ bool addImguiFont(void* pFontBuffer, uint32_t fontBufferSize, void* pFontGlyphRa
 	loadDesc.pDesc = &textureDesc;
 	loadDesc.ppTexture = &pTexture;
 	addResource(&loadDesc, &token);
+	waitForToken(&token);
 
+	TextureUpdateDesc updateDesc = { pTexture };
+	beginUpdateResource(&updateDesc);
+	for (uint32_t r = 0; r < updateDesc.mRowCount; ++r)
+	{
+		memcpy(updateDesc.pMappedData + r * updateDesc.mDstRowStride,
+			pixels + r * updateDesc.mSrcRowStride, updateDesc.mSrcRowStride);
+	}
+	endUpdateResource(&updateDesc, &token);
+
+	pUserInterface->mFontTextures.emplace_back(pTexture);
+	io.Fonts->TexID = (void*)(pUserInterface->mFontTextures.size() - 1);
+
+	DescriptorData params[1] = {};
+	params[0].pName = "uTex";
+	params[0].ppTextures = &pTexture;
+	vk_updateDescriptorSet(pUserInterface->pRenderer, (uint32_t)pUserInterface->mFontTextures.size() - 1, pUserInterface->pDescriptorSetTexture, 1, params);
 
 	return true;
 }
@@ -122,4 +141,26 @@ void uiCreateComponent(const char* pTitle, const UIComponentDesc* pDesc, UICompo
 	if (pFontBuffer)
 		addImguiFont(pFontBuffer, fontBufferSize, NULL, pDesc->mFontSize, &pComponent->pFont);
 
+	pComponent->mInitialWindowRect = { pDesc->mStartPosition.getX(), 
+		pDesc->mStartPosition.getY(), 
+		pDesc->mStartSize.getX(),
+		pDesc->mStartSize.getY() };
+
+	pComponent->mActive = true;
+	strcpy(pComponent->mTitle, pTitle);
+	pComponent->mAlpha = 1.0f;
+	pUserInterface->mComponents.emplace_back(pComponent);
+	
+	*ppUIComponent = pComponent;
+}
+
+/****************************************************************************/
+// MARK: - Safe Public Setter Functions
+/****************************************************************************/
+
+void uiSetComponentFlags(UIComponent* pGui, int32_t flags)
+{
+	ASSERT(pGui);
+
+	pGui->mFlags = flags;
 }

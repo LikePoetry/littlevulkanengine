@@ -77,6 +77,14 @@ typedef struct UIWidget
 	bool mDeactivatedAfterEdit = false;
 } UIWidget;
 
+
+typedef struct TextboxWidget
+{
+	char* pData = NULL;
+	uint32_t mLength = 0;
+	bool     mAutoSelectAll = true;
+}TextboxWidget;
+
 /****************************************************************************/
 // MARK: - UI Component Data Structures
 /****************************************************************************/
@@ -145,4 +153,15 @@ typedef struct UIComponent
 /// Create a UI Component "window" to which Widgets can be added
 /// User is NOT responsible for freeing this memory at application exit
 void uiCreateComponent(const char* pTitle, const UIComponentDesc* pDesc, UIComponent** ppGuiComponent);
+
+/****************************************************************************/
+// MARK: - Safe UI Component and Widget Setter Functions
+/****************************************************************************/
+
+// NOTE: These functions exist to protect scope against null-pointer derefs
+// on UI Component and Widget handles if this functionality still exists in 
+// app code while the UI Master Switch is disabled.
+
+/// Assign "GuiComponentFlags" enum values to a given UI Component
+void uiSetComponentFlags(UIComponent* pGui, int32_t flags);
 

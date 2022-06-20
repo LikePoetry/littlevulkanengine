@@ -1261,3 +1261,4 @@ void vk_queueSubmit(Queue* pQueue, const QueueSubmitDesc* pDesc);
 void vk_removeSemaphore(Renderer* pRenderer, Semaphore* pSemaphore);
 
 void vk_removeFence(Renderer* pRenderer, Fence* pFence);
+void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* pDescriptorSet, uint32_t count, const DescriptorData* pParams);

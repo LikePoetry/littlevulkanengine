@@ -243,6 +243,10 @@ typedef struct ResourceLoaderDesc
 
 extern ResourceLoaderDesc gDefaultResourceLoaderDesc;
 
+/// If token is NULL, the resource will be available when allResourceLoadsCompleted() returns true.
+/// If token is non NULL, the resource will be available after isTokenCompleted(token) returns true.
+void addResource(TextureLoadDesc* pTextureDesc, SyncToken* token);
+
 void beginUpdateResource(BufferUpdateDesc* pBufferDesc);
 void beginUpdateResource(TextureUpdateDesc* pTextureDesc);
 void endUpdateResource(BufferUpdateDesc* pBuffer, SyncToken* token);

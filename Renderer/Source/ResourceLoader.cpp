@@ -46,6 +46,14 @@ static FORGE_CONSTEXPR const bool gUma = false;
 // Surface Utils
 /************************************************************************/
 
+static inline ResourceState util_determine_resource_start_state(bool uav)
+{
+	if (uav)
+		return RESOURCE_STATE_UNORDERED_ACCESS;
+	else
+		return RESOURCE_STATE_SHADER_RESOURCE;
+}
+
 static inline constexpr ShaderSemantic util_cgltf_attrib_type_to_semantic(cgltf_attribute_type type, uint32_t index)
 {
 	switch (type)
@@ -1724,6 +1732,36 @@ static void queueBufferUpdate(ResourceLoader* pLoader, BufferUpdateDesc* pBuffer
 		*token = max(t, *token);
 }
 
+static void queueTextureLoad(ResourceLoader* pLoader, TextureLoadDesc* pTextureUpdate, SyncToken* token)
+{
+	uint32_t nodeIndex = pTextureUpdate->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pTextureUpdate));
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
+
+static void queueTextureBarrier(ResourceLoader* pLoader, Texture* pTexture, ResourceState state, SyncToken* token)
+{
+	uint32_t nodeIndex = pTexture->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest{ TextureBarrier{ pTexture, RESOURCE_STATE_UNDEFINED, state } });
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
+
 static void waitForToken(ResourceLoader* pLoader, const SyncToken* token)
 {
 	if (pLoader->mDesc.mSingleThreaded)
@@ -1736,6 +1774,41 @@ static void waitForToken(ResourceLoader* pLoader, const SyncToken* token)
 		waitConditionVariable(&pLoader->mTokenCond, &pLoader->mTokenMutex, TIMEOUT_INFINITE);
 	}
 	releaseMutex(&pLoader->mTokenMutex);
+}
+
+void addResource(TextureLoadDesc* pTextureDesc, SyncToken* token)
+{
+	ASSERT(pTextureDesc->ppTexture);
+
+	if (!pTextureDesc->pFileName && pTextureDesc->pDesc)
+	{
+		ASSERT(pTextureDesc->pDesc->mStartState);
+
+		// If texture is supposed to be filled later (UAV / Update later / ...) proceed with the mStartState provided by the user in the texture description
+		vk_addTexture(pResourceLoader->ppRenderers[pTextureDesc->mNodeIndex], pTextureDesc->pDesc, pTextureDesc->ppTexture);
+
+		// Transition texture to desired state for Vulkan since all Vulkan resources are created in undefined state
+		if (gSelectedRendererApi == RENDERER_API_VULKAN)
+		{
+			ResourceState startState = pTextureDesc->pDesc->mStartState;
+			// Check whether this is required (user specified a state other than undefined / common)
+			if (startState == RESOURCE_STATE_UNDEFINED || startState == RESOURCE_STATE_COMMON)	//-V560
+			{
+				startState = util_determine_resource_start_state(pTextureDesc->pDesc->mDescriptors & DESCRIPTOR_TYPE_RW_TEXTURE);
+
+			}
+			queueTextureBarrier(pResourceLoader, *pTextureDesc->ppTexture, startState, token);
+		}
+	}
+	else
+	{
+		TextureLoadDesc updateDesc = *pTextureDesc;
+		queueTextureLoad(pResourceLoader, &updateDesc, token);
+		if (pResourceLoader->mDesc.mSingleThreaded)
+		{
+			streamerThreadFunc(pResourceLoader);
+		}
+	}
 }
 
 void beginUpdateResource(BufferUpdateDesc* pBufferUpdate)

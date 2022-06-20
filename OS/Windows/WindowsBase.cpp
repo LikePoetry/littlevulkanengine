@@ -73,6 +73,7 @@ void setupPlatformUI(int32_t width,int32_t height)
 
 	// WINDOW AND RESOLUTION CONTROL
 	extern void platformSetupWindowSystemUI(IApp*);
+
 }
 
 //------------------------------------------------------------------------

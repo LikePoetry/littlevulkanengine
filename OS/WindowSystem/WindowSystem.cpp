@@ -10,6 +10,8 @@
 static WindowDesc* pWindowRef = NULL;
 static UIComponent* pWindowControlsComponent = NULL;
 
+char gPlatformName[64];
+
 void platformSetupWindowSystemUI(IApp* pApp)
 {
 	float dpiSacle;
@@ -29,6 +31,11 @@ void platformSetupWindowSystemUI(IApp* pApp)
 	uiDesc.mFontSize = 16.0f;
 
 	uiCreateComponent("Window and Resolution Controls", &uiDesc, &pWindowControlsComponent);
-	//uiSetComponentFlags(pWindowControlsComponent, GUI_COMPONENT_FLAGS_START_COLLAPSED);
-	//strcpy(gPlatformName, "Windows");
+	uiSetComponentFlags(pWindowControlsComponent, GUI_COMPONENT_FLAGS_START_COLLAPSED);
+	strcpy(gPlatformName, "Windows");
+
+	TextboxWidget Textbox;
+	Textbox.pData = gPlatformName;
+	Textbox.mLength = 64;
+	//REGISTER_LUA_WIDGET(uiCreateComponentWidget(pWindowControlsComponent, "Platform Name", &Textbox, WIDGET_TYPE_TEXTBOX));
 }
