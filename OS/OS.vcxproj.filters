@@ -109,6 +109,7 @@
       <Filter>Math</Filter>
     </ClInclude>
     <ClInclude Include="Interfaces\IInput.h" />
+    <ClInclude Include="Interfaces\IScripting.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp">
@@ -171,5 +172,6 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
+    <ClCompile Include="Scripting\LuaSystem.cpp" />
   </ItemGroup>
 </Project>

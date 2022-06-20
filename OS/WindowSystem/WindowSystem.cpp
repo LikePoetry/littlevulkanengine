@@ -4,7 +4,7 @@
 #include "../Interfaces/IApp.h"
 #include "../Interfaces/ITime.h"
 //#include "../Interfaces/IInput.h"
-//#include "../Interfaces/IScripting.h"
+#include "../Interfaces/IScripting.h"
 #include "../Interfaces/IOperatingSystem.h"
 
 static WindowDesc* pWindowRef = NULL;
@@ -37,5 +37,5 @@ void platformSetupWindowSystemUI(IApp* pApp)
 	TextboxWidget Textbox;
 	Textbox.pData = gPlatformName;
 	Textbox.mLength = 64;
-	//REGISTER_LUA_WIDGET(uiCreateComponentWidget(pWindowControlsComponent, "Platform Name", &Textbox, WIDGET_TYPE_TEXTBOX));
+	REGISTER_LUA_WIDGET(uiCreateComponentWidget(pWindowControlsComponent, "Platform Name", &Textbox, WIDGET_TYPE_TEXTBOX));
 }

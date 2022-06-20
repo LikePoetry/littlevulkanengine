@@ -77,6 +77,171 @@ typedef struct UIWidget
 	bool mDeactivatedAfterEdit = false;
 } UIWidget;
 
+typedef struct CollapsingHeaderWidget
+{
+	eastl::vector<UIWidget*>	  mGroupedWidgets;
+	bool                      mCollapsed = true;
+	bool					  mPreviousCollapsed = false;
+	bool                      mDefaultOpen = false;
+	bool					  mHeaderIsVisible = true;
+}CollapsingHeaderWidget;
+
+typedef struct DebugTexturesWidget
+{
+	eastl::vector<void* /* Texture* */> mTextures;
+	float2                              mTextureDisplaySize = float2(512.f, 512.f);
+}DebugTexturesWidget;
+
+typedef struct LabelWidget
+{
+}LabelWidget;
+
+typedef struct ColorLabelWidget
+{
+	float4 mColor = float4(0.f, 0.f, 0.f, 0.f);
+}ColorLabelWidget;
+
+typedef struct HorizontalSpaceWidget
+{
+}HorizontalSpaceWidget;
+
+typedef struct SeparatorWidget
+{
+}SeparatorWidget;
+
+typedef struct VerticalSeparatorWidget
+{
+	uint32_t mLineCount = 0;
+}VerticalSeparatorWidget;
+
+typedef struct ButtonWidget
+{
+}ButtonWidget;
+
+typedef struct SliderFloatWidget
+{
+	char    mFormat[MAX_FORMAT_STR_LENGTH] = { "%.3f" };
+	float* pData = NULL;
+	float   mMin = 0.f;
+	float   mMax = 0.f;
+	float   mStep = 0.01f;
+}SliderFloatWidget;
+
+typedef struct SliderFloat2Widget
+{
+	char     mFormat[MAX_FORMAT_STR_LENGTH] = { "%.3f" };
+	float2* pData = NULL;
+	float2   mMin = float2(0.f, 0.f);
+	float2   mMax = float2(0.f, 0.f);
+	float2   mStep = float2(0.01f, 0.01f);
+}SliderFloat2Widget;
+
+typedef struct SliderFloat3Widget
+{
+	char     mFormat[MAX_FORMAT_STR_LENGTH] = { "%.3f" };
+	float3* pData = NULL;
+	float3   mMin = float3(0.f, 0.f, 0.f);
+	float3   mMax = float3(0.f, 0.f, 0.f);
+	float3   mStep = float3(0.01f, 0.01f, 0.01f);
+}SliderFloat3Widget;
+
+typedef struct SliderFloat4Widget
+{
+	char     mFormat[MAX_FORMAT_STR_LENGTH] = { "%.3f" };
+	float4* pData = NULL;
+	float4   mMin = float4(0.f, 0.f, 0.f, 0.f);
+	float4   mMax = float4(0.f, 0.f, 0.f, 0.f);
+	float4   mStep = float4(0.01f, 0.01f, 0.01f, 0.01f);
+}SliderFloat4Widget;
+
+typedef struct SliderIntWidget
+{
+	char      mFormat[MAX_FORMAT_STR_LENGTH] = { "%d" };
+	int32_t* pData = NULL;
+	int32_t   mMin = 0;
+	int32_t   mMax = 0;
+	int32_t   mStep = 1;
+}SliderIntWidget;
+
+typedef struct SliderUintWidget
+{
+	char       mFormat[MAX_FORMAT_STR_LENGTH] = { "%d" };
+	uint32_t* pData = NULL;
+	uint32_t   mMin = 0;
+	uint32_t   mMax = 0;
+	uint32_t   mStep = 1;
+}SliderUintWidget;
+
+typedef struct RadioButtonWidget
+{
+	int32_t* pData = NULL;
+	int32_t  mRadioId = 0;
+}RadioButtonWidget;
+
+typedef struct CheckboxWidget
+{
+	bool* pData = NULL;
+}CheckboxWidget;
+
+typedef struct OneLineCheckboxWidget
+{
+	bool* pData = NULL;
+	float4   mColor = float4(0.f, 0.f, 0.f, 0.f);
+}OneLineCheckboxWidget;
+
+typedef struct CursorLocationWidget
+{
+	float2 mLocation = float2(0.f, 0.f);
+}CursorLocationWidget;
+
+typedef struct DropdownWidget
+{
+	uint32_t* pData = NULL;
+	eastl::vector<uint32_t>  mValues;
+	eastl::vector<char*>	 mNames;
+}DropdownWidget;
+
+typedef struct ColumnWidget
+{
+	eastl::vector<UIWidget*> mPerColumnWidgets;
+	uint32_t				mNumColumns = 0;
+}ColumnWidget;
+
+typedef struct ProgressBarWidget
+{
+	size_t* pData = NULL;
+	size_t  mMaxProgress = 0;
+}ProgressBarWidget;
+
+typedef struct ColorSliderWidget
+{
+	float4* pData = NULL;
+}ColorSliderWidget;
+
+typedef struct HistogramWidget
+{
+	float* pValues = NULL;
+	uint32_t	mCount = 0;
+	float* mMinScale = NULL;
+	float* mMaxScale = NULL;
+	float2		mHistogramSize = float2(0.f, 0.f);
+	const char* mHistogramTitle = NULL;
+}HistogramWidget;
+
+typedef struct PlotLinesWidget
+{
+	float* mValues = NULL;
+	uint32_t	 mNumValues = 0;
+	float* mScaleMin = NULL;
+	float* mScaleMax = NULL;
+	float2* mPlotScale = NULL;
+	const char* mTitle = NULL;
+}PlotLinesWidget;
+
+typedef struct ColorPickerWidget
+{
+	float4* pData = NULL;
+}ColorPickerWidget;
 
 typedef struct TextboxWidget
 {
@@ -84,6 +249,48 @@ typedef struct TextboxWidget
 	uint32_t mLength = 0;
 	bool     mAutoSelectAll = true;
 }TextboxWidget;
+
+typedef struct DynamicTextWidget
+{
+	char* pData = NULL;
+	uint32_t mLength = 0;
+	float4* pColor = NULL;
+}DynamicTextWidget;
+
+typedef struct FilledRectWidget
+{
+	float2	 mPos = float2(0.f, 0.f);
+	float2	 mScale = float2(0.f, 0.f);
+	float4   mColor = float4(0.f, 0.f, 0.f, 0.f);
+}FilledRectWidget;
+
+typedef struct DrawTextWidget
+{
+	float2	 mPos = float2(0.f, 0.f);
+	float4   mColor = float4(0.f, 0.f, 0.f, 0.f);
+}DrawTextWidget;
+
+typedef struct DrawTooltipWidget
+{
+	bool* mShowTooltip = NULL;
+	char* mText = NULL;
+}DrawTooltipWidget;
+
+typedef struct DrawLineWidget
+{
+	float2	 mPos1 = float2(0.f, 0.f);
+	float2	 mPos2 = float2(0.f, 0.f);
+	float4   mColor = float4(0.f, 0.f, 0.f, 0.f);
+	bool	 mAddItem = false;
+}DrawLineWidget;
+
+typedef struct DrawCurveWidget
+{
+	float2* mPos = NULL;
+	uint32_t mNumPoints = 0;
+	float	 mThickness = 0.f;
+	float4	 mColor = float4(0.f, 0.f, 0.f, 0.f);
+}DrawCurveWidget;
 
 /****************************************************************************/
 // MARK: - UI Component Data Structures
@@ -153,6 +360,10 @@ typedef struct UIComponent
 /// Create a UI Component "window" to which Widgets can be added
 /// User is NOT responsible for freeing this memory at application exit
 void uiCreateComponent(const char* pTitle, const UIComponentDesc* pDesc, UIComponent** ppGuiComponent);
+
+/// Create a Widget to be assigned to a given UI Component
+/// User is NOT responsible for freeing this memory at application exit
+UIWidget* uiCreateComponentWidget(UIComponent* pGui, const char* pLabel, const void* pWidget, WidgetType type, bool clone = true); //-V1071
 
 /****************************************************************************/
 // MARK: - Safe UI Component and Widget Setter Functions
