@@ -30,13 +30,7 @@ project "Renderer"
 			"ThirdParty/OpenSource/meshoptimizer/src/overdrawoptimizer.cpp",
 			"ThirdParty/OpenSource/meshoptimizer/src/vcacheoptimizer.cpp",
 			"ThirdParty/OpenSource/meshoptimizer/src/vfetchoptimizer.cpp",
-			"ThirdParty/OpenSource/imgui/imconfig.h",
-			"ThirdParty/OpenSource/imgui/imgui.cpp",
-			"ThirdParty/OpenSource/imgui/imgui.h",
-			"ThirdParty/OpenSource/imgui/imgui_demo.cpp",
-			"ThirdParty/OpenSource/imgui/imgui_draw.cpp",
-			"ThirdParty/OpenSource/imgui/imgui_internal.h",
-			"ThirdParty/OpenSource/imgui/imgui_widgets.cpp"
+
 		}
 		
 		defines
@@ -87,8 +81,16 @@ project "OS"
 		"%{prj.name}/*/**.c",
 		"ThirdParty/OpenSource/EASTL/allocator_forge.cpp",
 		"ThirdParty/OpenSource/EASTL/assert.cpp",
+		"ThirdParty/OpenSource/EASTL/EAStdC/EASprintf.cpp",
 		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c",
-		"ThirdParty/OpenSource/basis_universal/transcoder/basisu_transcoder.cpp"
+		"ThirdParty/OpenSource/basis_universal/transcoder/basisu_transcoder.cpp",
+		"ThirdParty/OpenSource/imgui/imconfig.h",
+		"ThirdParty/OpenSource/imgui/imgui.cpp",
+		"ThirdParty/OpenSource/imgui/imgui.h",
+		"ThirdParty/OpenSource/imgui/imgui_demo.cpp",
+		"ThirdParty/OpenSource/imgui/imgui_draw.cpp",
+		"ThirdParty/OpenSource/imgui/imgui_internal.h",
+		"ThirdParty/OpenSource/imgui/imgui_widgets.cpp",
 	}
 	
 	defines

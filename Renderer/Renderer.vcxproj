@@ -95,22 +95,15 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imconfig.h" />
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui.h" />
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h" />
     <ClInclude Include="Include\IRay.h" />
     <ClInclude Include="Include\IRenderer.h" />
     <ClInclude Include="Include\IResourceLoader.h" />
+    <ClInclude Include="Include\IShaderReflection.h" />
     <ClInclude Include="Include\RendererConfig.h" />
-    <ClInclude Include="IShaderReflection.h" />
     <ClInclude Include="Vulkan\VulkanCapsBuilder.h" />
     <ClInclude Include="Vulkan\VulkanConfig.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp" />
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_demo.cpp" />
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_draw.cpp" />
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\allocator.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\indexgenerator.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\overdrawoptimizer.cpp" />

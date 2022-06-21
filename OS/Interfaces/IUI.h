@@ -357,6 +357,10 @@ typedef struct UIComponent
 // MARK: - UI Component Public Functions
 /****************************************************************************/
 
+/// Add a subwidget beneath a Collapsing Header widget
+/// All subwidgets must be added before calling uiAddComponentWidget for the Collapsing Header
+UIWidget* uiCreateCollapsingHeaderSubWidget(CollapsingHeaderWidget* pWidget, const char* pLabel, const void* pSubWidget, WidgetType type);
+
 /// Create a UI Component "window" to which Widgets can be added
 /// User is NOT responsible for freeing this memory at application exit
 void uiCreateComponent(const char* pTitle, const UIComponentDesc* pDesc, UIComponent** ppGuiComponent);
@@ -376,3 +380,29 @@ UIWidget* uiCreateComponentWidget(UIComponent* pGui, const char* pLabel, const v
 /// Assign "GuiComponentFlags" enum values to a given UI Component
 void uiSetComponentFlags(UIComponent* pGui, int32_t flags);
 
+/// Set whether or not a given Widget is intended to be "deferrred"
+void uiSetWidgetDeferred(UIWidget* pWidget, bool deferred);
+
+/// Assign Widget callback function (pointer to a function which takes and returns void)
+/// Will be called when Widget is hovered, usable, and not blocked by anything
+void uiSetWidgetOnHoverCallback(UIWidget* pWidget, WidgetCallback callback);
+
+/// Assign Widget callback function (pointer to a function which takes and returns void)
+/// Will be called when Widget is currently active (ex. button being held)
+void uiSetWidgetOnActiveCallback(UIWidget* pWidget, WidgetCallback callback);
+
+/// Assign Widget callback function (pointer to a function which takes and returns void)
+/// Will be called when Widget is currently focused (for keyboard/gamepad nav)
+void uiSetWidgetOnFocusCallback(UIWidget* pWidget, WidgetCallback callback);
+
+/// Assign Widget callback function (pointer to a function which takes and returns void)
+/// Will be called when Widget just changed its underlying value or was pressed
+void uiSetWidgetOnEditedCallback(UIWidget* pWidget, WidgetCallback callback);
+
+/// Assign Widget callback function (pointer to a function which takes and returns void)
+/// Will be called when Widget is made inactive from an active state
+void uiSetWidgetOnDeactivatedCallback(UIWidget* pWidget, WidgetCallback callback);
+
+/// Assign Widget callback function (pointer to a function which takes and returns void)
+/// Will be called when Widget is made inactive from an active state and its underlying value has changed
+void uiSetWidgetOnDeactivatedAfterEditCallback(UIWidget* pWidget, WidgetCallback callback);

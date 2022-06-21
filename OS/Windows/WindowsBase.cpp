@@ -4,9 +4,13 @@
 #include "../Interfaces/IOperatingSystem.h"
 #include "../Interfaces/IApp.h"
 #include "../Interfaces/ILog.h"
-#include "../Interfaces/IMemory.h"
 #include "../Interfaces/IFileSystem.h"
 #include "../Interfaces/ITime.h"
+#include "../Interfaces/IScripting.h"
+#include "../Interfaces/IUI.h"
+#include "../Interfaces/IMemory.h"
+
+
 
 #include "../../Renderer/Include/IRenderer.h"
 // App Data
@@ -18,6 +22,11 @@ static uint8_t gResetScenario = RESET_SCENARIO_NONE;
 static CpuInfo gCpu;
 
 // UI
+// UI
+static UIComponent* pAPISwitchingComponent = NULL;
+static UIComponent* pToggleVSyncComponent = NULL;
+static UIWidget* pSwitchComponentLabelWidget = NULL;
+static UIWidget* pSelectApUIWidget = NULL;
 static uint32_t     gSelectedApiIndex = 0;
 
 // Renderer.cpp
@@ -73,7 +82,51 @@ void setupPlatformUI(int32_t width,int32_t height)
 
 	// WINDOW AND RESOLUTION CONTROL
 	extern void platformSetupWindowSystemUI(IApp*);
+	platformSetupWindowSystemUI(pApp);
 
+	// VSYNC CONTROL
+
+	UIComponentDesc uiDesc = {};
+	uiDesc.mStartPosition = vec2(width * 0.4f, height * 0.90f);
+	uiCreateComponent("VSync Control", &uiDesc, &pToggleVSyncComponent);
+
+	CheckboxWidget checkbox;
+	checkbox.pData = &pApp->mSettings.mVSyncEnabled;
+	UIWidget* pCheckbox = uiCreateComponentWidget(pToggleVSyncComponent, "Toggle VSync\t\t\t\t\t", &checkbox, WIDGET_TYPE_CHECKBOX);
+	REGISTER_LUA_WIDGET(pCheckbox);
+
+	// API SWITCHING
+
+	uiDesc = {};
+	uiDesc.mStartPosition = vec2(width * 0.4f, height * 0.01f);
+	uiCreateComponent("API Switching", &uiDesc, &pAPISwitchingComponent);
+
+	static const char* pApiNames[] =
+	{
+		"Vulkan",
+	};
+
+	// Select Api 
+	DropdownWidget selectApUIWidget;
+	selectApUIWidget.pData = &gSelectedApiIndex;
+
+	uint32_t apiCount = RENDERER_API_COUNT;
+
+	ASSERT(apiCount != 0 && "No supported Graphics API available!");
+	for (uint32_t i = 0; i < apiCount; ++i)
+	{
+		selectApUIWidget.mNames.push_back((char*)pApiNames[i]);
+		selectApUIWidget.mValues.push_back(i);
+	}
+
+	pSelectApUIWidget = uiCreateComponentWidget(pAPISwitchingComponent, "Select API", &selectApUIWidget, WIDGET_TYPE_DROPDOWN);
+	//TODO
+	//pSelectApUIWidget->pOnEdited = onAPISwitch;
+	REGISTER_LUA_WIDGET(pSelectApUIWidget);
+
+	LuaScriptDesc apiScriptDesc = {};
+	apiScriptDesc.pScriptFileName = "Test_API_Switching.lua";
+	luaDefineScripts(&apiScriptDesc, 1);
 }
 
 //------------------------------------------------------------------------

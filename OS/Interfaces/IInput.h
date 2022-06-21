@@ -2,3 +2,5 @@
 #include "../Core/Config.h"
 #include "IOperatingSystem.h"
 #include "../Math/MathTypes.h"
+
+bool         setEnableCaptureInput(bool enable);

@@ -776,6 +776,22 @@ bool addImguiFont(void* pFontBuffer, uint32_t fontBufferSize, void* pFontGlyphRa
 // MARK: - UI Component Public Functions
 /****************************************************************************/
 
+// CollapsingHeaderWidget public functions
+UIWidget* uiCreateCollapsingHeaderSubWidget(CollapsingHeaderWidget* pWidget, const char* pLabel, const void* pSubWidget, WidgetType type)
+{
+#ifdef ENABLE_FORGE_UI
+	UIWidget widget{};
+	widget.mType = type;
+	widget.pWidget = (void*)pSubWidget;
+	strcpy(widget.mLabel, pLabel);
+
+	pWidget->mGroupedWidgets.emplace_back(cloneWidget(&widget));
+	return pWidget->mGroupedWidgets.back();
+#else
+	return NULL;
+#endif
+}
+
 void uiCreateComponent(const char* pTitle, const UIComponentDesc* pDesc, UIComponent** ppUIComponent)
 {
 	ASSERT(ppUIComponent);
@@ -833,7 +849,78 @@ UIWidget* uiCreateComponentWidget(UIComponent* pGui,const char* pLabel, const vo
 
 void uiSetComponentFlags(UIComponent* pGui, int32_t flags)
 {
+#ifdef ENABLE_FORGE_UI
 	ASSERT(pGui);
 
 	pGui->mFlags = flags;
+#endif
+}
+
+void uiSetWidgetDeferred(UIWidget* pWidget, bool deferred)
+{
+#ifdef ENABLE_FORGE_UI
+	ASSERT(pWidget);
+
+	pWidget->mDeferred = deferred;
+#endif
+}
+
+void uiSetWidgetOnHoverCallback(UIWidget* pWidget, WidgetCallback callback)
+{
+#ifdef ENABLE_FORGE_UI
+	ASSERT(pWidget);
+	ASSERT(callback);
+
+	pWidget->pOnHover = callback;
+#endif
+}
+
+void uiSetWidgetOnActiveCallback(UIWidget* pWidget, WidgetCallback callback)
+{
+#ifdef ENABLE_FORGE_UI
+	ASSERT(pWidget);
+	ASSERT(callback);
+
+	pWidget->pOnActive = callback;
+#endif
+}
+
+void uiSetWidgetOnFocusCallback(UIWidget* pWidget, WidgetCallback callback)
+{
+#ifdef ENABLE_FORGE_UI
+	ASSERT(pWidget);
+	ASSERT(callback);
+
+	pWidget->pOnFocus = callback;
+#endif
+}
+
+void uiSetWidgetOnEditedCallback(UIWidget* pWidget, WidgetCallback callback)
+{
+#ifdef ENABLE_FORGE_UI
+	ASSERT(pWidget);
+	ASSERT(callback);
+
+	pWidget->pOnEdited = callback;
+#endif
+}
+
+void uiSetWidgetOnDeactivatedCallback(UIWidget* pWidget, WidgetCallback callback)
+{
+#ifdef ENABLE_FORGE_UI
+	ASSERT(pWidget);
+	ASSERT(callback);
+
+	pWidget->pOnDeactivated = callback;
+#endif
+}
+
+void uiSetWidgetOnDeactivatedAfterEditCallback(UIWidget* pWidget, WidgetCallback callback)
+{
+#ifdef ENABLE_FORGE_UI
+	ASSERT(pWidget);
+	ASSERT(callback);
+
+	pWidget->pOnDeactivatedAfterEdit = callback;
+#endif
 }

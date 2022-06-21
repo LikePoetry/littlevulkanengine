@@ -95,6 +95,9 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imconfig.h" />
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui.h" />
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h" />
     <ClInclude Include="Core\Atomics.h" />
     <ClInclude Include="Core\CPUConfig.h" />
     <ClInclude Include="Core\Config.h" />
@@ -114,22 +117,30 @@
     <ClInclude Include="Interfaces\IUI.h" />
     <ClInclude Include="Logging\Log.h" />
     <ClInclude Include="Math\MathTypes.h" />
+    <ClInclude Include="UI\imgui_user.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EASprintf.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Camera\CameraController.cpp" />
     <ClCompile Include="Core\CPUConfig.cpp" />
     <ClCompile Include="Core\Timer.c" />
     <ClCompile Include="FileSystem\FileSystem.cpp" />
     <ClCompile Include="Fonts\FontSystem.cpp" />
     <ClCompile Include="Fonts\stbtt.cpp" />
+    <ClCompile Include="Input\InputSystem.cpp" />
     <ClCompile Include="Logging\Log.c" />
     <ClCompile Include="MemoryTracking\MemoryTracking.c" />
     <ClCompile Include="Scripting\LuaSystem.cpp" />
     <ClCompile Include="UI\UI.cpp" />
+    <ClCompile Include="UI\imgui_user.cpp" />
     <ClCompile Include="WindowSystem\WindowSystem.cpp" />
     <ClCompile Include="Windows\WindowsBase.cpp" />
     <ClCompile Include="Windows\WindowsFileSystem.cpp" />

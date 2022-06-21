@@ -17,6 +17,13 @@
 
 #define MAX_MONITOR_COUNT 32
 
+typedef enum WindowMode
+{
+	WM_WINDOWED,
+	WM_FULLSCREEN,
+	WM_BORDERLESS
+} WindowMode;
+
 typedef struct RectDesc
 {
 	int32_t left;
@@ -97,21 +104,36 @@ inline int getRectHeight(const RectDesc* rect) { return rect->bottom - rect->top
 
 // Window handling
 void openWindow(const char* app_name, WindowDesc* winDesc);
+void closeWindow(const WindowDesc* winDesc);
 void setWindowRect(WindowDesc* winDesc, const RectDesc* rect);
 void setWindowSize(WindowDesc* winDesc, unsigned width, unsigned height);
 void toggleBorderless(WindowDesc* winDesc, unsigned width, unsigned height);
 void toggleFullscreen(WindowDesc* winDesc);
+void showWindow(WindowDesc* winDesc);
+void hideWindow(WindowDesc* winDesc);
+void maximizeWindow(WindowDesc* winDesc);
+void minimizeWindow(WindowDesc* winDesc);
 void centerWindow(WindowDesc* winDesc);
 
 // Mouse and cursor handling
+void* createCursor(const char* path);
+void  setCursor(void* cursor);
+void  showCursor(void);
+void  hideCursor(void);
+bool  isCursorInsideTrackingArea(void);
 void  setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y);
+void  setMousePositionAbsolute(int32_t x, int32_t y);
 
-// pArray pointer to array with at least 2 elements(x,y)
-void getDpiScale(float array[2]);
+
 
 void getRecommendedResolution(RectDesc* rect);
-MonitorDesc* getMonitor(uint32_t index);
+// Sets video mode for specified display
+void setResolution(const MonitorDesc* pMonitor, const Resolution* pRes);
 
+MonitorDesc* getMonitor(uint32_t index);
+uint32_t     getMonitorCount(void);
+// pArray pointer to array with at least 2 elements(x,y)
+void getDpiScale(float array[2]);
 
 //------------------------------------------------------------------------
 // PLATFORM LAYER

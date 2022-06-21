@@ -13,6 +13,9 @@
     <Filter Include="Fonts">
       <UniqueIdentifier>{CF74300D-3B89-58BE-040B-FC1D70DE54EF}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Input">
+      <UniqueIdentifier>{953A660D-014F-8EBE-CAD0-311E36A48AEF}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Interfaces">
       <UniqueIdentifier>{A9FC10E8-95B4-5235-FEBB-2B91EA92ED25}</UniqueIdentifier>
     </Filter>
@@ -25,6 +28,9 @@
     <Filter Include="MemoryTracking">
       <UniqueIdentifier>{31B3166C-1D81-0A72-0615-7B98F281E6D6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Scripting">
+      <UniqueIdentifier>{985A7358-04C5-27CF-4D03-D974B9AC0524}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ThirdParty">
       <UniqueIdentifier>{107145F9-FC28-8746-6530-60A251072237}</UniqueIdentifier>
     </Filter>
@@ -33,6 +39,9 @@
     </Filter>
     <Filter Include="ThirdParty\OpenSource\EASTL">
       <UniqueIdentifier>{8AA85B30-F6B5-8916-7F9C-8501EBA855CD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\EASTL\EAStdC">
+      <UniqueIdentifier>{ED3AD832-D976-DB9C-4289-F3932EE483B7}</UniqueIdentifier>
     </Filter>
     <Filter Include="ThirdParty\OpenSource\basis_universal">
       <UniqueIdentifier>{FB387A6F-67FD-785F-3063-A9299CE61495}</UniqueIdentifier>
@@ -46,6 +55,9 @@
     <Filter Include="ThirdParty\OpenSource\cpu_features\src">
       <UniqueIdentifier>{CEF5F145-BA47-C935-A366-06468F57E21E}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ThirdParty\OpenSource\imgui">
+      <UniqueIdentifier>{CC94FF32-38A2-2D19-C188-29042D95F9CF}</UniqueIdentifier>
+    </Filter>
     <Filter Include="UI">
       <UniqueIdentifier>{83755900-6F01-880B-D8AF-880BC45A880B}</UniqueIdentifier>
     </Filter>
@@ -57,6 +69,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imconfig.h">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui.h">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClInclude>
     <ClInclude Include="Core\Atomics.h">
       <Filter>Core</Filter>
     </ClInclude>
@@ -84,6 +105,9 @@
     <ClInclude Include="Interfaces\IFont.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
+    <ClInclude Include="Interfaces\IInput.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
     <ClInclude Include="Interfaces\ILog.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
@@ -91,6 +115,9 @@
       <Filter>Interfaces</Filter>
     </ClInclude>
     <ClInclude Include="Interfaces\IOperatingSystem.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="Interfaces\IScripting.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
     <ClInclude Include="Interfaces\IThread.h">
@@ -108,10 +135,14 @@
     <ClInclude Include="Math\MathTypes.h">
       <Filter>Math</Filter>
     </ClInclude>
-    <ClInclude Include="Interfaces\IInput.h" />
-    <ClInclude Include="Interfaces\IScripting.h" />
+    <ClInclude Include="UI\imgui_user.h">
+      <Filter>UI</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EASprintf.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL\EAStdC</Filter>
+    </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp">
       <Filter>ThirdParty\OpenSource\EASTL</Filter>
     </ClCompile>
@@ -123,6 +154,18 @@
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c">
       <Filter>ThirdParty\OpenSource\cpu_features\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_demo.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_draw.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp">
+      <Filter>ThirdParty\OpenSource\imgui</Filter>
     </ClCompile>
     <ClCompile Include="Camera\CameraController.cpp">
       <Filter>Camera</Filter>
@@ -142,13 +185,22 @@
     <ClCompile Include="Fonts\stbtt.cpp">
       <Filter>Fonts</Filter>
     </ClCompile>
+    <ClCompile Include="Input\InputSystem.cpp">
+      <Filter>Input</Filter>
+    </ClCompile>
     <ClCompile Include="Logging\Log.c">
       <Filter>Logging</Filter>
     </ClCompile>
     <ClCompile Include="MemoryTracking\MemoryTracking.c">
       <Filter>MemoryTracking</Filter>
     </ClCompile>
+    <ClCompile Include="Scripting\LuaSystem.cpp">
+      <Filter>Scripting</Filter>
+    </ClCompile>
     <ClCompile Include="UI\UI.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\imgui_user.cpp">
       <Filter>UI</Filter>
     </ClCompile>
     <ClCompile Include="WindowSystem\WindowSystem.cpp">
@@ -172,6 +224,5 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
-    <ClCompile Include="Scripting\LuaSystem.cpp" />
   </ItemGroup>
 </Project>

@@ -779,6 +779,29 @@ void openWindow(const char* app_name, WindowDesc* winDesc)
 	setMousePositionRelative(winDesc, getRectWidth(&winDesc->windowedRect) >> 1, getRectHeight(&winDesc->windowedRect) >> 1);
 }
 
+bool handleMessages()
+{
+	MSG msg;
+	msg.message = NULL;
+	bool quit = false;
+	while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+	{
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+
+		if (WM_CLOSE == msg.message || WM_QUIT == msg.message)
+			quit = true;
+	}
+
+	return quit;
+}
+
+void closeWindow(const WindowDesc* winDesc)
+{
+	DestroyWindow((HWND)winDesc->handle.window);
+	handleMessages();
+}
+
 void setWindowRect(WindowDesc* winDesc, const RectDesc* rect)
 {
 	HWND hwnd = (HWND)winDesc->handle.window;
@@ -842,6 +865,30 @@ void toggleFullscreen(WindowDesc* winDesc)
 	adjustWindow(winDesc);
 }
 
+void showWindow(WindowDesc* winDesc)
+{
+	winDesc->hide = false;
+	ShowWindow((HWND)winDesc->handle.window, SW_SHOW);
+}
+
+void hideWindow(WindowDesc* winDesc)
+{
+	winDesc->hide = true;
+	ShowWindow((HWND)winDesc->handle.window, SW_HIDE);
+}
+
+void maximizeWindow(WindowDesc* winDesc)
+{
+	winDesc->maximized = true;
+	ShowWindow((HWND)winDesc->handle.window, SW_MAXIMIZE);
+}
+
+void minimizeWindow(WindowDesc* winDesc)
+{
+	winDesc->maximized = false;
+	ShowWindow((HWND)winDesc->handle.window, SW_MINIMIZE);
+}
+
 void centerWindow(WindowDesc* winDesc)
 {
 	UpdateWindowDescFullScreenRect(winDesc);
@@ -871,6 +918,89 @@ void centerWindow(WindowDesc* winDesc)
 	winDesc->windowedRect = { (int32_t)rect.left, (int32_t)rect.top, (int32_t)rect.right, (int32_t)rect.bottom };
 }
 
+void* createCursor(const char* path)
+{
+	return LoadCursorFromFileA(path);
+}
+
+void setCursor(void* cursor)
+{
+	HCURSOR windowsCursor = (HCURSOR)cursor;
+	SetCursor(windowsCursor);
+}
+
+void showCursor()
+{
+	if (!gCursorVisible)
+	{
+		ShowCursor(TRUE);
+		gCursorVisible = true;
+	}
+}
+
+void hideCursor()
+{
+	if (gCursorVisible)
+	{
+		ShowCursor(FALSE);
+		gCursorVisible = false;
+	}
+}
+
+void captureCursor(WindowDesc* winDesc, bool bEnable)
+{
+	ASSERT(winDesc);
+
+	static int32_t lastCursorPosX = 0;
+	static int32_t lastCursorPosY = 0;
+
+	if (winDesc->cursorCaptured != bEnable)
+	{
+		if (bEnable)
+		{
+			POINT lastCursorPoint;
+			GetCursorPos(&lastCursorPoint);
+			lastCursorPosX = lastCursorPoint.x;
+			lastCursorPosY = lastCursorPoint.y;
+
+			HWND handle = (HWND)winDesc->handle.window;
+			SetCapture(handle);
+
+			RECT clientRect;
+			GetClientRect(handle, &clientRect);
+			//convert screen rect to client coordinates.
+			POINT ptClientUL = { clientRect.left, clientRect.top };
+			// Add one to the right and bottom sides, because the
+			// coordinates retrieved by GetClientRect do not
+			// include the far left and lowermost pixels.
+			POINT ptClientLR = { clientRect.right + 1, clientRect.bottom + 1 };
+			ClientToScreen(handle, &ptClientUL);
+			ClientToScreen(handle, &ptClientLR);
+
+			// Copy the client coordinates of the client area
+			// to the rcClient structure. Confine the mouse cursor
+			// to the client area by passing the rcClient structure
+			// to the ClipCursor function.
+			SetRect(&clientRect, ptClientUL.x, ptClientUL.y, ptClientLR.x, ptClientLR.y);
+			ClipCursor(&clientRect);
+			ShowCursor(FALSE);
+		}
+		else
+		{
+			ClipCursor(NULL);
+			ShowCursor(TRUE);
+			ReleaseCapture();
+			SetCursorPos(lastCursorPosX, lastCursorPosY);
+		}
+
+		winDesc->cursorCaptured = bEnable;
+	}
+}
+
+bool isCursorInsideTrackingArea()
+{
+	return gCursorInsideRectangle;
+}
 
 void setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y)
 {
@@ -880,9 +1010,49 @@ void setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y)
 	SetCursorPos(point.x, point.y);
 }
 
+void setMousePositionAbsolute(int32_t x, int32_t y)
+{
+	SetCursorPos(x, y);
+}
+
+
+
 //------------------------------------------------------------------------
 // MONITOR AND RESOLUTION HANDLING INTERFACE FUNCTIONS
 //------------------------------------------------------------------------
+
+void getRecommendedResolution(RectDesc* rect)
+{
+	*rect = { 0, 0, min(1920, (int)(GetSystemMetrics(SM_CXSCREEN) * 0.75)), min(1080, (int)(GetSystemMetrics(SM_CYSCREEN) * 0.75)) };
+}
+
+void setResolution(const MonitorDesc* pMonitor, const Resolution* pMode)
+{
+	DEVMODEW devMode = {};
+	devMode.dmSize = sizeof(DEVMODEW);
+	devMode.dmPelsHeight = pMode->mHeight;
+	devMode.dmPelsWidth = pMode->mWidth;
+	devMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+
+	ChangeDisplaySettingsExW(
+		pMonitor->adapterName,
+		&devMode,
+		NULL,
+		CDS_FULLSCREEN,
+		NULL
+	);
+}
+
+MonitorDesc* getMonitor(uint32_t index)
+{
+	ASSERT(gMonitorCount > index);
+	return &gMonitors[index];
+}
+
+uint32_t getMonitorCount()
+{
+	return gMonitorCount;
+}
 
 void getDpiScale(float array[2])
 {
@@ -911,15 +1081,4 @@ void getDpiScale(float array[2])
 		array[0] = dpiScale;
 		array[1] = dpiScale;
 	}
-}
-
-void getRecommendedResolution(RectDesc* rect)
-{
-	*rect = { 0, 0, min(1920, (int)(GetSystemMetrics(SM_CXSCREEN) * 0.75)), min(1080, (int)(GetSystemMetrics(SM_CYSCREEN) * 0.75)) };
-}
-
-MonitorDesc* getMonitor(uint32_t index)
-{
-	ASSERT(gMonitorCount > index);
-	return &gMonitors[index];
 }
