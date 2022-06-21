@@ -49,6 +49,11 @@ gVkInternalFree(void* pUserData, size_t size, VkInternalAllocationType allocatio
 {
 }
 
+static void internal_log(LogLevel level, const char* msg, const char* component)
+{
+	LOGF(level, "%s ( %s )", component, msg);
+}
+
 using DescriptorNameToIndexMap = eastl::string_hash_map<uint32_t>;
 
 struct DynamicUniformData
@@ -80,8 +85,8 @@ static const DescriptorInfo* get_descriptor(const RootSignature* pRootSignature,
 }
 /************************************************************************/
 /************************************************************************/
-VkPipelineBindPoint gPipelineBindPoint[PIPELINE_TYPE_COUNT] = 
-{ 
+VkPipelineBindPoint gPipelineBindPoint[PIPELINE_TYPE_COUNT] =
+{
 	VK_PIPELINE_BIND_POINT_MAX_ENUM, VK_PIPELINE_BIND_POINT_COMPUTE,
 	VK_PIPELINE_BIND_POINT_GRAPHICS,
 	VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
@@ -103,11 +108,32 @@ VkAllocationCallbacks gVkAllocationCallbacks =
 	gVkInternalFree
 };
 
+typedef struct NullDescriptors
+{
+	Texture* pDefaultTextureSRV[MAX_LINKED_GPUS][TEXTURE_DIM_COUNT];
+	Texture* pDefaultTextureUAV[MAX_LINKED_GPUS][TEXTURE_DIM_COUNT];
+	Buffer* pDefaultBufferSRV[MAX_LINKED_GPUS];
+	Buffer* pDefaultBufferUAV[MAX_LINKED_GPUS];
+	Sampler* pDefaultSampler;
+	Mutex    mSubmitMutex;
+
+	// #TODO - Remove after we have a better way to specify initial resource state
+	// Unlike DX12, Vulkan textures start in undefined layout.
+	// With this, we transition them to the specified layout so app code doesn't have to worry about this
+	Mutex    mInitialTransitionMutex;
+	Queue* pInitialTransitionQueue;
+	CmdPool* pInitialTransitionCmdPool;
+	Cmd* pInitialTransitionCmd;
+	Fence* pInitialTransitionFence;
+} NullDescriptors;
+
 #define SAFE_FREE(p_var)       \
 	if (p_var)                 \
 	{                          \
 		tf_free((void*)p_var); \
 	}
+
+
 
 VkBufferUsageFlags util_to_vk_buffer_usage(DescriptorType usage, bool typed)
 {
@@ -486,6 +512,238 @@ VkImageAspectFlags util_vk_determine_aspect_mask(VkFormat format, bool includeSt
 }
 
 /************************************************************************/
+// Internal init functions
+/************************************************************************/
+void CreateInstance(
+	const char* app_name, const RendererDesc* pDesc, uint32_t userDefinedInstanceLayerCount,
+	const char** userDefinedInstanceLayers,
+	Renderer* pRenderer) 
+{
+	// These are the extensions that we have loaded
+	const char* instanceExtensionCache[MAX_INSTANCE_EXTENSIONS] = {};
+
+	uint32_t layerCount = 0;
+	uint32_t extCount = 0;
+	vkEnumerateInstanceLayerProperties(&layerCount, NULL);
+	vkEnumerateInstanceExtensionProperties(NULL, &extCount, NULL);
+
+	VkLayerProperties* layers = (VkLayerProperties*)alloca(sizeof(VkLayerProperties) * layerCount);
+	vkEnumerateInstanceLayerProperties(&layerCount, layers);
+
+	VkExtensionProperties* exts = (VkExtensionProperties*)alloca(sizeof(VkExtensionProperties) * extCount);
+	vkEnumerateInstanceExtensionProperties(NULL, &extCount, exts);
+
+	for (uint32_t i = 0; i < layerCount; ++i)
+	{
+		internal_log(eINFO, layers[i].layerName, "vkinstance-layer");
+	}
+
+	for (uint32_t i = 0; i < extCount; ++i)
+	{
+		internal_log(eINFO, exts[i].extensionName, "vkinstance-ext");
+	}
+
+	DECLARE_ZERO(VkApplicationInfo, app_info);
+	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	app_info.pNext = NULL;
+	app_info.pApplicationName = app_name;
+	app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+	app_info.pEngineName = "TheForge";
+	app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	app_info.apiVersion = TARGET_VULKAN_API_VERSION;
+
+	eastl::vector<const char*> layerTemp = eastl::vector<const char*>(userDefinedInstanceLayerCount);
+	memcpy(layerTemp.data(), userDefinedInstanceLayers, layerTemp.size() * sizeof(char*));
+
+	// Instance
+	{
+		// check to see if the layers are present
+		for (uint32_t i = 0; i < (uint32_t)layerTemp.size(); ++i)
+		{
+			bool layerFound = false;
+			for (uint32_t j = 0; j < layerCount; ++j)
+			{
+				if (strcmp(userDefinedInstanceLayers[i], layers[j].layerName) == 0)
+				{
+					layerFound = true;
+					break;
+				}
+			}
+			if (layerFound == false)
+			{
+				internal_log(eWARNING, userDefinedInstanceLayers[i], "vkinstance-layer-missing");
+				// delete layer and get new index
+				i = (uint32_t)(layerTemp.erase(layerTemp.begin() + i) - layerTemp.begin());
+			}
+		}
+
+		uint32_t                   extension_count = 0;
+		const uint32_t             initialCount = sizeof(gVkWantedInstanceExtensions) / sizeof(gVkWantedInstanceExtensions[0]);
+		const uint32_t             userRequestedCount = (uint32_t)pDesc->mVulkan.mInstanceExtensionCount;
+		eastl::vector<const char*> wantedInstanceExtensions(initialCount + userRequestedCount);
+		for (uint32_t i = 0; i < initialCount; ++i)
+		{
+			wantedInstanceExtensions[i] = gVkWantedInstanceExtensions[i];
+		}
+		for (uint32_t i = 0; i < userRequestedCount; ++i)
+		{
+			wantedInstanceExtensions[initialCount + i] = pDesc->mVulkan.ppInstanceExtensions[i];
+		}
+		const uint32_t wanted_extension_count = (uint32_t)wantedInstanceExtensions.size();
+		// Layer extensions
+		for (size_t i = 0; i < layerTemp.size(); ++i)
+		{
+			const char* layer_name = layerTemp[i];
+			uint32_t    count = 0;
+			vkEnumerateInstanceExtensionProperties(layer_name, &count, NULL);
+			VkExtensionProperties* properties = count ? (VkExtensionProperties*)tf_calloc(count, sizeof(*properties)) : NULL;
+			ASSERT(properties != NULL || count == 0);
+			vkEnumerateInstanceExtensionProperties(layer_name, &count, properties);
+			for (uint32_t j = 0; j < count; ++j)
+			{
+				for (uint32_t k = 0; k < wanted_extension_count; ++k)
+				{
+					if (strcmp(wantedInstanceExtensions[k], properties[j].extensionName) == 0)    //-V522
+					{
+						if (strcmp(wantedInstanceExtensions[k], VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME) == 0)
+							gDeviceGroupCreationExtension = true;
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+						if (strcmp(wantedInstanceExtensions[k], VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+							gDebugUtilsExtension = true;
+#endif
+						instanceExtensionCache[extension_count++] = wantedInstanceExtensions[k];
+						// clear wanted extension so we dont load it more then once
+						wantedInstanceExtensions[k] = "";
+						break;
+					}
+				}
+			}
+			SAFE_FREE((void*)properties);
+		}
+		// Standalone extensions
+		{
+			const char* layer_name = NULL;
+			uint32_t    count = 0;
+			vkEnumerateInstanceExtensionProperties(layer_name, &count, NULL);
+			if (count > 0)
+			{
+				VkExtensionProperties* properties = (VkExtensionProperties*)tf_calloc(count, sizeof(*properties));
+				ASSERT(properties != NULL);
+				vkEnumerateInstanceExtensionProperties(layer_name, &count, properties);
+				for (uint32_t j = 0; j < count; ++j)
+				{
+					for (uint32_t k = 0; k < wanted_extension_count; ++k)
+					{
+						if (strcmp(wantedInstanceExtensions[k], properties[j].extensionName) == 0)
+						{
+							instanceExtensionCache[extension_count++] = wantedInstanceExtensions[k];
+							// clear wanted extension so we dont load it more then once
+							//gVkWantedInstanceExtensions[k] = "";
+							if (strcmp(wantedInstanceExtensions[k], VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME) == 0)
+								gDeviceGroupCreationExtension = true;
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+							if (strcmp(wantedInstanceExtensions[k], VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+								gDebugUtilsExtension = true;
+#endif
+							break;
+						}
+					}
+				}
+				SAFE_FREE((void*)properties);
+			}
+		}
+
+#if defined(QUEST_VR)
+		char oculusVRInstanceExtensionBuffer[4096];
+		hook_add_vk_instance_extensions(instanceExtensionCache, &extension_count, MAX_INSTANCE_EXTENSIONS, oculusVRInstanceExtensionBuffer, sizeof(oculusVRInstanceExtensionBuffer));
+#endif
+
+#if VK_HEADER_VERSION >= 108
+		VkValidationFeaturesEXT      validationFeaturesExt = { VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
+		VkValidationFeatureEnableEXT enabledValidationFeatures[] = {
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+		};
+
+		if (pDesc->mEnableGPUBasedValidation)
+		{
+			validationFeaturesExt.enabledValidationFeatureCount = 1;
+			validationFeaturesExt.pEnabledValidationFeatures = enabledValidationFeatures;
+		}
+#endif
+
+		// Add more extensions here
+		DECLARE_ZERO(VkInstanceCreateInfo, create_info);
+		create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+#if VK_HEADER_VERSION >= 108
+		create_info.pNext = &validationFeaturesExt;
+#endif
+		create_info.flags = 0;
+		create_info.pApplicationInfo = &app_info;
+		create_info.enabledLayerCount = (uint32_t)layerTemp.size();
+		create_info.ppEnabledLayerNames = layerTemp.data();
+		create_info.enabledExtensionCount = extension_count;
+		create_info.ppEnabledExtensionNames = instanceExtensionCache;
+		CHECK_VKRESULT(vkCreateInstance(&create_info, &gVkAllocationCallbacks, &(pRenderer->mVulkan.pVkInstance)));
+	}
+
+#if defined(NX64)
+	loadExtensionsNX(pRenderer->mVulkan.pVkInstance);
+#else
+	// Load Vulkan instance functions
+	volkLoadInstance(pRenderer->mVulkan.pVkInstance);
+#endif
+
+	// Debug
+	{
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+		if (gDebugUtilsExtension)
+		{
+			VkDebugUtilsMessengerCreateInfoEXT create_info = {};
+			create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+			create_info.pfnUserCallback = internal_debug_report_callback;
+			create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+			create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+			create_info.flags = 0;
+			create_info.pUserData = NULL;
+			VkResult res = vkCreateDebugUtilsMessengerEXT(
+				pRenderer->mVulkan.pVkInstance, &create_info, &gVkAllocationCallbacks, &(pRenderer->mVulkan.pVkDebugUtilsMessenger));
+			if (VK_SUCCESS != res)
+			{
+				internal_log(
+					eERROR, "vkCreateDebugUtilsMessengerEXT failed - disabling Vulkan debug callbacks",
+					"internal_vk_init_instance");
+			}
+		}
+#endif
+	}
+}
+
+static bool initCommon(const char* appName, const RendererDesc* pDesc, Renderer* pRenderer) 
+{
+	const char** instanceLayers = (const char**)alloca((2 + pDesc->mVulkan.mInstanceLayerCount) * sizeof(char*));
+	uint32_t     instanceLayerCount = 0;
+
+	instanceLayers[instanceLayerCount++] = "VK_LAYER_KHRONOS_validation";
+
+	for (uint32_t i = 0; i < (uint32_t)pDesc->mVulkan.mInstanceLayerCount; ++i)
+		instanceLayers[instanceLayerCount++] = pDesc->mVulkan.ppInstanceLayers[i];
+
+	VkResult vkRes = volkInitialize();
+	if (vkRes != VK_SUCCESS)
+	{
+		LOGF(LogLevel::eERROR, "Failed to initialize Vulkan");
+		return false;
+	}
+
+	CreateInstance(appName, pDesc, instanceLayerCount, instanceLayers, pRenderer);
+
+	pRenderer->mUnlinkedRendererIndex = 0;
+	pRenderer->mVulkan.mOwnInstance = true;
+	return true;
+}
+
+/************************************************************************/
 // Virtual Texture
 /************************************************************************/
 static void alignedDivision(const VkExtent3D& extent, const VkExtent3D& granularity, VkExtent3D* out)
@@ -630,7 +888,7 @@ void vk_waitQueueIdle(Queue* pQueue)
 	vkQueueWaitIdle(pQueue->mVulkan.pVkQueue);
 }
 
-void vk_removeQueue(Renderer* pRenderer, Queue* pQueue) 
+void vk_removeQueue(Renderer* pRenderer, Queue* pQueue)
 {
 	ASSERT(pRenderer);
 	ASSERT(pQueue);
@@ -2717,6 +2975,61 @@ void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* 
 	}
 
 	vkUpdateDescriptorSets(pRenderer->mVulkan.pVkDevice, writeSetCount, writeSetArray, 0, NULL);
+}
+
+/************************************************************************/
+// Renderer Init Remove
+/************************************************************************/
+static uint32_t gRendererCount = 0;
+
+void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** ppRenderer)
+{
+	ASSERT(appName);
+	ASSERT(pDesc);
+	ASSERT(ppRenderer);
+
+	uint8_t* mem = (uint8_t*)tf_calloc_memalign(1, alignof(Renderer), sizeof(Renderer) + sizeof(NullDescriptors));
+	ASSERT(mem);
+
+	Renderer* pRenderer = (Renderer*)mem;
+	pRenderer->mGpuMode = pDesc->mGpuMode;
+	pRenderer->mShaderTarget = pDesc->mShaderTarget;
+	pRenderer->mEnableGpuBasedValidation = pDesc->mEnableGPUBasedValidation;
+	pRenderer->pNullDescriptors = (NullDescriptors*)(mem + sizeof(Renderer));
+
+	pRenderer->pName = (char*)tf_calloc(strlen(appName) + 1, sizeof(char));
+	strcpy(pRenderer->pName, appName);
+
+	// Initialize the Vulkan internal bits
+	{
+		ASSERT(pDesc->mGpuMode != GPU_MODE_UNLINKED || pDesc->pContext);
+		if (pDesc->pContext)
+		{
+			ASSERT(pDesc->mGpuIndex < pDesc->pContext->mGpuCount);
+			pRenderer->mVulkan.pVkInstance = pDesc->pContext->mVulkan.pVkInstance;
+			pRenderer->mVulkan.mOwnInstance = false;
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+			pRenderer->mVulkan.pVkDebugUtilsMessenger = pDesc->pContext->mVulkan.pVkDebugUtilsMessenger;
+#else
+			pRenderer->mVulkan.pVkDebugReport = pDesc->pContext->mVulkan.pVkDebugReport;
+#endif
+			pRenderer->mUnlinkedRendererIndex = gRendererCount;
+		}
+		else if (!initCommon(appName, pDesc, pRenderer))
+		{
+			SAFE_FREE(pRenderer->pName);
+			SAFE_FREE(pRenderer);
+			return;
+		}
+
+
+	}
+
+}
+
+void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Renderer** ppRenderer)
+{
+	vk_initRenderer(appName, pSettings, ppRenderer);
 }
 
 #include "../ThirdParty/OpenSource/volk/volk.c"

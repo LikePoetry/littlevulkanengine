@@ -1218,6 +1218,10 @@ struct VkVTPendingPageDeletion
 	Buffer** pIntermediateBuffers;
 	uint32_t* pIntermediateBuffersCount;
 };
+API_INTERFACE void FORGE_CALLCONV initRenderer(const char* app_name, const RendererDesc* p_settings, Renderer** pRenderer);
+
+
+
 
 void vk_waitQueueIdle(Queue* p_queue);
 void vk_removeQueue(Renderer* pRenderer, Queue* pQueue);
@@ -1262,3 +1266,5 @@ void vk_removeSemaphore(Renderer* pRenderer, Semaphore* pSemaphore);
 
 void vk_removeFence(Renderer* pRenderer, Fence* pFence);
 void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* pDescriptorSet, uint32_t count, const DescriptorData* pParams);
+
+void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** ppRenderer);
