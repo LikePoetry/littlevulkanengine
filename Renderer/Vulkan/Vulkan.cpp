@@ -24,6 +24,10 @@
 
 #include "../../OS/Interfaces/IMemory.h"
 
+#ifdef VK_RAYTRACING_AVAILABLE
+extern void vk_FillRaytracingDescriptorData(uint32_t count, AccelerationStructure** const ppAccelerationStructures, VkAccelerationStructureKHR* pOutHandles);
+#endif
+
 #define DECLARE_ZERO(type, var) type var = {};
 
 static void* VKAPI_PTR gVkAllocation(void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
@@ -54,6 +58,29 @@ static void internal_log(LogLevel level, const char* msg, const char* component)
 	LOGF(level, "%s ( %s )", component, msg);
 }
 
+static VkBool32 VKAPI_PTR internal_debug_report_callback(
+	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
+	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+{
+	const char* pLayerPrefix = pCallbackData->pMessageIdName;
+	const char* pMessage = pCallbackData->pMessage;
+	int32_t     messageCode = pCallbackData->messageIdNumber;
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+	{
+		LOGF(LogLevel::eINFO, "[%s] : %s (%i)", pLayerPrefix, pMessage, messageCode);
+	}
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+	{
+		LOGF(LogLevel::eWARNING, "[%s] : %s (%i)", pLayerPrefix, pMessage, messageCode);
+	}
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+	{
+		LOGF(LogLevel::eERROR, "[%s] : %s (%i)", pLayerPrefix, pMessage, messageCode);
+		ASSERT(false);
+	}
+
+	return VK_FALSE;
+}
 using DescriptorNameToIndexMap = eastl::string_hash_map<uint32_t>;
 
 struct DynamicUniformData
@@ -510,6 +537,162 @@ VkImageAspectFlags util_vk_determine_aspect_mask(VkFormat format, bool includeSt
 	}
 	return result;
 }
+
+const char* gVkWantedInstanceExtensions[] =
+{
+	VK_KHR_SURFACE_EXTENSION_NAME,
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+	VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+	VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+	VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+	VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+#elif defined(VK_USE_PLATFORM_GGP)
+	VK_GGP_STREAM_DESCRIPTOR_SURFACE_EXTENSION_NAME,
+#elif defined(VK_USE_PLATFORM_VI_NN)
+	VK_NN_VI_SURFACE_EXTENSION_NAME,
+#endif
+	// Debug utils not supported on all devices yet
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+	VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#else
+	VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+#endif
+	VK_NV_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
+	// To legally use HDR formats
+	VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME,
+	/************************************************************************/
+	// VR Extensions
+	/************************************************************************/
+	VK_KHR_DISPLAY_EXTENSION_NAME,
+	VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME,
+	/************************************************************************/
+	// Multi GPU Extensions
+	/************************************************************************/
+#if VK_KHR_device_group_creation
+	  VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME,
+#endif
+#ifndef NX64
+	  /************************************************************************/
+	// Property querying extensions
+	/************************************************************************/
+	VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+	/************************************************************************/
+	/************************************************************************/
+#endif
+};
+
+const char* gVkWantedDeviceExtensions[] =
+{
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+	VK_KHR_MAINTENANCE1_EXTENSION_NAME,
+	VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
+	VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME,
+	VK_EXT_SHADER_SUBGROUP_VOTE_EXTENSION_NAME,
+	VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
+	VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+#ifdef USE_EXTERNAL_MEMORY_EXTENSIONS
+	VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
+	VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+	VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+	VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
+	VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
+	VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
+#endif
+#endif
+	// Debug marker extension in case debug utils is not supported
+#ifndef ENABLE_DEBUG_UTILS_EXTENSION
+	VK_EXT_DEBUG_MARKER_EXTENSION_NAME,
+#endif
+#if defined(VK_USE_PLATFORM_GGP)
+	VK_GGP_FRAME_TOKEN_EXTENSION_NAME,
+#endif
+
+#if VK_KHR_draw_indirect_count
+	VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME,
+#endif
+	// Fragment shader interlock extension to be used for ROV type functionality in Vulkan
+#if VK_EXT_fragment_shader_interlock
+	VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME,
+#endif
+	/************************************************************************/
+	// NVIDIA Specific Extensions
+	/************************************************************************/
+#ifdef USE_NV_EXTENSIONS
+	VK_NVX_DEVICE_GENERATED_COMMANDS_EXTENSION_NAME,
+#endif
+	/************************************************************************/
+	// AMD Specific Extensions
+	/************************************************************************/
+	VK_AMD_DRAW_INDIRECT_COUNT_EXTENSION_NAME,
+	VK_AMD_SHADER_BALLOT_EXTENSION_NAME,
+	VK_AMD_GCN_SHADER_EXTENSION_NAME,
+	/************************************************************************/
+	// Multi GPU Extensions
+	/************************************************************************/
+#if VK_KHR_device_group
+	VK_KHR_DEVICE_GROUP_EXTENSION_NAME,
+#endif
+	/************************************************************************/
+	// Bindless & None Uniform access Extensions
+	/************************************************************************/
+	VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+#if VK_KHR_maintenance3 // descriptor indexing depends on this
+		VK_KHR_MAINTENANCE3_EXTENSION_NAME,
+#endif
+		/************************************************************************/
+		// Raytracing
+		/************************************************************************/
+	#ifdef VK_RAYTRACING_AVAILABLE
+		VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+		VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+		VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+
+		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+		VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+
+		VK_KHR_RAY_QUERY_EXTENSION_NAME,
+	#endif
+		/************************************************************************/
+		// YCbCr format support
+		/************************************************************************/
+	#if VK_KHR_bind_memory2
+		// Requirement for VK_KHR_sampler_ycbcr_conversion
+		VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
+	#endif
+	#if VK_KHR_sampler_ycbcr_conversion
+		VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
+		#if VK_KHR_bind_memory2 // ycbcr conversion depends on this
+			VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
+		#endif
+	#endif
+			/************************************************************************/
+			// Multiview support
+			/************************************************************************/
+		#ifdef QUEST_VR
+			VK_KHR_MULTIVIEW_EXTENSION_NAME,
+		#endif
+			/************************************************************************/
+			// Nsight Aftermath
+			/************************************************************************/
+		#ifdef ENABLE_NSIGHT_AFTERMATH
+			VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME,
+			VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME,
+		#endif
+			/************************************************************************/
+			/************************************************************************/
+};
+// clang-format on
+
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+static bool gDebugUtilsExtension = false;
+#endif
+static bool gRenderDocLayerEnabled = false;
+static bool gDeviceGroupCreationExtension = false;
 
 /************************************************************************/
 // Internal init functions
@@ -3032,5 +3215,12 @@ void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Rend
 	vk_initRenderer(appName, pSettings, ppRenderer);
 }
 
+void vk_FillRaytracingDescriptorData(uint32_t count, AccelerationStructure** const ppAccelerationStructures, VkAccelerationStructureKHR* pOutHandles)
+{
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		pOutHandles[i] = ppAccelerationStructures[i]->mAccelerationStructure;
+	}
+}
 #include "../ThirdParty/OpenSource/volk/volk.c"
 #endif

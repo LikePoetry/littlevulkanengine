@@ -5,8 +5,11 @@
 
 #include "../../ThirdParty/OpenSource/volk/volk.h"
 
+#define TARGET_VULKAN_API_VERSION VK_API_VERSION_1_1
 
 #define ENABLE_DEBUG_UTILS_EXTENSION
+
+#define VK_RAYTRACING_AVAILABLE
 
 #define CHECK_VKRESULT(exp)                                                      \
 	{                                                                            \
