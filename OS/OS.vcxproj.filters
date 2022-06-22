@@ -138,6 +138,7 @@
     <ClInclude Include="UI\imgui_user.h">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="Core\GPUConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EASprintf.cpp">

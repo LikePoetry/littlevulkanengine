@@ -16,6 +16,8 @@
 #include "../../OS/Interfaces/ILog.h"
 #include "../../OS/Math/MathTypes.h"
 
+#include "../../OS/Core/GPUConfig.h"
+
 #include "../../ThirdParty/OpenSource/VulkanMemoryAllocator/VulkanMemoryAllocator.h"
 #include "../../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
 #include "../../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_query.h"
@@ -24,9 +26,41 @@
 
 #include "../../OS/Interfaces/IMemory.h"
 
-#ifdef VK_RAYTRACING_AVAILABLE
+//#ifdef VK_RAYTRACING_AVAILABLE
 extern void vk_FillRaytracingDescriptorData(uint32_t count, AccelerationStructure** const ppAccelerationStructures, VkAccelerationStructureKHR* pOutHandles);
-#endif
+//#endif
+
+#define VENDOR_ID_NVIDIA 0x10DE
+#define VENDOR_ID_AMD 0x1002
+#define VENDOR_ID_AMD_1 0x1022
+#define VENDOR_ID_INTEL 0x163C
+#define VENDOR_ID_INTEL_1 0x8086
+#define VENDOR_ID_INTEL_2 0x8087
+
+typedef enum GpuVendor
+{
+	GPU_VENDOR_NVIDIA,
+	GPU_VENDOR_AMD,
+	GPU_VENDOR_INTEL,
+	GPU_VENDOR_UNKNOWN,
+	GPU_VENDOR_COUNT,
+} GpuVendor;
+
+#define VK_FORMAT_VERSION( version, outVersionString )                     \
+	ASSERT( VK_MAX_DESCRIPTION_SIZE == ARRAYSIZE( outVersionString ) ); \
+	sprintf( outVersionString, "%u.%u.%u", VK_VERSION_MAJOR( version ), VK_VERSION_MINOR( version ), VK_VERSION_PATCH( version ) );
+
+static GpuVendor util_to_internal_gpu_vendor(uint32_t vendorId)
+{
+	if (vendorId == VENDOR_ID_NVIDIA)
+		return GPU_VENDOR_NVIDIA;
+	else if (vendorId == VENDOR_ID_AMD || vendorId == VENDOR_ID_AMD_1)
+		return GPU_VENDOR_AMD;
+	else if (vendorId == VENDOR_ID_INTEL || vendorId == VENDOR_ID_INTEL_1 || vendorId == VENDOR_ID_INTEL_2)
+		return GPU_VENDOR_INTEL;
+	else
+		return GPU_VENDOR_UNKNOWN;
+}
 
 #define DECLARE_ZERO(type, var) type var = {};
 
@@ -287,6 +321,106 @@ void util_calculate_device_indices(
 		pIndices[pSharedNodeIndices[i]] = nodeIndex;
 }
 
+void util_query_gpu_settings(VkPhysicalDevice gpu,
+	VkPhysicalDeviceProperties2* gpuProperties,
+	VkPhysicalDeviceMemoryProperties* gpuMemoryProperties,
+	VkPhysicalDeviceFeatures2KHR* gpuFeatures,
+	VkQueueFamilyProperties** queueFamilyProperties,
+	uint32_t* queueFamilyPropertyCount,
+	GPUSettings* gpuSettings)
+{
+	*gpuProperties = {};
+	*gpuMemoryProperties = {};
+	*gpuFeatures = {};
+	*queueFamilyProperties = NULL;
+	*queueFamilyPropertyCount = 0;
+
+	// Get memory properties
+	vkGetPhysicalDeviceMemoryProperties(gpu, gpuMemoryProperties);
+
+	// Get features
+	gpuFeatures->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
+
+	vkGetPhysicalDeviceFeatures2KHR(gpu, gpuFeatures);
+
+	// Get device properties
+	VkPhysicalDeviceSubgroupProperties subgroupProperties = {};
+	subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+	subgroupProperties.pNext = NULL;
+	gpuProperties->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
+	subgroupProperties.pNext = gpuProperties->pNext;
+	gpuProperties->pNext = &subgroupProperties;
+
+	vkGetPhysicalDeviceProperties2KHR(gpu, gpuProperties);
+
+	// Get queue family properties
+	vkGetPhysicalDeviceQueueFamilyProperties(gpu, queueFamilyPropertyCount, NULL);
+	*queueFamilyProperties = (VkQueueFamilyProperties*)tf_calloc(*queueFamilyPropertyCount, sizeof(VkQueueFamilyProperties));
+	vkGetPhysicalDeviceQueueFamilyProperties(gpu, queueFamilyPropertyCount, *queueFamilyProperties);
+
+	*gpuSettings = {};
+	gpuSettings->mUniformBufferAlignment = (uint32_t)gpuProperties->properties.limits.minUniformBufferOffsetAlignment;
+	gpuSettings->mUploadBufferTextureAlignment = (uint32_t)gpuProperties->properties.limits.optimalBufferCopyOffsetAlignment;
+	gpuSettings->mUploadBufferTextureRowAlignment = (uint32_t)gpuProperties->properties.limits.optimalBufferCopyRowPitchAlignment;
+	gpuSettings->mMaxVertexInputBindings = gpuProperties->properties.limits.maxVertexInputBindings;
+	gpuSettings->mMultiDrawIndirect = gpuFeatures->features.multiDrawIndirect;
+
+	gpuSettings->mWaveLaneCount = subgroupProperties.subgroupSize;
+	gpuSettings->mWaveOpsSupportFlags = WAVE_OPS_SUPPORT_FLAG_NONE;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_BASIC_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_VOTE_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_VOTE_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_ARITHMETIC_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_BALLOT_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_BALLOT_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_SHUFFLE_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_SHUFFLE_RELATIVE_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_CLUSTERED_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_CLUSTERED_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_QUAD_BIT;
+	if (subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_PARTITIONED_BIT_NV)
+		gpuSettings->mWaveOpsSupportFlags |= WAVE_OPS_SUPPORT_FLAG_PARTITIONED_BIT_NV;
+
+	gpuSettings->mTessellationSupported = gpuFeatures->features.tessellationShader;
+	gpuSettings->mGeometryShaderSupported = gpuFeatures->features.geometryShader;
+
+	//save vendor and model Id as string
+	sprintf(gpuSettings->mGpuVendorPreset.mModelId, "%#x", gpuProperties->properties.deviceID);
+	sprintf(gpuSettings->mGpuVendorPreset.mVendorId, "%#x", gpuProperties->properties.vendorID);
+	strncpy(gpuSettings->mGpuVendorPreset.mGpuName, gpuProperties->properties.deviceName, MAX_GPU_VENDOR_STRING_LENGTH);
+
+	//TODO: Fix once vulkan adds support for revision ID
+	strncpy(gpuSettings->mGpuVendorPreset.mRevisionId, "0x00", MAX_GPU_VENDOR_STRING_LENGTH);
+	gpuSettings->mGpuVendorPreset.mPresetLevel = getGPUPresetLevel(
+		gpuSettings->mGpuVendorPreset.mVendorId, gpuSettings->mGpuVendorPreset.mModelId,
+		gpuSettings->mGpuVendorPreset.mRevisionId);
+
+	//fill in driver info
+	uint32_t major, minor, secondaryBranch, tertiaryBranch;
+	switch (util_to_internal_gpu_vendor(gpuProperties->properties.vendorID))
+	{
+	case GPU_VENDOR_NVIDIA:
+		major = (gpuProperties->properties.driverVersion >> 22) & 0x3ff;
+		minor = (gpuProperties->properties.driverVersion >> 14) & 0x0ff;
+		secondaryBranch = (gpuProperties->properties.driverVersion >> 6) & 0x0ff;
+		tertiaryBranch = (gpuProperties->properties.driverVersion) & 0x003f;
+
+		sprintf(gpuSettings->mGpuVendorPreset.mGpuDriverVersion, "%u.%u.%u.%u", major, minor, secondaryBranch, tertiaryBranch);
+		break;
+	default:
+		VK_FORMAT_VERSION(gpuProperties->properties.driverVersion, gpuSettings->mGpuVendorPreset.mGpuDriverVersion);
+		break;
+	}
+
+	gpuFeatures->pNext = NULL;
+	gpuProperties->pNext = NULL;
+}
+
 VkImageLayout util_to_vk_image_layout(ResourceState usage)
 {
 	if (usage & RESOURCE_STATE_COPY_SOURCE)
@@ -509,6 +643,17 @@ VkFormatFeatureFlags util_vk_image_usage_to_format_features(VkImageUsageFlags us
 	return result;
 }
 
+VkQueueFlags util_to_vk_queue_flags(QueueType queueType)
+{
+	switch (queueType)
+	{
+	case QUEUE_TYPE_GRAPHICS: return VK_QUEUE_GRAPHICS_BIT;
+	case QUEUE_TYPE_TRANSFER: return VK_QUEUE_TRANSFER_BIT;
+	case QUEUE_TYPE_COMPUTE: return VK_QUEUE_COMPUTE_BIT;
+	default: ASSERT(false && "Invalid Queue Type"); return VK_QUEUE_FLAG_BITS_MAX_ENUM;
+	}
+}
+
 VkImageAspectFlags util_vk_determine_aspect_mask(VkFormat format, bool includeStencilBit)
 {
 	VkImageAspectFlags result = 0;
@@ -536,6 +681,95 @@ VkImageAspectFlags util_vk_determine_aspect_mask(VkFormat format, bool includeSt
 	default: result = VK_IMAGE_ASPECT_COLOR_BIT; break;
 	}
 	return result;
+}
+
+
+void util_find_queue_family_index(const Renderer* pRenderer, uint32_t nodeIndex, QueueType queueType,
+	VkQueueFamilyProperties* pOutProps,
+	uint8_t* pOutFamilyIndex,
+	uint8_t* pOutQueueIndex)
+{
+	if (pRenderer->mGpuMode != GPU_MODE_LINKED)
+		nodeIndex = 0;
+
+	uint32_t		queueFamilyIndex = UINT32_MAX;
+	uint32_t		queueIndex = UINT32_MAX;
+	VkQueueFlags	requiredFlags = util_to_vk_queue_flags(queueType);
+	bool			found = false;
+
+	// Get queue family properties
+	uint32_t		queueFamilyPropertyCount = 0;
+	VkQueueFamilyProperties* queueFamilyProperties = NULL;
+	vkGetPhysicalDeviceQueueFamilyProperties(pRenderer->mVulkan.pVkActiveGPU, &queueFamilyPropertyCount, NULL);
+	queueFamilyProperties = (VkQueueFamilyProperties*)alloca(queueFamilyPropertyCount * sizeof(VkQueueFamilyProperties));
+	vkGetPhysicalDeviceQueueFamilyProperties(pRenderer->mVulkan.pVkActiveGPU, &queueFamilyPropertyCount, queueFamilyProperties);
+
+	uint32_t minQueueFlag = UINT32_MAX;
+
+	// Try to find a dedicated queue of this type
+	for (uint32_t index = 0; index < queueFamilyPropertyCount; ++index)
+	{
+		VkQueueFlags queueFlags = queueFamilyProperties[index].queueFlags;
+		bool		graphicsQueue = (queueFlags & VK_QUEUE_GRAPHICS_BIT) ? true : false;
+		uint32_t	flagAnd = (queueFlags & requiredFlags);
+		if (queueType == QUEUE_TYPE_GRAPHICS && graphicsQueue)
+		{
+			found = true;
+			queueFamilyIndex = index;
+			queueIndex = 0;
+			break;
+		}
+		if ((queueFlags & requiredFlags) && ((queueFlags & ~requiredFlags) == 0) &&
+			pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueFlags] < pRenderer->mVulkan.pAvailableQueueCount[nodeIndex][queueFlags])
+		{
+			found = true;
+			queueFamilyIndex = index;
+			queueIndex = pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueFlags];
+			break;
+		}
+		if (flagAnd && ((queueFlags - flagAnd) < minQueueFlag) && !graphicsQueue &&
+			pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueFlags] < pRenderer->mVulkan.pAvailableQueueCount[nodeIndex][queueFlags])
+		{
+			found = true;
+			minQueueFlag = (queueFlags - flagAnd);
+			queueFamilyIndex = index;
+			queueIndex = pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueFlags];
+			break;
+		}
+	}
+
+	// If hardware doesn't provide a dedicated queue try to find a non-dedicated one
+	if (!found)
+	{
+		for (uint32_t index = 0; index < queueFamilyPropertyCount; ++index)
+		{
+			VkQueueFlags queueFlags = queueFamilyProperties[index].queueFlags;
+			if ((queueFlags & requiredFlags) &&
+				pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueFlags] < pRenderer->mVulkan.pAvailableQueueCount[nodeIndex][queueFlags])
+			{
+				found = true;
+				queueFamilyIndex = index;
+				queueIndex = pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueFlags];
+				break;
+			}
+		}
+	}
+
+	if (!found)
+	{
+		found = true;
+		queueFamilyIndex = 0;
+		queueIndex = 0;
+
+		LOGF(LogLevel::eWARNING, "Could not find queue of type %u. Using default queue", (uint32_t)queueType);
+	}
+
+	if (pOutProps)
+		*pOutProps = queueFamilyProperties[queueFamilyIndex];
+	if (pOutFamilyIndex)
+		*pOutFamilyIndex = (uint8_t)queueFamilyIndex;
+	if (pOutQueueIndex)
+		*pOutQueueIndex = (uint8_t)queueIndex;
 }
 
 const char* gVkWantedInstanceExtensions[] =
@@ -700,7 +934,7 @@ static bool gDeviceGroupCreationExtension = false;
 void CreateInstance(
 	const char* app_name, const RendererDesc* pDesc, uint32_t userDefinedInstanceLayerCount,
 	const char** userDefinedInstanceLayers,
-	Renderer* pRenderer) 
+	Renderer* pRenderer)
 {
 	// These are the extensions that we have loaded
 	const char* instanceExtensionCache[MAX_INSTANCE_EXTENSIONS] = {};
@@ -902,7 +1136,20 @@ void CreateInstance(
 	}
 }
 
-static bool initCommon(const char* appName, const RendererDesc* pDesc, Renderer* pRenderer) 
+static void RemoveInstance(Renderer* pRenderer)
+{
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkInstance);
+
+	if (pRenderer->mVulkan.pVkDebugUtilsMessenger)
+	{
+		vkDestroyDebugUtilsMessengerEXT(pRenderer->mVulkan.pVkInstance, pRenderer->mVulkan.pVkDebugUtilsMessenger, &gVkAllocationCallbacks);
+		pRenderer->mVulkan.pVkDebugUtilsMessenger = NULL;
+	}
+
+	vkDestroyInstance(pRenderer->mVulkan.pVkInstance, &gVkAllocationCallbacks);
+}
+
+static bool initCommon(const char* appName, const RendererDesc* pDesc, Renderer* pRenderer)
 {
 	const char** instanceLayers = (const char**)alloca((2 + pDesc->mVulkan.mInstanceLayerCount) * sizeof(char*));
 	uint32_t     instanceLayerCount = 0;
@@ -926,6 +1173,224 @@ static bool initCommon(const char* appName, const RendererDesc* pDesc, Renderer*
 	return true;
 }
 
+static void exitCommon(Renderer* pRenderer)
+{
+	RemoveInstance(pRenderer);
+}
+
+static bool SelectBestGpu(Renderer* pRenderer)
+{
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkInstance);
+
+	uint32_t gpuCount = 0;
+
+	CHECK_VKRESULT(vkEnumeratePhysicalDevices(pRenderer->mVulkan.pVkInstance, &gpuCount, NULL));
+
+	if (gpuCount < 1)
+	{
+		LOGF(LogLevel::eERROR, "Failed to enumerate any physical Vulkan devices");
+		ASSERT(gpuCount);
+		return false;
+	}
+
+	VkPhysicalDevice* gpus = (VkPhysicalDevice*)alloca(gpuCount * sizeof(VkPhysicalDevice));
+	VkPhysicalDeviceProperties2* gpuProperties = (VkPhysicalDeviceProperties2*)alloca(gpuCount * sizeof(VkPhysicalDeviceProperties2));
+	VkPhysicalDeviceMemoryProperties* gpuMemoryProperties =
+		(VkPhysicalDeviceMemoryProperties*)alloca(gpuCount * sizeof(VkPhysicalDeviceMemoryProperties));
+	VkPhysicalDeviceFeatures2KHR* gpuFeatures = (VkPhysicalDeviceFeatures2KHR*)alloca(gpuCount * sizeof(VkPhysicalDeviceFeatures2KHR));
+	VkQueueFamilyProperties** queueFamilyProperties = (VkQueueFamilyProperties**)alloca(gpuCount * sizeof(VkQueueFamilyProperties*));
+	uint32_t* queueFamilyPropertyCount = (uint32_t*)alloca(gpuCount * sizeof(uint32_t));
+
+	CHECK_VKRESULT(vkEnumeratePhysicalDevices(pRenderer->mVulkan.pVkInstance, &gpuCount, gpus));
+
+	/************************************************************************/
+	// Select discrete gpus first
+	// If we have multiple discrete gpus prefer with bigger VRAM size
+	// To find VRAM in Vulkan, loop through all the heaps and find if the
+	// heap has the DEVICE_LOCAL_BIT flag set
+	/************************************************************************/
+	typedef bool (*DeviceBetterFunc)(
+		uint32_t, uint32_t, const GPUSettings*, const VkPhysicalDeviceProperties2*, const VkPhysicalDeviceMemoryProperties*);
+	DeviceBetterFunc isDeviceBetter = [](uint32_t testIndex, uint32_t refIndex, const GPUSettings* gpuSettings,
+		const VkPhysicalDeviceProperties2* gpuProperties,
+		const VkPhysicalDeviceMemoryProperties* gpuMemoryProperties) {
+			const GPUSettings& testSettings = gpuSettings[testIndex];
+			const GPUSettings& refSettings = gpuSettings[refIndex];
+
+			// First test the preset level
+			if (testSettings.mGpuVendorPreset.mPresetLevel != refSettings.mGpuVendorPreset.mPresetLevel)
+			{
+				return testSettings.mGpuVendorPreset.mPresetLevel > refSettings.mGpuVendorPreset.mPresetLevel;
+			}
+
+			// Next test discrete vs integrated/software
+			const VkPhysicalDeviceProperties& testProps = gpuProperties[testIndex].properties;
+			const VkPhysicalDeviceProperties& refProps = gpuProperties[refIndex].properties;
+
+			// If first is a discrete gpu and second is not discrete (integrated, software, ...), always prefer first
+			if (testProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && refProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+			{
+				return true;
+			}
+
+			// If first is not a discrete gpu (integrated, software, ...) and second is a discrete gpu, always prefer second
+			if (testProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && refProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+			{
+				return false;
+			}
+
+			// Compare by VRAM if both gpu's are of same type (integrated vs discrete)
+			if (testProps.vendorID == refProps.vendorID && testProps.deviceID == refProps.deviceID)
+			{
+				const VkPhysicalDeviceMemoryProperties& testMemoryProps = gpuMemoryProperties[testIndex];
+				const VkPhysicalDeviceMemoryProperties& refMemoryProps = gpuMemoryProperties[refIndex];
+				//if presets are the same then sort by vram size
+				VkDeviceSize totalTestVram = 0;
+				VkDeviceSize totalRefVram = 0;
+				for (uint32_t i = 0; i < testMemoryProps.memoryHeapCount; ++i)
+				{
+					if (VK_MEMORY_HEAP_DEVICE_LOCAL_BIT & testMemoryProps.memoryHeaps[i].flags)
+						totalTestVram += testMemoryProps.memoryHeaps[i].size;
+				}
+				for (uint32_t i = 0; i < refMemoryProps.memoryHeapCount; ++i)
+				{
+					if (VK_MEMORY_HEAP_DEVICE_LOCAL_BIT & refMemoryProps.memoryHeaps[i].flags)
+						totalRefVram += refMemoryProps.memoryHeaps[i].size;
+				}
+
+				return totalTestVram >= totalRefVram;
+			}
+
+			return false;
+	};
+
+	uint32_t     gpuIndex = UINT32_MAX;
+	GPUSettings* gpuSettings = (GPUSettings*)alloca(gpuCount * sizeof(GPUSettings));
+
+	for (uint32_t i = 0; i < gpuCount; ++i)
+	{
+		util_query_gpu_settings(gpus[i], &gpuProperties[i], &gpuMemoryProperties[i], &gpuFeatures[i], &queueFamilyProperties[i], &queueFamilyPropertyCount[i], &gpuSettings[i]);
+
+		LOGF(
+			LogLevel::eINFO, "GPU[%i] detected. Vendor ID: %s, Model ID: %s, Preset: %s, GPU Name: %s", i,
+			gpuSettings[i].mGpuVendorPreset.mVendorId, gpuSettings[i].mGpuVendorPreset.mModelId,
+			presetLevelToString(gpuSettings[i].mGpuVendorPreset.mPresetLevel), gpuSettings[i].mGpuVendorPreset.mGpuName);
+
+		// Check that gpu supports at least graphics
+		if (gpuIndex == UINT32_MAX || isDeviceBetter(i, gpuIndex, gpuSettings, gpuProperties, gpuMemoryProperties))
+		{
+			uint32_t                 count = queueFamilyPropertyCount[i];
+			VkQueueFamilyProperties* properties = queueFamilyProperties[i];
+
+			//select if graphics queue is available
+			for (uint32_t j = 0; j < count; j++)
+			{
+				//get graphics queue family
+				if (properties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+				{
+					gpuIndex = i;
+					break;
+				}
+			}
+		}
+	}
+
+	if (VK_PHYSICAL_DEVICE_TYPE_CPU == gpuProperties[gpuIndex].properties.deviceType)
+	{
+		LOGF(eERROR, "The only available GPU is of type VK_PHYSICAL_DEVICE_TYPE_CPU. Early exiting");
+		ASSERT(false);
+		return false;
+	}
+
+	ASSERT(gpuIndex != UINT32_MAX);
+	pRenderer->mVulkan.pVkActiveGPU = gpus[gpuIndex];
+	pRenderer->mVulkan.pVkActiveGPUProperties = (VkPhysicalDeviceProperties2*)tf_malloc(sizeof(VkPhysicalDeviceProperties2));
+	pRenderer->pActiveGpuSettings = (GPUSettings*)tf_malloc(sizeof(GPUSettings));
+	*pRenderer->mVulkan.pVkActiveGPUProperties = gpuProperties[gpuIndex];
+	pRenderer->mVulkan.pVkActiveGPUProperties->pNext = NULL;
+	*pRenderer->pActiveGpuSettings = gpuSettings[gpuIndex];
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkActiveGPU);
+
+	LOGF(LogLevel::eINFO, "GPU[%d] is selected as default GPU", gpuIndex);
+	LOGF(LogLevel::eINFO, "Name of selected gpu: %s", pRenderer->pActiveGpuSettings->mGpuVendorPreset.mGpuName);
+	LOGF(LogLevel::eINFO, "Vendor id of selected gpu: %s", pRenderer->pActiveGpuSettings->mGpuVendorPreset.mVendorId);
+	LOGF(LogLevel::eINFO, "Model id of selected gpu: %s", pRenderer->pActiveGpuSettings->mGpuVendorPreset.mModelId);
+	LOGF(LogLevel::eINFO, "Preset of selected gpu: %s", presetLevelToString(pRenderer->pActiveGpuSettings->mGpuVendorPreset.mPresetLevel));
+
+	for (uint32_t i = 0; i < gpuCount; ++i)
+		SAFE_FREE(queueFamilyProperties[i]);
+
+	return true;
+
+}
+
+static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
+{
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkInstance);
+
+	// There are the extensions that we have loaded
+	const char* deviceExtensionCache[MAX_DEVICE_EXTENSIONS] = {};
+
+	//TODO VK_KHR_device_group_creation
+	if (pRenderer->mLinkedNodeCount < 2 && pRenderer->mGpuMode == GPU_MODE_LINKED)
+	{
+		pRenderer->mGpuMode = GPU_MODE_SINGLE;
+	}
+
+	if (!pDesc->pContext)
+	{
+		if (!SelectBestGpu(pRenderer))
+			return false;
+	}
+	else
+	{
+		ASSERT(pDesc->mGpuIndex < pDesc->pContext->mGpuCount);
+
+		pRenderer->mVulkan.pVkActiveGPU = pDesc->pContext->pGpus[pDesc->mGpuIndex].mVulkan.pGPU;
+		pRenderer->mVulkan.pVkActiveGPUProperties = (VkPhysicalDeviceProperties2*)tf_malloc(sizeof(VkPhysicalDeviceProperties2));
+		pRenderer->pActiveGpuSettings = (GPUSettings*)tf_malloc(sizeof(GPUSettings));
+		*pRenderer->mVulkan.pVkActiveGPUProperties = pDesc->pContext->pGpus[pDesc->mGpuIndex].mVulkan.mGPUProperties;
+		pRenderer->mVulkan.pVkActiveGPUProperties->pNext = NULL;
+		*pRenderer->pActiveGpuSettings = pDesc->pContext->pGpus[pDesc->mGpuIndex].mSettings;
+	}
+
+	uint32_t layerCount = 0;
+	uint32_t extCount = 0;
+	vkEnumerateDeviceLayerProperties(pRenderer->mVulkan.pVkActiveGPU, &layerCount, NULL);
+	vkEnumerateDeviceExtensionProperties(pRenderer->mVulkan.pVkActiveGPU, NULL, &extCount, NULL);
+
+	VkLayerProperties* layers = (VkLayerProperties*)alloca(sizeof(VkLayerProperties) * layerCount);
+	vkEnumerateDeviceLayerProperties(pRenderer->mVulkan.pVkActiveGPU, &layerCount, layers);
+
+	VkExtensionProperties* exts = (VkExtensionProperties*)alloca(sizeof(VkExtensionProperties) * extCount);
+	vkEnumerateDeviceExtensionProperties(pRenderer->mVulkan.pVkActiveGPU, NULL, &extCount, exts);
+
+	for (uint32_t i = 0; i < layerCount; ++i)
+	{
+		internal_log(eINFO, layers[i].layerName, "vkdevice-layer");
+		if (strcmp(layers[i].layerName, "VK_LAYER_RENDERDOC_Capture") == 0)
+			gRenderDocLayerEnabled = true;
+	}
+
+	for (uint32_t i = 0; i < extCount; ++i)
+	{
+		internal_log(eINFO, exts[i].extensionName, "vkdevice-ext");
+	}
+
+	uint32_t extension_count = 0;
+	bool	dedicateAllocationExtension = false;
+
+
+}
+
+static void RemoveDevice(Renderer* pRenderer)
+{
+	vkDestroyDescriptorSetLayout(pRenderer->mVulkan.pVkDevice, pRenderer->mVulkan.pEmptyDescriptorSetLayout, &gVkAllocationCallbacks);
+	vkDestroyDescriptorPool(pRenderer->mVulkan.pVkDevice, pRenderer->mVulkan.pEmptyDescriptorPool, &gVkAllocationCallbacks);
+	vkDestroyDevice(pRenderer->mVulkan.pVkDevice, &gVkAllocationCallbacks);
+	SAFE_FREE(pRenderer->pActiveGpuSettings);
+	SAFE_FREE(pRenderer->mVulkan.pVkActiveGPUProperties);
+}
 /************************************************************************/
 // Virtual Texture
 /************************************************************************/
@@ -994,7 +1459,7 @@ static bool allocateVirtualPage(Renderer* pRenderer, Texture* pTexture, VirtualT
 	++pTexture->pSvt->mVirtualPageAliveCount;
 
 	return true;
-}
+	}
 
 VirtualTexturePage* addPage(Renderer* pRenderer, Texture* pTexture, const VkOffset3D& offset, const VkExtent3D& extent, const VkDeviceSize size, const uint32_t mipLevel, uint32_t layer, uint32_t pageIndex)
 {
@@ -1214,8 +1679,8 @@ void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffe
 		{
 			CHECK_VKRESULT(vkCreateBufferView(
 				pRenderer->mVulkan.pVkDevice, &viewInfo, &gVkAllocationCallbacks, &pBuffer->mVulkan.pVkStorageTexelView));
-		}
 	}
+}
 
 #if defined(ENABLE_GRAPHICS_DEBUG)
 	if (pDesc->pName)
@@ -1687,7 +2152,7 @@ void vk_addTexture(Renderer* pRenderer, const TextureDesc* pDesc, Texture** ppTe
 #endif
 
 	* ppTexture = pTexture;
-}
+	}
 
 void vk_addVirtualTexture(Cmd* pCmd, const TextureDesc* pDesc, Texture** ppTexture, void* pImageData)
 {
@@ -2510,7 +2975,7 @@ void vk_cmdBindDescriptorSetWithRootCbvs(Cmd* pCmd, uint32_t index, DescriptorSe
 		if (paramIndex != UINT32_MAX)
 		{
 			VALIDATE_DESCRIPTOR(pDesc, "Invalid descriptor with param index (%u)", paramIndex);
-		}
+	}
 		else
 		{
 			VALIDATE_DESCRIPTOR(pDesc, "Invalid descriptor with param name (%s)", pParam->pName);
@@ -2551,13 +3016,13 @@ void vk_cmdBindDescriptorSetWithRootCbvs(Cmd* pCmd, uint32_t index, DescriptorSe
 			writeSet.pBufferInfo = &bufferInfo;
 			vkUpdateDescriptorSets(pCmd->pRenderer->mVulkan.pVkDevice, 1, &writeSet, 0, NULL);
 		}
-	}
+}
 
 	vkCmdBindDescriptorSets(
 		pCmd->mVulkan.pVkCmdBuf, gPipelineBindPoint[pRootSignature->mPipelineType], pRootSignature->mVulkan.pPipelineLayout,
 		pDescriptorSet->mVulkan.mUpdateFrequency, 1, &pDescriptorSet->mVulkan.pHandles[index],
 		pDescriptorSet->mVulkan.mDynamicOffsetCount, offsets);
-}
+	}
 
 void vk_cmdBindDescriptorSet(Cmd* pCmd, uint32_t index, DescriptorSet* pDescriptorSet)
 {
@@ -3080,7 +3545,7 @@ void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* 
 					pParam->ppBuffers[arr]->mVulkan.pVkBuffer,
 					pParam->ppBuffers[arr]->mVulkan.mOffset,
 					VK_WHOLE_SIZE
-				};
+			};
 
 				if (pParam->pRanges)
 				{
@@ -3100,7 +3565,7 @@ void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* 
 					updateData[arr].offset = range.mOffset;
 					updateData[arr].range = range.mSize;
 				}
-			}
+		}
 		}
 		break;
 		}
@@ -3154,8 +3619,8 @@ void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* 
 		}
 #endif
 		default: break;
-		}
 	}
+}
 
 	vkUpdateDescriptorSets(pRenderer->mVulkan.pVkDevice, writeSetCount, writeSetArray, 0, NULL);
 }
@@ -3205,22 +3670,129 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 			return;
 		}
 
+		if (!AddDevice(pDesc, pRenderer))
+		{
+			if (pRenderer->mVulkan.mOwnInstance)
+				exitCommon(pRenderer);
+			SAFE_FREE(pRenderer->pName);
+			SAFE_FREE(pRenderer);
+			return;
+		}
 
-	}
+		//anything below LOW preset is not supported and we will exit
+		if (pRenderer->pActiveGpuSettings->mGpuVendorPreset.mPresetLevel < GPU_PRESET_LOW)
+		{
+			//have the condition in the assert as well so its cleared when the assert message box appears
+			ASSERT(pRenderer->pActiveGpuSettings->mGpuVendorPreset.mPresetLevel >= GPU_PRESET_LOW);    //-V547
 
+			SAFE_FREE(pRenderer->pName);
+
+			//remove device and any memory we allocated in just above as this is the first function called
+			//when initializing the forge
+			RemoveDevice(pRenderer);
+			if (pRenderer->mVulkan.mOwnInstance)
+				exitCommon(pRenderer);
+			SAFE_FREE(pRenderer);
+			LOGF(LogLevel::eERROR, "Selected GPU has an Office Preset in gpu.cfg.");
+			LOGF(LogLevel::eERROR, "Office preset is not supported by The Forge.");
+
+			//return NULL pRenderer so that client can gracefully handle exit
+			//This is better than exiting from here in case client has allocated memory or has fallbacks
+			*ppRenderer = NULL;
+			return;
+		}
+
+		/************************************************************************/
+		// Memory allocator
+		/************************************************************************/
+		VmaAllocatorCreateInfo createInfo = { 0 };
+		createInfo.device = pRenderer->mVulkan.pVkDevice;
+		createInfo.physicalDevice = pRenderer->mVulkan.pVkActiveGPU;
+		createInfo.instance = pRenderer->mVulkan.pVkInstance;
+
+		if (pRenderer->mVulkan.mDedicatedAllocationExtension)
+		{
+			createInfo.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+		}
+
+		if (pRenderer->mVulkan.mBufferDeviceAddressExtension)
+		{
+			createInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+		}
+
+		VmaVulkanFunctions vulkanFunctions = {};
+		vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+		vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+		vulkanFunctions.vkAllocateMemory = vkAllocateMemory;
+		vulkanFunctions.vkBindBufferMemory = vkBindBufferMemory;
+		vulkanFunctions.vkBindImageMemory = vkBindImageMemory;
+		vulkanFunctions.vkCreateBuffer = vkCreateBuffer;
+		vulkanFunctions.vkCreateImage = vkCreateImage;
+		vulkanFunctions.vkDestroyBuffer = vkDestroyBuffer;
+		vulkanFunctions.vkDestroyImage = vkDestroyImage;
+		vulkanFunctions.vkFreeMemory = vkFreeMemory;
+		vulkanFunctions.vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements;
+		vulkanFunctions.vkGetBufferMemoryRequirements2KHR = vkGetBufferMemoryRequirements2KHR;
+		vulkanFunctions.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
+		vulkanFunctions.vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2KHR;
+		vulkanFunctions.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
+		vulkanFunctions.vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties;
+		vulkanFunctions.vkMapMemory = vkMapMemory;
+		vulkanFunctions.vkUnmapMemory = vkUnmapMemory;
+		vulkanFunctions.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
+		vulkanFunctions.vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges;
+		vulkanFunctions.vkCmdCopyBuffer = vkCmdCopyBuffer;
+
+		createInfo.pVulkanFunctions = &vulkanFunctions;
+		createInfo.pAllocationCallbacks = &gVkAllocationCallbacks;
+		vmaCreateAllocator(&createInfo, &pRenderer->mVulkan.pVmaAllocator);
+}
+
+	// Empty descriptor set for filling in gaps when example: set 1 is used but set 0 is not used in the shader.
+	// We still need to bind empty descriptor set here to keep some drivers happy
+
+
+}
+
+void vk_addQueue(Renderer* pRenderer, QueueDesc* pDesc, Queue** ppQueue)
+{
+	ASSERT(pDesc != NULL);
+
+	const uint32_t          nodeIndex = (pRenderer->mGpuMode == GPU_MODE_LINKED) ? pDesc->mNodeIndex : 0;
+	VkQueueFamilyProperties queueProps = {};
+	uint8_t                 queueFamilyIndex = UINT8_MAX;
+	uint8_t                 queueIndex = UINT8_MAX;
+
+	util_find_queue_family_index(pRenderer, nodeIndex, pDesc->mType, &queueProps, &queueFamilyIndex, &queueIndex);
+	++pRenderer->mVulkan.pUsedQueueCount[nodeIndex][queueProps.queueFlags];
+
+	Queue* pQueue = (Queue*)tf_calloc(1, sizeof(Queue));
+	ASSERT(pQueue);
+
+	pQueue->mVulkan.mVkQueueFamilyIndex = queueFamilyIndex;
+	pQueue->mNodeIndex = pDesc->mNodeIndex;
+	pQueue->mType = pDesc->mType;
+	pQueue->mVulkan.mVkQueueIndex = queueIndex;
+	pQueue->mVulkan.mGpuMode = pRenderer->mGpuMode;
+	pQueue->mVulkan.mTimestampPeriod = pRenderer->mVulkan.pVkActiveGPUProperties->properties.limits.timestampPeriod;
+	pQueue->mVulkan.mFlags = queueProps.queueFlags;
+	pQueue->mVulkan.pSubmitMutex = &pRenderer->pNullDescriptors->mSubmitMutex;
+
+	// override node index
+	if (pRenderer->mGpuMode == GPU_MODE_UNLINKED)
+		pQueue->mNodeIndex = pRenderer->mUnlinkedRendererIndex;
+
+	// Get queue handle
+	vkGetDeviceQueue(
+		pRenderer->mVulkan.pVkDevice, pQueue->mVulkan.mVkQueueFamilyIndex, pQueue->mVulkan.mVkQueueIndex, &pQueue->mVulkan.pVkQueue);
+	ASSERT(VK_NULL_HANDLE != pQueue->mVulkan.pVkQueue);
+
+	*ppQueue = pQueue;
 }
 
 void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Renderer** ppRenderer)
 {
 	vk_initRenderer(appName, pSettings, ppRenderer);
-}
-
-void vk_FillRaytracingDescriptorData(uint32_t count, AccelerationStructure** const ppAccelerationStructures, VkAccelerationStructureKHR* pOutHandles)
-{
-	for (uint32_t i = 0; i < count; ++i)
-	{
-		pOutHandles[i] = ppAccelerationStructures[i]->mAccelerationStructure;
-	}
 }
 #include "../ThirdParty/OpenSource/volk/volk.c"
 #endif

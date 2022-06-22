@@ -190,6 +190,9 @@ extern "C"
 	/// Flushes all writes to the file stream to the underlying subsystem.
 	bool fsFlushStream(FileStream* stream);
 
+	/// Returns whether the current seek position is at the end of the file stream.
+	bool fsStreamAtEnd(const FileStream* stream);
+
 	/// Default file system using C File IO or Bundled File IO (Android) based on the ResourceDirectory
 	extern IFileSystem* pSystemFileIO;
 	/***********************************************************************/

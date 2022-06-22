@@ -645,3 +645,9 @@ bool fsFlushStream(FileStream* pStream)
 {
 	return pStream->pIO->Flush(pStream);
 }
+
+/// Returns whether the current seek position is at the end of the file stream.
+bool fsStreamAtEnd(const FileStream* pStream)
+{
+	return pStream->pIO->IsAtEnd(pStream);
+}

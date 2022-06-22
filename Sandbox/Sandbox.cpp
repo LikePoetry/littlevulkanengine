@@ -10,13 +10,15 @@ const float    gSphereDiameter = 0.5f;
 
 Renderer* pRenderer = NULL;
 
+Queue* pGraphicsQueue = NULL;
+
 int              gNumberOfSpherePoints;
 
 float* pSpherePoints = 0;
 
 
 
-class App :public IApp 
+class App :public IApp
 {
 public:
 	bool Init()
@@ -40,8 +42,18 @@ public:
 		settings.mGLESSupported = false;
 
 		initRenderer(GetName(), &settings, &pRenderer);
+		//check for init success
+		if (!pRenderer)
+			return false;
 
-		LOGF(LogLevel::eERROR,"error ocure");
+		QueueDesc queueDesc = {};
+		queueDesc.mType = QUEUE_TYPE_GRAPHICS;
+		queueDesc.mFlag = QUEUE_FLAG_INIT_MICROPROFILE;
+		vk_addQueue(pRenderer, &queueDesc, &pGraphicsQueue);
+
+
+
+		LOGF(LogLevel::eERROR, "error ocure");
 		return false;
 	}
 	const char* GetName() { return "Test Demo"; }

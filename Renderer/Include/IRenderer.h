@@ -52,6 +52,23 @@ typedef enum QueueType
 	MAX_QUEUE_TYPE
 } QueueType;
 
+typedef enum QueueFlag
+{
+	QUEUE_FLAG_NONE = 0x0,
+	QUEUE_FLAG_DISABLE_GPU_TIMEOUT = 0x1,
+	QUEUE_FLAG_INIT_MICROPROFILE = 0x2,
+	MAX_QUEUE_FLAG = 0xFFFFFFFF
+} QueueFlag;
+MAKE_ENUM_FLAG(uint32_t, QueueFlag)
+
+typedef enum QueuePriority
+{
+	QUEUE_PRIORITY_NORMAL,
+	QUEUE_PRIORITY_HIGH,
+	QUEUE_PRIORITY_GLOBAL_REALTIME,
+	MAX_QUEUE_PRIORITY
+} QueuePriority;
+
 typedef void (*LogFn)(LogLevel, const char*, const char*);
 
 typedef enum ResourceState
@@ -779,6 +796,14 @@ typedef struct Semaphore
 	};
 } Semaphore;
 
+typedef struct QueueDesc
+{
+	QueueType     mType;
+	QueueFlag     mFlag;
+	QueuePriority mPriority;
+	uint32_t      mNodeIndex;
+} QueueDesc;
+
 /// Data structure holding necessary info to create a Buffer
 typedef struct BufferDesc
 {
@@ -1005,6 +1030,7 @@ typedef enum WaveOpsSupportFlags
 	WAVE_OPS_SUPPORT_FLAG_PARTITIONED_BIT_NV = 0x00000100,
 	WAVE_OPS_SUPPORT_FLAG_ALL = 0x7FFFFFFF
 } WaveOpsSupportFlags;
+MAKE_ENUM_FLAG(uint32_t, WaveOpsSupportFlags);
 
 typedef struct GPUSettings
 {
@@ -1268,3 +1294,5 @@ void vk_removeFence(Renderer* pRenderer, Fence* pFence);
 void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* pDescriptorSet, uint32_t count, const DescriptorData* pParams);
 
 void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** ppRenderer);
+
+void vk_addQueue(Renderer* pRenderer, QueueDesc* pDesc, Queue** ppQueue);

@@ -1,6 +1,8 @@
 #include "../Include/RendererConfig.h"
 
 #include "../Include/IRenderer.h"
+#include "../Include/IRay.h"
+
 
 /************************************************************************/
 // Internal initialization settings

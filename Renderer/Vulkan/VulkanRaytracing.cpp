@@ -40,3 +40,11 @@ struct AccelerationStructure
 	uint64_t                             mStructureDeviceAddress;
 	uint32_t                             mPrimitiveCount;
 };
+
+void vk_FillRaytracingDescriptorData(uint32_t count, AccelerationStructure** const ppAccelerationStructures, VkAccelerationStructureKHR* pOutHandles)
+{
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		pOutHandles[i] = ppAccelerationStructures[i]->mAccelerationStructure;
+	}
+}
