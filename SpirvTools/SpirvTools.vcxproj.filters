@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ThirdParty">
+      <UniqueIdentifier>{107145F9-FC28-8746-6530-60A251072237}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource">
+      <UniqueIdentifier>{E22582C4-4E92-3DBF-1786-D51C83B15F27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\SPIRV_Cross">
+      <UniqueIdentifier>{6E060C86-DA74-6105-235E-1C058F0B57A1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="SpirvTools.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cfg.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cpp.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cross.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cross_parsed_ir.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cross_util.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_glsl.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_hlsl.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_msl.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_parser.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_reflect.cpp">
+      <Filter>ThirdParty\OpenSource\SPIRV_Cross</Filter>
+    </ClCompile>
+    <ClCompile Include="SpirvTools.cpp" />
+  </ItemGroup>
+</Project>

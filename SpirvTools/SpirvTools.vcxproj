@@ -88,6 +88,22 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="SpirvTools.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cfg.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cpp.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cross.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cross_parsed_ir.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_cross_util.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_glsl.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_hlsl.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_msl.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_parser.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\SPIRV_Cross\spirv_reflect.cpp" />
+    <ClCompile Include="SpirvTools.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

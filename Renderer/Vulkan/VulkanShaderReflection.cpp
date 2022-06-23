@@ -1,9 +1,47 @@
 #include "../Include/RendererConfig.h"
 #include "../Include/IRenderer.h"
 
-
+#include "../../SpirvTools/SpirvTools.h"
 #include "../../OS/Interfaces/ILog.h"
 #include "../../OS/Interfaces/IMemory.h"
+
+static DescriptorType sSPIRV_TO_DESCRIPTOR[SPIRV_TYPE_COUNT] = {
+	DESCRIPTOR_TYPE_UNDEFINED,        DESCRIPTOR_TYPE_UNDEFINED,    DESCRIPTOR_TYPE_UNIFORM_BUFFER,  DESCRIPTOR_TYPE_RW_BUFFER,
+	DESCRIPTOR_TYPE_TEXTURE,          DESCRIPTOR_TYPE_RW_TEXTURE,   DESCRIPTOR_TYPE_SAMPLER,         DESCRIPTOR_TYPE_ROOT_CONSTANT,
+	DESCRIPTOR_TYPE_INPUT_ATTACHMENT, DESCRIPTOR_TYPE_TEXEL_BUFFER, DESCRIPTOR_TYPE_RW_TEXEL_BUFFER, DESCRIPTOR_TYPE_RAY_TRACING,
+	DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+};
+
+static TextureDimension sSPIRV_TO_RESOURCE_DIM[SPIRV_DIM_COUNT] = {
+	TEXTURE_DIM_UNDEFINED,
+	TEXTURE_DIM_UNDEFINED,
+	TEXTURE_DIM_1D,
+	TEXTURE_DIM_1D_ARRAY,
+	TEXTURE_DIM_2D,
+	TEXTURE_DIM_2D_ARRAY,
+	TEXTURE_DIM_2DMS,
+	TEXTURE_DIM_2DMS_ARRAY,
+	TEXTURE_DIM_3D,
+	TEXTURE_DIM_CUBE,
+	TEXTURE_DIM_CUBE_ARRAY,
+};
+
+bool filterResource(SPIRV_Resource* resource, ShaderStage currentStage)
+{
+	bool filter = false;
+
+	// remove used resources
+	// TODO: log warning
+	filter = filter || (resource->is_used == false);
+
+	// remove stage outputs
+	filter = filter || (resource->type == SPIRV_Resource_Type::SPIRV_TYPE_STAGE_OUTPUTS);
+
+	// remove stage inputs that are not on the vertex shader
+	filter = filter || (resource->type == SPIRV_Resource_Type::SPIRV_TYPE_STAGE_INPUTS && currentStage != SHADER_STAGE_VERT);
+
+	return filter;
+}
 
 void vk_createShaderReflection(const uint8_t* shaderCode, uint32_t shaderSize, ShaderStage shaderStage, ShaderReflection* pOutReflection)
 {

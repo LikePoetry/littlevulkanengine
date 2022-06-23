@@ -129,61 +129,7 @@ project "OS"
 		runtime "Release"
 		optimize "on"
 
-project "Sandbox"
 
-	location "Sandbox"
-	kind "ConsoleApp"
-	language "C++"
-	cppdialect "C++17"
-	staticruntime "on"
-	targetdir("bin/" ..outputdir.. "/%{prj.name}")
-	objdir("bin-int/" ..outputdir.. "/%{prj.name}")
-
-	files
-	{
-		"%{prj.name}/**.h",
-		"%{prj.name}/**.cpp",
-		"%{prj.name}/**.c",
-
-	}
-	
-	defines
-	{
-		"_CRT_SECURE_NO_WARNINGS",
-		"_WINDOWS"
-	}
-
-	includedirs
-	{
-		"%{prj.name}",
-		"OS",
-		"Renderer",
-		"$(VULKAN_SDK)/Include"
-	}
-
-	libdirs 
-	{ 
-		"%VULKAN_SDK%/lib" 
-	}
-
-	links
-	{
-		"OS",
-		"Renderer"
-	}
-
-	filter "system:windows"
-		systemversion "latest"
-		
-	filter "configurations:Debug"
-		defines ""
-		runtime "Debug"
-		symbols "on"
-
-	filter "configurations:Release"
-		defines ""
-		runtime "Release"
-		optimize "on"
 
 group "Tools"
 project "SpirvTools"
@@ -198,8 +144,18 @@ project "SpirvTools"
 	
 		files
 		{
-			"%{prj.name}/*/**.h",
-			"%{prj.name}/*/**.cpp"
+			"%{prj.name}/**.h",
+			"%{prj.name}/**.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_cfg.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_cpp.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_cross.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_cross_parsed_ir.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_cross_util.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_glsl.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_hlsl.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_msl.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_parser.cpp",
+			"ThirdParty/OpenSource/SPIRV_Cross/spirv_reflect.cpp"
 		}
 		
 		defines
@@ -217,6 +173,64 @@ project "SpirvTools"
 		filter "system:windows"
 			systemversion "latest"
 	
+		filter "configurations:Debug"
+			defines ""
+			runtime "Debug"
+			symbols "on"
+	
+		filter "configurations:Release"
+			defines ""
+			runtime "Release"
+			optimize "on"
+group	""
+		project "Sandbox"
+
+		location "Sandbox"
+		kind "ConsoleApp"
+		language "C++"
+		cppdialect "C++17"
+		staticruntime "on"
+		targetdir("bin/" ..outputdir.. "/%{prj.name}")
+		objdir("bin-int/" ..outputdir.. "/%{prj.name}")
+	
+		files
+		{
+			"%{prj.name}/**.h",
+			"%{prj.name}/**.cpp",
+			"%{prj.name}/**.c",
+	
+		}
+		
+		defines
+		{
+			"_CRT_SECURE_NO_WARNINGS",
+			"_WINDOWS"
+		}
+	
+		includedirs
+		{
+			"%{prj.name}",
+			"OS",
+			"Renderer",
+			"SpirvTools",
+			"$(VULKAN_SDK)/Include"
+		}
+	
+		libdirs 
+		{ 
+			"%VULKAN_SDK%/lib" 
+		}
+	
+		links
+		{
+			"OS",
+			"Renderer",
+			"SpirvTools"
+		}
+	
+		filter "system:windows"
+			systemversion "latest"
+			
 		filter "configurations:Debug"
 			defines ""
 			runtime "Debug"

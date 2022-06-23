@@ -2685,7 +2685,7 @@ void addShader(Renderer* pRenderer, const ShaderLoadDesc* pDesc, Shader** ppShad
 	binaryDesc.mConstantCount = pDesc->mConstantCount;
 	binaryDesc.pConstants = pDesc->pConstants;
 
-	addShaderBinary(pRenderer, &binaryDesc, ppShader);
+	vk_addShaderBinary(pRenderer, &binaryDesc, ppShader);
 
 #if defined(QUEST_VR)
 	if (ppShader)
