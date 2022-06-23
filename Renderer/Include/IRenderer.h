@@ -120,6 +120,26 @@ typedef enum PipelineType
 	PIPELINE_TYPE_COUNT,
 } PipelineType;
 
+typedef enum FilterType
+{
+	FILTER_NEAREST = 0,
+	FILTER_LINEAR,
+} FilterType;
+
+typedef enum AddressMode
+{
+	ADDRESS_MODE_MIRROR,
+	ADDRESS_MODE_REPEAT,
+	ADDRESS_MODE_CLAMP_TO_EDGE,
+	ADDRESS_MODE_CLAMP_TO_BORDER
+} AddressMode;
+
+typedef enum MipMapMode
+{
+	MIPMAP_MODE_NEAREST = 0,
+	MIPMAP_MODE_LINEAR
+} MipMapMode;
+
 // Forward declarations
 typedef struct RendererContext    RendererContext;
 typedef struct Renderer           Renderer;
@@ -265,6 +285,109 @@ typedef enum ShaderSemantic
 	SEMANTIC_TEXCOORD9,
 } ShaderSemantic;
 
+typedef enum BlendConstant
+{
+	BC_ZERO = 0,
+	BC_ONE,
+	BC_SRC_COLOR,
+	BC_ONE_MINUS_SRC_COLOR,
+	BC_DST_COLOR,
+	BC_ONE_MINUS_DST_COLOR,
+	BC_SRC_ALPHA,
+	BC_ONE_MINUS_SRC_ALPHA,
+	BC_DST_ALPHA,
+	BC_ONE_MINUS_DST_ALPHA,
+	BC_SRC_ALPHA_SATURATE,
+	BC_BLEND_FACTOR,
+	BC_ONE_MINUS_BLEND_FACTOR,
+	MAX_BLEND_CONSTANTS
+} BlendConstant;
+
+typedef enum BlendMode
+{
+	BM_ADD,
+	BM_SUBTRACT,
+	BM_REVERSE_SUBTRACT,
+	BM_MIN,
+	BM_MAX,
+	MAX_BLEND_MODES,
+} BlendMode;
+
+typedef enum CompareMode
+{
+	CMP_NEVER,
+	CMP_LESS,
+	CMP_EQUAL,
+	CMP_LEQUAL,
+	CMP_GREATER,
+	CMP_NOTEQUAL,
+	CMP_GEQUAL,
+	CMP_ALWAYS,
+	MAX_COMPARE_MODES,
+} CompareMode;
+
+typedef enum StencilOp
+{
+	STENCIL_OP_KEEP,
+	STENCIL_OP_SET_ZERO,
+	STENCIL_OP_REPLACE,
+	STENCIL_OP_INVERT,
+	STENCIL_OP_INCR,
+	STENCIL_OP_DECR,
+	STENCIL_OP_INCR_SAT,
+	STENCIL_OP_DECR_SAT,
+	MAX_STENCIL_OPS,
+} StencilOp;
+
+static const int RED = 0x1;
+static const int GREEN = 0x2;
+static const int BLUE = 0x4;
+static const int ALPHA = 0x8;
+static const int ALL = (RED | GREEN | BLUE | ALPHA);
+static const int NONE = 0;
+
+static const int BS_NONE = -1;
+static const int DS_NONE = -1;
+static const int RS_NONE = -1;
+
+// Blend states are always attached to one of the eight or more render targets that
+// are in a MRT
+// Mask constants
+typedef enum BlendStateTargets
+{
+	BLEND_STATE_TARGET_0 = 0x1,
+	BLEND_STATE_TARGET_1 = 0x2,
+	BLEND_STATE_TARGET_2 = 0x4,
+	BLEND_STATE_TARGET_3 = 0x8,
+	BLEND_STATE_TARGET_4 = 0x10,
+	BLEND_STATE_TARGET_5 = 0x20,
+	BLEND_STATE_TARGET_6 = 0x40,
+	BLEND_STATE_TARGET_7 = 0x80,
+	BLEND_STATE_TARGET_ALL = 0xFF,
+} BlendStateTargets;
+MAKE_ENUM_FLAG(uint32_t, BlendStateTargets)
+
+typedef enum CullMode
+{
+	CULL_MODE_NONE = 0,
+	CULL_MODE_BACK,
+	CULL_MODE_FRONT,
+	CULL_MODE_BOTH,
+	MAX_CULL_MODES
+} CullMode;
+
+typedef enum FrontFace
+{
+	FRONT_FACE_CCW = 0,
+	FRONT_FACE_CW
+} FrontFace;
+
+typedef enum FillMode
+{
+	FILL_MODE_SOLID,
+	FILL_MODE_WIREFRAME,
+	MAX_FILL_MODES
+} FillMode;
 
 typedef union ClearValue
 {
@@ -348,6 +471,27 @@ typedef enum GPUPresetLevel
 	GPU_PRESET_ULTRA,
 	GPU_PRESET_COUNT
 } GPUPresetLevel;
+
+typedef enum SamplerRange
+{
+	SAMPLER_RANGE_FULL = 0,
+	SAMPLER_RANGE_NARROW = 1,
+} SamplerRange;
+
+typedef enum SamplerModelConversion
+{
+	SAMPLER_MODEL_CONVERSION_RGB_IDENTITY = 0,
+	SAMPLER_MODEL_CONVERSION_YCBCR_IDENTITY = 1,
+	SAMPLER_MODEL_CONVERSION_YCBCR_709 = 2,
+	SAMPLER_MODEL_CONVERSION_YCBCR_601 = 3,
+	SAMPLER_MODEL_CONVERSION_YCBCR_2020 = 4,
+} SamplerModelConversion;
+
+typedef enum SampleLocation
+{
+	SAMPLE_LOCATION_COSITED = 0,
+	SAMPLE_LOCATION_MIDPOINT = 1,
+} SampleLocation;
 
 typedef struct BufferBarrier
 {
@@ -585,6 +729,33 @@ typedef struct DEFINE_ALIGNED(RenderTarget, 64)
 } RenderTarget;
 COMPILE_ASSERT(sizeof(RenderTarget) <= 32 * sizeof(uint64_t));
 
+typedef struct SamplerDesc
+{
+	FilterType  mMinFilter;
+	FilterType  mMagFilter;
+	MipMapMode  mMipMapMode;
+	AddressMode mAddressU;
+	AddressMode mAddressV;
+	AddressMode mAddressW;
+	float       mMipLodBias;
+	bool		mSetLodRange;
+	float       mMinLod;
+	float       mMaxLod;
+	float       mMaxAnisotropy;
+	CompareMode mCompareFunc;
+
+	struct
+	{
+		TinyImageFormat        mFormat;
+		SamplerModelConversion mModel;
+		SamplerRange           mRange;
+		SampleLocation         mChromaOffsetX;
+		SampleLocation         mChromaOffsetY;
+		FilterType             mChromaFilter;
+		bool                   mForceExplicitReconstruction;
+	} mSamplerConversionDesc;
+} SamplerDesc;
+
 typedef struct DEFINE_ALIGNED(Sampler, 16)
 {
 	union
@@ -730,12 +901,27 @@ typedef struct DEFINE_ALIGNED(DescriptorSet, 64)
 	};
 } DescriptorSet;
 
+typedef struct CmdPoolDesc
+{
+	Queue* pQueue;
+	bool   mTransient;
+} CmdPoolDesc;
+
 typedef struct CmdPool
 {
 	VkCommandPool pVkCmdPool;
 
 	Queue* pQueue;
 } CmdPool;
+
+typedef struct CmdDesc
+{
+	CmdPool* pPool;
+#if defined(ORBIS) || defined(PROSPERO)
+	uint32_t mMaxSize;
+#endif
+	bool mSecondary;
+} CmdDesc;
 
 typedef struct DEFINE_ALIGNED(Cmd, 64)
 {
@@ -1161,6 +1347,62 @@ typedef struct Shader
 
 } Shader;
 
+typedef struct BlendStateDesc
+{
+	/// Source blend factor per render target.
+	BlendConstant mSrcFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Destination blend factor per render target.
+	BlendConstant mDstFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Source alpha blend factor per render target.
+	BlendConstant mSrcAlphaFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Destination alpha blend factor per render target.
+	BlendConstant mDstAlphaFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Blend mode per render target.
+	BlendMode mBlendModes[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Alpha blend mode per render target.
+	BlendMode mBlendAlphaModes[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Write mask per render target.
+	int32_t mMasks[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Mask that identifies the render targets affected by the blend state.
+	BlendStateTargets mRenderTargetMask;
+	/// Set whether alpha to coverage should be enabled.
+	bool mAlphaToCoverage;
+	/// Set whether each render target has an unique blend function. When false the blend function in slot 0 will be used for all render targets.
+	bool mIndependentBlend;
+} BlendStateDesc;
+
+
+
+typedef struct DepthStateDesc
+{
+	bool        mDepthTest;
+	bool        mDepthWrite;
+	CompareMode mDepthFunc;
+	bool        mStencilTest;
+	uint8_t     mStencilReadMask;
+	uint8_t     mStencilWriteMask;
+	CompareMode mStencilFrontFunc;
+	StencilOp   mStencilFrontFail;
+	StencilOp   mDepthFrontFail;
+	StencilOp   mStencilFrontPass;
+	CompareMode mStencilBackFunc;
+	StencilOp   mStencilBackFail;
+	StencilOp   mDepthBackFail;
+	StencilOp   mStencilBackPass;
+} DepthStateDesc;
+
+typedef struct RasterizerStateDesc
+{
+	CullMode  mCullMode;
+	int32_t   mDepthBias;
+	float     mSlopeScaledDepthBias;
+	FillMode  mFillMode;
+	FrontFace mFrontFace;
+	bool      mMultiSample;
+	bool      mScissor;
+	bool      mDepthClampEnable;
+} RasterizerStateDesc;
+
 typedef struct DEFINE_ALIGNED(Pipeline, 64)
 {
 	union
@@ -1279,8 +1521,12 @@ void vk_cmdBindPushConstants(Cmd* pCmd, RootSignature* pRootSignature, uint32_t 
 void vk_cmdBindVertexBuffer(Cmd* pCmd, uint32_t bufferCount, Buffer** ppBuffers, const uint32_t* pStrides, const uint64_t* pOffsets);
 
 void vk_cmdDraw(Cmd* pCmd, uint32_t vertex_count, uint32_t first_vertex);
+
+void vk_addCmdPool(Renderer* pRenderer, const CmdPoolDesc* pDesc, CmdPool** ppCmdPool);
 void vk_endCmd(Cmd* pCmd);
+
 void vk_removeCmd(Renderer* pRenderer, Cmd* pCmd);
+void vk_addCmd(Renderer* pRenderer, const CmdDesc* pDesc, Cmd** ppCmd);
 void vk_removeCmdPool(Renderer* pRenderer, CmdPool* pCmdPool);
 
 void vk_mapBuffer(Renderer* pRenderer, Buffer* pBuffer, ReadRange* pRange);
@@ -1290,9 +1536,19 @@ void vk_queueSubmit(Queue* pQueue, const QueueSubmitDesc* pDesc);
 
 void vk_removeSemaphore(Renderer* pRenderer, Semaphore* pSemaphore);
 
+void vk_addFence(Renderer* pRenderer, Fence** ppFence);
 void vk_removeFence(Renderer* pRenderer, Fence* pFence);
+
+
 void vk_updateDescriptorSet(Renderer* pRenderer, uint32_t index, DescriptorSet* pDescriptorSet, uint32_t count, const DescriptorData* pParams);
 
 void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** ppRenderer);
 
 void vk_addQueue(Renderer* pRenderer, QueueDesc* pDesc, Queue** ppQueue);
+
+void vk_addSampler(Renderer* pRenderer, const SamplerDesc* pDesc, Sampler** ppSampler);
+
+void vk_setTextureName(Renderer* pRenderer, Texture* pTexture, const char* pName);
+void vk_setBufferName(Renderer* pRenderer, Buffer* pBuffer, const char* pName);
+
+

@@ -87,6 +87,9 @@
     <ClInclude Include="Core\Config.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="Core\GPUConfig.h">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="Core\RingBuffer.h">
       <Filter>Core</Filter>
     </ClInclude>
@@ -138,7 +141,6 @@
     <ClInclude Include="UI\imgui_user.h">
       <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="Core\GPUConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EASprintf.cpp">
@@ -148,6 +150,9 @@
       <Filter>ThirdParty\OpenSource\EASTL</Filter>
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\hashtable.cpp">
       <Filter>ThirdParty\OpenSource\EASTL</Filter>
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp">

@@ -124,6 +124,7 @@
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EASprintf.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\hashtable.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
     <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp" />

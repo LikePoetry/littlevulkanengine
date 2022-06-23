@@ -82,6 +82,7 @@ project "OS"
 		"ThirdParty/OpenSource/EASTL/allocator_forge.cpp",
 		"ThirdParty/OpenSource/EASTL/assert.cpp",
 		"ThirdParty/OpenSource/EASTL/EAStdC/EASprintf.cpp",
+		"ThirdParty/OpenSource/EASTL/hashtable.cpp",
 		"ThirdParty/OpenSource/cpu_features/src/impl_x86_windows.c",
 		"ThirdParty/OpenSource/basis_universal/transcoder/basisu_transcoder.cpp",
 		"ThirdParty/OpenSource/imgui/imconfig.h",
