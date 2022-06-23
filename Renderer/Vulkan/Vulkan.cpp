@@ -27,6 +27,7 @@
 #include "../../OS/Interfaces/IMemory.h"
 #include <Core/Atomics.h>
 
+extern void vk_createShaderReflection(const uint8_t* shaderCode, uint32_t shaderSize, ShaderStage shaderStage, ShaderReflection* pOutReflection);
 //#ifdef VK_RAYTRACING_AVAILABLE
 extern void vk_FillRaytracingDescriptorData(uint32_t count, AccelerationStructure** const ppAccelerationStructures, VkAccelerationStructureKHR* pOutHandles);
 //#endif
@@ -4976,6 +4977,238 @@ void vk_setTextureName(Renderer* pRenderer, Texture* pTexture, const char* pName
 		util_set_object_name(pRenderer->mVulkan.pVkDevice, (uint64_t)pTexture->mVulkan.pVkImage, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT, pName);
 #endif
 	}
+}
+
+void vk_addSemaphore(Renderer* pRenderer, Semaphore** ppSemaphore)
+{
+	ASSERT(pRenderer);
+	ASSERT(ppSemaphore);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+
+	Semaphore* pSemaphore = (Semaphore*)tf_calloc(1, sizeof(Semaphore));
+	ASSERT(pSemaphore);
+
+	DECLARE_ZERO(VkSemaphoreCreateInfo, add_info);
+	add_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	add_info.pNext = NULL;
+	add_info.flags = 0;
+	CHECK_VKRESULT(
+		vkCreateSemaphore(pRenderer->mVulkan.pVkDevice, &add_info, &gVkAllocationCallbacks, &(pSemaphore->mVulkan.pVkSemaphore)));
+	// Set signal initial state.
+	pSemaphore->mVulkan.mSignaled = false;
+
+	*ppSemaphore = pSemaphore;
+}
+
+void vk_addShaderBinary(Renderer* pRenderer, const BinaryShaderDesc* pDesc, Shader** ppShaderProgram) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pDesc);
+	ASSERT(ppShaderProgram);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+
+	uint32_t counter = 0;
+
+	size_t totalSize = sizeof(Shader);
+	totalSize += sizeof(PipelineReflection);
+
+	for (uint32_t i = 0; i < SHADER_STAGE_COUNT; ++i)
+	{
+		ShaderStage stage_mask = (ShaderStage)(1 << i);
+		if (stage_mask == (pDesc->mStages & stage_mask))
+		{
+			switch (stage_mask)
+			{
+			case SHADER_STAGE_VERT: totalSize += (strlen(pDesc->mVert.pEntryPoint) + 1) * sizeof(char); break;      //-V814
+			case SHADER_STAGE_TESC: totalSize += (strlen(pDesc->mHull.pEntryPoint) + 1) * sizeof(char); break;      //-V814
+			case SHADER_STAGE_TESE: totalSize += (strlen(pDesc->mDomain.pEntryPoint) + 1) * sizeof(char); break;    //-V814
+			case SHADER_STAGE_GEOM: totalSize += (strlen(pDesc->mGeom.pEntryPoint) + 1) * sizeof(char); break;      //-V814
+			case SHADER_STAGE_FRAG: totalSize += (strlen(pDesc->mFrag.pEntryPoint) + 1) * sizeof(char); break;      //-V814
+			case SHADER_STAGE_RAYTRACING:
+			case SHADER_STAGE_COMP: totalSize += (strlen(pDesc->mComp.pEntryPoint) + 1) * sizeof(char); break;    //-V814
+			default: break;
+			}
+			++counter;
+		}
+	}
+
+	if (pDesc->mConstantCount)
+	{
+		totalSize += sizeof(VkSpecializationInfo);
+		totalSize += sizeof(VkSpecializationMapEntry) * pDesc->mConstantCount;
+		for (uint32_t i = 0; i < pDesc->mConstantCount; ++i)
+		{
+			const ShaderConstant* constant = &pDesc->pConstants[i];
+			totalSize += (constant->mSize == sizeof(bool)) ? sizeof(VkBool32) : constant->mSize;
+		}
+	}
+
+	totalSize += counter * sizeof(VkShaderModule);
+	totalSize += counter * sizeof(char*);
+	Shader* pShaderProgram = (Shader*)tf_calloc(1, totalSize);
+	pShaderProgram->mStages = pDesc->mStages;
+	pShaderProgram->pReflection = (PipelineReflection*)(pShaderProgram + 1);    //-V1027
+	pShaderProgram->mVulkan.pShaderModules = (VkShaderModule*)(pShaderProgram->pReflection + 1);
+	pShaderProgram->mVulkan.pEntryNames = (char**)(pShaderProgram->mVulkan.pShaderModules + counter);
+	pShaderProgram->mVulkan.pSpecializationInfo = NULL;
+
+	uint8_t* mem = (uint8_t*)(pShaderProgram->mVulkan.pEntryNames + counter);
+	counter = 0;
+	ShaderReflection stageReflections[SHADER_STAGE_COUNT] = {};
+
+	for (uint32_t i = 0; i < SHADER_STAGE_COUNT; ++i)
+	{
+		ShaderStage stage_mask = (ShaderStage)(1 << i);
+		if (stage_mask == (pShaderProgram->mStages & stage_mask))
+		{
+			DECLARE_ZERO(VkShaderModuleCreateInfo, create_info);
+			create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			create_info.pNext = NULL;
+			create_info.flags = 0;
+
+			const BinaryShaderStageDesc* pStageDesc = nullptr;
+			switch (stage_mask)
+			{
+			case SHADER_STAGE_VERT:
+			{
+				vk_createShaderReflection(
+					(const uint8_t*)pDesc->mVert.pByteCode, (uint32_t)pDesc->mVert.mByteCodeSize, stage_mask,
+					&stageReflections[counter]);
+
+				create_info.codeSize = pDesc->mVert.mByteCodeSize;
+				create_info.pCode = (const uint32_t*)pDesc->mVert.pByteCode;
+				pStageDesc = &pDesc->mVert;
+				CHECK_VKRESULT(vkCreateShaderModule(
+					pRenderer->mVulkan.pVkDevice, &create_info, &gVkAllocationCallbacks,
+					&(pShaderProgram->mVulkan.pShaderModules[counter])));
+			}
+			break;
+			case SHADER_STAGE_TESC:
+			{
+				vk_createShaderReflection(
+					(const uint8_t*)pDesc->mHull.pByteCode, (uint32_t)pDesc->mHull.mByteCodeSize, stage_mask,
+					&stageReflections[counter]);
+
+				create_info.codeSize = pDesc->mHull.mByteCodeSize;
+				create_info.pCode = (const uint32_t*)pDesc->mHull.pByteCode;
+				pStageDesc = &pDesc->mHull;
+				CHECK_VKRESULT(vkCreateShaderModule(
+					pRenderer->mVulkan.pVkDevice, &create_info, &gVkAllocationCallbacks,
+					&(pShaderProgram->mVulkan.pShaderModules[counter])));
+			}
+			break;
+			case SHADER_STAGE_TESE:
+			{
+				vk_createShaderReflection(
+					(const uint8_t*)pDesc->mDomain.pByteCode, (uint32_t)pDesc->mDomain.mByteCodeSize, stage_mask,
+					&stageReflections[counter]);
+
+				create_info.codeSize = pDesc->mDomain.mByteCodeSize;
+				create_info.pCode = (const uint32_t*)pDesc->mDomain.pByteCode;
+				pStageDesc = &pDesc->mDomain;
+				CHECK_VKRESULT(vkCreateShaderModule(
+					pRenderer->mVulkan.pVkDevice, &create_info, &gVkAllocationCallbacks,
+					&(pShaderProgram->mVulkan.pShaderModules[counter])));
+			}
+			break;
+			case SHADER_STAGE_GEOM:
+			{
+				vk_createShaderReflection(
+					(const uint8_t*)pDesc->mGeom.pByteCode, (uint32_t)pDesc->mGeom.mByteCodeSize, stage_mask,
+					&stageReflections[counter]);
+
+				create_info.codeSize = pDesc->mGeom.mByteCodeSize;
+				create_info.pCode = (const uint32_t*)pDesc->mGeom.pByteCode;
+				pStageDesc = &pDesc->mGeom;
+				CHECK_VKRESULT(vkCreateShaderModule(
+					pRenderer->mVulkan.pVkDevice, &create_info, &gVkAllocationCallbacks,
+					&(pShaderProgram->mVulkan.pShaderModules[counter])));
+			}
+			break;
+			case SHADER_STAGE_FRAG:
+			{
+				vk_createShaderReflection(
+					(const uint8_t*)pDesc->mFrag.pByteCode, (uint32_t)pDesc->mFrag.mByteCodeSize, stage_mask,
+					&stageReflections[counter]);
+
+				create_info.codeSize = pDesc->mFrag.mByteCodeSize;
+				create_info.pCode = (const uint32_t*)pDesc->mFrag.pByteCode;
+				pStageDesc = &pDesc->mFrag;
+				CHECK_VKRESULT(vkCreateShaderModule(
+					pRenderer->mVulkan.pVkDevice, &create_info, &gVkAllocationCallbacks,
+					&(pShaderProgram->mVulkan.pShaderModules[counter])));
+			}
+			break;
+			case SHADER_STAGE_COMP:
+#ifdef VK_RAYTRACING_AVAILABLE
+			case SHADER_STAGE_RAYTRACING:
+#endif
+			{
+				vk_createShaderReflection(
+					(const uint8_t*)pDesc->mComp.pByteCode, (uint32_t)pDesc->mComp.mByteCodeSize, stage_mask,
+					&stageReflections[counter]);
+
+				create_info.codeSize = pDesc->mComp.mByteCodeSize;
+				create_info.pCode = (const uint32_t*)pDesc->mComp.pByteCode;
+				pStageDesc = &pDesc->mComp;
+				CHECK_VKRESULT(vkCreateShaderModule(
+					pRenderer->mVulkan.pVkDevice, &create_info, &gVkAllocationCallbacks,
+					&(pShaderProgram->mVulkan.pShaderModules[counter])));
+			}
+			break;
+			default: ASSERT(false && "Shader Stage not supported!"); break;
+			}
+
+			pShaderProgram->mVulkan.pEntryNames[counter] = (char*)mem;
+			mem += (strlen(pStageDesc->pEntryPoint) + 1) * sizeof(char);    //-V522
+			strcpy(pShaderProgram->mVulkan.pEntryNames[counter], pStageDesc->pEntryPoint);
+			++counter;
+		}
+	}
+
+	// Fill specialization constant entries
+	if (pDesc->mConstantCount)
+	{
+		pShaderProgram->mVulkan.pSpecializationInfo = (VkSpecializationInfo*)mem;
+		mem += sizeof(VkSpecializationInfo);
+
+		VkSpecializationMapEntry* mapEntries = (VkSpecializationMapEntry*)mem;
+		mem += pDesc->mConstantCount * sizeof(VkSpecializationMapEntry);
+
+		uint8_t* data = mem;
+		uint32_t offset = 0;
+		for (uint32_t i = 0; i < pDesc->mConstantCount; ++i)
+		{
+			const ShaderConstant* constant = &pDesc->pConstants[i];
+			const bool boolType = constant->mSize == sizeof(bool);
+			const uint32_t size = boolType ? sizeof(VkBool32) : constant->mSize;
+
+			VkSpecializationMapEntry* entry = &mapEntries[i];
+			entry->constantID = constant->mIndex;
+			entry->offset = offset;
+			entry->size = size;
+
+			if (boolType)
+			{
+				*(VkBool32*)(data + offset) = *(const bool*)constant->pValue;
+			}
+			else
+			{
+				memcpy(data + offset, constant->pValue, constant->mSize);
+			}
+			offset += size;
+		}
+
+		VkSpecializationInfo* specializationInfo = pShaderProgram->mVulkan.pSpecializationInfo;
+		specializationInfo->dataSize = offset;
+		specializationInfo->mapEntryCount = pDesc->mConstantCount;
+		specializationInfo->pData = data;
+		specializationInfo->pMapEntries = mapEntries;
+	}
+
+	createPipelineReflection(stageReflections, counter, pShaderProgram->pReflection);
+
+	*ppShaderProgram = pShaderProgram;
 }
 
 void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Renderer** ppRenderer)

@@ -119,3 +119,5 @@ struct PipelineReflection
 	ShaderVariable* pVariables;
 	uint32_t        mVariableCount;
 };
+
+void createPipelineReflection(ShaderReflection* pReflection, uint32_t stageCount, PipelineReflection* pOutReflection);

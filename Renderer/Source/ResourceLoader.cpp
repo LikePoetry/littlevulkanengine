@@ -42,6 +42,8 @@ static FORGE_CONSTEXPR const bool gUma = false;
 
 #define MAX_FRAMES 3U
 
+ResourceLoaderDesc gDefaultResourceLoaderDesc = { 8ull << 20, 2 };
+
 /************************************************************************/
 // Surface Utils
 /************************************************************************/
@@ -368,6 +370,57 @@ static MappedMemoryRange allocateUploadMemory(Renderer* pRenderer, uint64_t memo
 	return { (uint8_t*)buffer->pCpuMappedAddress, buffer, 0, memoryRequirement };
 }
 
+static uint32_t util_get_texture_row_alignment(Renderer* pRenderer)
+{
+	return max(1u, pRenderer->pActiveGpuSettings->mUploadBufferTextureRowAlignment);
+}
+
+static uint32_t util_get_texture_subresource_alignment(Renderer* pRenderer, TinyImageFormat fmt = TinyImageFormat_UNDEFINED)
+{
+	uint32_t blockSize = max(1u, TinyImageFormat_BitSizeOfBlock(fmt) >> 3);
+	uint32_t alignment = round_up(pRenderer->pActiveGpuSettings->mUploadBufferTextureAlignment, blockSize);
+	return round_up(alignment, util_get_texture_row_alignment(pRenderer));
+}
+
+static void setupCopyEngine(Renderer* pRenderer, CopyEngine* pCopyEngine, uint32_t nodeIndex, uint64_t size, uint32_t bufferCount)
+{
+	QueueDesc desc = { QUEUE_TYPE_TRANSFER, QUEUE_FLAG_NONE, QUEUE_PRIORITY_NORMAL, nodeIndex };
+	vk_addQueue(pRenderer, &desc, &pCopyEngine->pQueue);
+
+	const uint64_t maxBlockSize = 32;
+	size = max(size, maxBlockSize);
+
+	pCopyEngine->resourceSets = (CopyResourceSet*)tf_malloc(sizeof(CopyResourceSet) * bufferCount);
+	for (uint32_t i = 0; i < bufferCount; ++i)
+	{
+		tf_placement_new<CopyResourceSet>(pCopyEngine->resourceSets + i);
+
+		CopyResourceSet& resourceSet = pCopyEngine->resourceSets[i];
+#if defined(DIRECT3D11)
+		if (gSelectedRendererApi != RENDERER_API_D3D11)
+#endif
+			vk_addFence(pRenderer, &resourceSet.pFence);
+
+		CmdPoolDesc cmdPoolDesc = {};
+		cmdPoolDesc.pQueue = pCopyEngine->pQueue;
+		vk_addCmdPool(pRenderer, &cmdPoolDesc, &resourceSet.pCmdPool);
+
+		CmdDesc cmdDesc = {};
+		cmdDesc.pPool = resourceSet.pCmdPool;
+		vk_addCmd(pRenderer, &cmdDesc, &resourceSet.pCmd);
+
+		vk_addSemaphore(pRenderer, &resourceSet.pCopyCompletedSemaphore);
+
+		resourceSet.mBuffer = allocateUploadMemory(pRenderer, size, util_get_texture_subresource_alignment(pRenderer)).pBuffer;
+	}
+
+	pCopyEngine->bufferSize = size;
+	pCopyEngine->bufferCount = bufferCount;
+	pCopyEngine->nodeIndex = nodeIndex;
+	pCopyEngine->isRecording = false;
+	pCopyEngine->pLastCompletedSemaphore = NULL;
+}
+
 static void cleanupCopyEngine(Renderer* pRenderer, CopyEngine* pCopyEngine)
 {
 	for (uint32_t i = 0; i < pCopyEngine->bufferCount; ++i)
@@ -409,18 +462,6 @@ static bool waitCopyEngineSet(Renderer* pRenderer, CopyEngine* pCopyEngine, size
 		vk_waitForFences(pRenderer, 1, &resourceSet.pFence);
 	}
 	return completed;
-}
-
-static uint32_t util_get_texture_row_alignment(Renderer* pRenderer)
-{
-	return max(1u, pRenderer->pActiveGpuSettings->mUploadBufferTextureRowAlignment);
-}
-
-static uint32_t util_get_texture_subresource_alignment(Renderer* pRenderer, TinyImageFormat fmt = TinyImageFormat_UNDEFINED)
-{
-	uint32_t blockSize = max(1u, TinyImageFormat_BitSizeOfBlock(fmt) >> 3);
-	uint32_t alignment = round_up(pRenderer->pActiveGpuSettings->mUploadBufferTextureAlignment, blockSize);
-	return round_up(alignment, util_get_texture_row_alignment(pRenderer));
 }
 
 static void resetCopyEngineSet(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet)
@@ -1714,6 +1755,65 @@ static void streamerThreadFunc(void* pThreadData)
 	freeAllUploadMemory();
 }
 
+static void addResourceLoader(Renderer** ppRenderers, uint32_t rendererCount, ResourceLoaderDesc* pDesc, ResourceLoader** ppLoader)
+{
+	ASSERT(rendererCount > 0);
+	ASSERT(rendererCount <= MAX_MULTIPLE_GPUS);
+	ResourceLoader* pLoader = tf_new(ResourceLoader);
+
+	uint32_t gpuCount = rendererCount;
+	if (ppRenderers[0]->mGpuMode != GPU_MODE_UNLINKED)
+	{
+		ASSERT(rendererCount == 1);
+		gpuCount = ppRenderers[0]->mLinkedNodeCount;
+	}
+
+	pLoader->mGpuCount = gpuCount;
+
+	for (uint32_t i = 0; i < gpuCount; ++i)
+	{
+		ASSERT(rendererCount == 1 || ppRenderers[i]->mGpuMode == GPU_MODE_UNLINKED);
+		// Replicate single renderer in linked mode, for uniform handling of linked and unlinked multi gpu.
+		pLoader->ppRenderers[i] = (rendererCount > 1) ? ppRenderers[i] : ppRenderers[0];
+	}
+
+	pLoader->mRun = true;    //-V601
+	pLoader->mDesc = pDesc ? *pDesc : gDefaultResourceLoaderDesc;
+
+	initMutex(&pLoader->mQueueMutex);
+	initMutex(&pLoader->mTokenMutex);
+	initConditionVariable(&pLoader->mQueueCond);
+	initConditionVariable(&pLoader->mTokenCond);
+	initMutex(&pLoader->mSemaphoreMutex);
+
+	pLoader->mTokenCounter = 0;
+	pLoader->mTokenCompleted = 0;
+	pLoader->mTokenSubmitted = 0;
+
+	for (uint32_t i = 0; i < gpuCount; ++i)
+	{
+		setupCopyEngine(pLoader->ppRenderers[i], &pLoader->pCopyEngines[i], i, pLoader->mDesc.mBufferSize, pLoader->mDesc.mBufferCount);
+	}
+
+	ThreadDesc threadDesc = {};
+	threadDesc.pFunc = streamerThreadFunc;
+	threadDesc.pData = pLoader;
+	strncpy(threadDesc.mThreadName, "ResourceLoaderTask", sizeof(threadDesc.mThreadName));
+
+#if defined(NX64)
+	threadDesc.mHasAffinityMask = true;
+	threadDesc.mAffinityMask = 1;
+#endif
+
+	// Create dedicated resource loader thread.
+	if (!pLoader->mDesc.mSingleThreaded)
+	{
+		initThread(&threadDesc, &pLoader->mThread);
+	}
+
+	*ppLoader = pLoader;
+}
+
 static void queueBufferUpdate(ResourceLoader* pLoader, BufferUpdateDesc* pBufferUpdate, SyncToken* token)
 {
 	uint32_t nodeIndex = pBufferUpdate->pBuffer->mNodeIndex;
@@ -1774,6 +1874,14 @@ static void waitForToken(ResourceLoader* pLoader, const SyncToken* token)
 		waitConditionVariable(&pLoader->mTokenCond, &pLoader->mTokenMutex, TIMEOUT_INFINITE);
 	}
 	releaseMutex(&pLoader->mTokenMutex);
+}
+
+/************************************************************************/
+// Resource Loader Interface Implementation
+/************************************************************************/
+void initResourceLoaderInterface(Renderer* pRenderer, ResourceLoaderDesc* pDesc)
+{
+	addResourceLoader(&pRenderer, 1, pDesc, &pResourceLoader);
 }
 
 void addResource(TextureLoadDesc* pTextureDesc, SyncToken* token)
@@ -1925,3 +2033,741 @@ bool      isTokenCompleted(const SyncToken* token)
 }
 
 void waitForToken(const SyncToken* token) { waitForToken(pResourceLoader, token); }
+
+static eastl::string fsReadFromStreamSTLLine(FileStream* stream)
+{
+	eastl::string result;
+
+	while (!fsStreamAtEnd(stream))
+	{
+		char nextChar = 0;
+		fsReadFromStream(stream, &nextChar, sizeof(nextChar));
+		if (nextChar == 0 || nextChar == '\n')
+		{
+			break;
+		}
+		if (nextChar == '\r')
+		{
+			char newLine = 0;
+			fsReadFromStream(stream, &newLine, sizeof(newLine));
+			if (newLine == '\n')
+			{
+				break;
+			}
+			else
+			{
+				// We're not looking at a "\r\n" sequence, so add the '\r' to the buffer.
+				fsSeekStream(stream, SBO_CURRENT_POSITION, -1);
+			}
+		}
+		result.push_back(nextChar);
+	}
+
+	return result;
+}
+
+bool check_for_byte_code(Renderer* pRenderer, const char* binaryShaderPath, time_t sourceTimeStamp, BinaryShaderStageDesc* pOut)
+{
+	// If source code is loaded from a package, its timestamp will be zero. Else check that binary is not older
+	// than source
+	time_t dstTimeStamp = fsGetLastModifiedTime(RD_SHADER_BINARIES, binaryShaderPath);
+	if (!sourceTimeStamp || (dstTimeStamp < sourceTimeStamp))
+		return false;
+
+	FileStream fh = {};
+	if (!fsOpenStreamFromPath(RD_SHADER_BINARIES, binaryShaderPath, FM_READ_BINARY, NULL, &fh))
+	{
+		LOGF(LogLevel::eERROR, "'%s' is not a valid shader bytecode file", binaryShaderPath);
+		return false;
+	}
+
+	if (!fsGetStreamFileSize(&fh))
+	{
+		fsCloseStream(&fh);
+		return false;
+	}
+
+#if defined(PROSPERO)
+	extern void prospero_loadByteCode(Renderer*, FileStream*, BinaryShaderStageDesc*);
+	prospero_loadByteCode(pRenderer, &fh, pOut);
+#else
+	ssize_t size = fsGetStreamFileSize(&fh);
+	pOut->mByteCodeSize = (uint32_t)size;
+	pOut->pByteCode = tf_memalign(256, size);
+	fsReadFromStream(&fh, (void*)pOut->pByteCode, size);
+#endif
+	fsCloseStream(&fh);
+
+	return true;
+}
+
+static bool process_source_file(
+	const char* pAppName, FileStream* original, const char* filePath, FileStream* file, time_t& outTimeStamp, eastl::string& outCode)
+{
+	// If the source if a non-packaged file, store the timestamp
+	if (file)
+	{
+		time_t fileTimeStamp = fsGetLastModifiedTime(RD_SHADER_SOURCES, filePath);
+
+		if (fileTimeStamp > outTimeStamp)
+			outTimeStamp = fileTimeStamp;
+	}
+	else
+	{
+		return true;    // The source file is missing, but we may still be able to use the shader binary.
+	}
+
+	const eastl::string pIncludeDirective = "#include";
+	while (!fsStreamAtEnd(file))
+	{
+		eastl::string line = fsReadFromStreamSTLLine(file);
+
+		size_t       filePos = line.find(pIncludeDirective, 0);
+		const size_t commentPosCpp = line.find("//", 0);
+		const size_t commentPosC = line.find("/*", 0);
+
+		// if we have an "#include \"" in our current line
+		const bool bLineHasIncludeDirective = filePos != eastl::string::npos;
+		const bool bLineIsCommentedOut = (commentPosCpp != eastl::string::npos && commentPosCpp < filePos) ||
+			(commentPosC != eastl::string::npos && commentPosC < filePos);
+
+		if (bLineHasIncludeDirective && !bLineIsCommentedOut)
+		{
+			// get the include file name
+			size_t        currentPos = filePos + pIncludeDirective.length();
+			eastl::string fileName;
+			while (line.at(currentPos++) == ' ')
+				;    // skip empty spaces
+			if (currentPos >= line.size())
+				continue;
+			if (line.at(currentPos - 1) != '\"')
+				continue;
+			else
+			{
+				// read char by char until we have the include file name
+				while (line.at(currentPos) != '\"')
+				{
+					fileName.push_back(line.at(currentPos));
+					++currentPos;
+				}
+			}
+
+			// get the include file path
+			//TODO: Remove Comments
+
+			if (fileName.at(0) == '<')    // disregard bracketsauthop
+				continue;
+
+			// open the include file
+			FileStream fHandle = {};
+			char       includePath[FS_MAX_PATH] = {};
+			{
+				char parentPath[FS_MAX_PATH] = {};
+				fsGetParentPath(filePath, parentPath);
+				fsAppendPathComponent(parentPath, fileName.c_str(), includePath);
+			}
+			if (!fsOpenStreamFromPath(RD_SHADER_SOURCES, includePath, FM_READ_BINARY, NULL, &fHandle))
+			{
+				LOGF(LogLevel::eERROR, "Cannot open #include file: %s", includePath);
+				continue;
+			}
+
+			// Add the include file into the current code recursively
+			if (!process_source_file(pAppName, original, includePath, &fHandle, outTimeStamp, outCode))
+			{
+				fsCloseStream(&fHandle);
+				return false;
+			}
+
+			fsCloseStream(&fHandle);
+		}
+
+#if defined(TARGET_IOS) || defined(ANDROID)
+		// iOS doesn't have support for resolving user header includes in shader code
+		// when compiling with shader source using Metal runtime.
+		// https://developer.apple.com/library/archive/documentation/3DDrawing/Conceptual/MTLBestPracticesGuide/FunctionsandLibraries.html
+		//
+		// Here we write out the contents of the header include into the original source
+		// where its included from -- we're expanding the headers as the pre-processor
+		// would do.
+		//
+		//const bool bAreWeProcessingAnIncludedHeader = file != original;
+		if (!bLineHasIncludeDirective)
+		{
+			outCode += line + "\n";
+		}
+#else
+		// Simply write out the current line if we are not in a header file
+		const bool bAreWeProcessingTheShaderSource = file == original;
+		if (bAreWeProcessingTheShaderSource)
+		{
+			outCode += line + "\n";
+		}
+#endif
+	}
+
+	return true;
+}
+
+// PC:
+// Vulkan has no builtin functions to compile source to spirv
+// So we call the glslangValidator tool located inside VulkanSDK on user machine to compile the glsl code to spirv
+// This code is not added to Vulkan.cpp since it calls no Vulkan specific functions
+void vk_compileShader(Renderer* pRenderer, ShaderTarget target, ShaderStage stage, const char* fileName, const char* outFile, uint32_t macroCount,
+	ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint)
+{
+	eastl::string commandLine;
+	char          filePath[FS_MAX_PATH] = { 0 };
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_SOURCES), fileName, filePath);
+	char outFilePath[FS_MAX_PATH] = { 0 };
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_BINARIES), outFile, outFilePath);
+
+	commandLine.append_sprintf("-V \"%s\" -o \"%s\"", filePath, outFilePath);
+
+	if (target >= shader_target_6_0)
+		commandLine += " --target-env vulkan1.1 ";
+
+	if (target >= shader_target_6_3)
+		commandLine += " --target-env spirv1.4";
+	//commandLine += " \"-D" + eastl::string("VULKAN") + "=" + "1" + "\"";
+
+	if (pEntryPoint != NULL)
+		commandLine.append_sprintf(" -e %s", pEntryPoint);
+
+	// Add platform macro
+#ifdef _WINDOWS
+	commandLine += " \"-D WINDOWS\"";
+#elif defined(__ANDROID__)
+	commandLine += " \"-D ANDROID\"";
+#elif defined(__linux__)
+	commandLine += " \"-D LINUX\"";
+#endif
+
+	// Add user defined macros to the command line
+	for (uint32_t i = 0; i < macroCount; ++i)
+	{
+		commandLine += " \"-D" + eastl::string(pMacros[i].definition) + "=" + pMacros[i].value + "\"";
+	}
+
+	const char* vulkanSdkStr = getenv("VULKAN_SDK");
+	char* glslangValidator = nullptr;
+
+	if (vulkanSdkStr)
+	{
+		glslangValidator = (char*)tf_calloc(strlen(vulkanSdkStr) + 64, sizeof(char));
+		strcpy(glslangValidator, vulkanSdkStr);
+		strcat(glslangValidator, "/bin/glslangValidator");
+	}
+	else
+	{
+		glslangValidator = (char*)tf_calloc(64, sizeof(char));
+		strcpy(glslangValidator, "/usr/bin/glslangValidator");
+	}
+
+	const char* args[1] = { commandLine.c_str() };
+
+	char logFileName[FS_MAX_PATH] = { 0 };
+	fsGetPathFileName(outFile, logFileName);
+	strcat(logFileName, "_compile.log");
+	char logFilePath[FS_MAX_PATH] = { 0 };
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_BINARIES), logFileName, logFilePath);
+
+	if (systemRun(glslangValidator, args, 1, logFilePath) == 0)
+	{
+		FileStream fh = {};
+		bool       success = fsOpenStreamFromPath(RD_SHADER_BINARIES, outFile, FM_READ_BINARY, NULL, &fh);
+		//Check if the File Handle exists
+		ASSERT(success);
+		pOut->mByteCodeSize = (uint32_t)fsGetStreamFileSize(&fh);
+		pOut->pByteCode = tf_malloc(pOut->mByteCodeSize);
+		fsReadFromStream(&fh, pOut->pByteCode, pOut->mByteCodeSize);
+		fsCloseStream(&fh);
+	}
+	else
+	{
+		FileStream fh = {};
+		// If for some reason the error file could not be created just log error msg
+		if (!fsOpenStreamFromPath(RD_SHADER_BINARIES, logFileName, FM_READ_BINARY, NULL, &fh))
+		{
+			LOGF(LogLevel::eERROR, "Failed to compile shader %s", filePath);
+		}
+		else
+		{
+			size_t size = fsGetStreamFileSize(&fh);
+			if (size)
+			{
+				char* errorLog = (char*)tf_malloc(size + 1);
+				errorLog[size] = 0;
+				fsReadFromStream(&fh, errorLog, size);
+				LOGF(LogLevel::eERROR, "Failed to compile shader %s with error\n%s", filePath, errorLog);
+			}
+			fsCloseStream(&fh);
+		}
+	}
+
+	tf_free(glslangValidator);
+}
+
+bool load_shader_stage_byte_code(
+	Renderer* pRenderer, ShaderTarget target, ShaderStage stage, ShaderStage allStages, const ShaderStageLoadDesc& loadDesc,
+	uint32_t macroCount, ShaderMacro* pMacros, BinaryShaderStageDesc* pOut)
+{
+	eastl::string rendererApi;
+	switch (gSelectedRendererApi)
+	{
+#if defined(DIRECT3D12)
+	case RENDERER_API_D3D12: rendererApi = "DIRECT3D12"; break;
+#endif
+#if defined(DIRECT3D11)
+	case RENDERER_API_D3D11: rendererApi = "DIRECT3D11"; break;
+#endif
+#if defined(VULKAN)
+	case RENDERER_API_VULKAN: rendererApi = "VULKAN"; break;
+#endif
+#if defined(GLES)
+	case RENDERER_API_GLES: rendererApi = "GLES"; break;
+#endif
+#if defined(METAL)
+	case RENDERER_API_METAL:
+#endif
+#if defined(ORBIS)
+	case RENDERER_API_ORBIS:
+#endif
+#if defined(PROSPERO)
+	case RENDERER_API_PROSPERO:
+#endif
+	default: break;
+	}
+
+	eastl::string code;
+#if !defined(NX64)
+	time_t timeStamp = 0;
+#endif
+
+	eastl::string fileNameAPI = rendererApi.size() > 0 ? rendererApi + '/' + loadDesc.pFileName : loadDesc.pFileName;
+#if !defined(METAL) && !defined(NX64)
+	FileStream    sourceFileStream = {};
+	bool          sourceExists = fsOpenStreamFromPath(RD_SHADER_SOURCES, fileNameAPI.c_str(), FM_READ_BINARY, NULL, &sourceFileStream);
+	ASSERT(sourceExists && "No source shader present for file");
+
+	if (!process_source_file(pRenderer->pName, &sourceFileStream, fileNameAPI.c_str(), &sourceFileStream, timeStamp, code))
+	{
+		fsCloseStream(&sourceFileStream);
+		return false;
+	}
+#elif defined(NX64)
+	eastl::string shaderDefines;
+	for (uint32_t i = 0; i < macroCount; ++i)
+	{
+		shaderDefines += (eastl::string(pMacros[i].definition) + pMacros[i].value);
+	}
+
+	uint32_t hash = 0;
+	MurmurHash3_x86_32(shaderDefines.c_str(), shaderDefines.size(), 0, &hash);
+
+	char hashStringBuffer[14];
+	sprintf(&hashStringBuffer[0], "%zu.%s", (size_t)hash, "spv");
+
+	char nxShaderPath[FS_MAX_PATH] = {};
+	fsAppendPathExtension(fileNameAPI.c_str(), hashStringBuffer, nxShaderPath);
+	FileStream sourceFileStream = {};
+	bool sourceExists = fsOpenStreamFromPath(RD_SHADER_SOURCES, nxShaderPath, FM_READ_BINARY, NULL, &sourceFileStream);
+	ASSERT(sourceExists);
+
+	if (sourceExists)
+	{
+		pOut->mByteCodeSize = (uint32_t)fsGetStreamFileSize(&sourceFileStream);
+		pOut->pByteCode = tf_malloc(pOut->mByteCodeSize);
+		fsReadFromStream(&sourceFileStream, pOut->pByteCode, pOut->mByteCodeSize);
+
+		LOGF(LogLevel::eINFO, "Shader loaded: '%s' with macro string '%s'", nxShaderPath, shaderDefines.c_str());
+		fsCloseStream(&sourceFileStream);
+		return true;
+	}
+	else
+	{
+		LOGF(LogLevel::eERROR, "Failed to load shader: '%s' with macro string '%s'", nxShaderPath, shaderDefines.c_str());
+		return false;
+	}
+
+#else
+	char metalShaderPath[FS_MAX_PATH] = {};
+	fsAppendPathExtension(loadDesc.pFileName, "metal", metalShaderPath);
+	FileStream sourceFileStream = {};
+	bool sourceExists = fsOpenStreamFromPath(RD_SHADER_SOURCES, metalShaderPath, FM_READ_BINARY, NULL, &sourceFileStream);
+	ASSERT(sourceExists);
+	if (!process_source_file(pRenderer->pName, &sourceFileStream, metalShaderPath, &sourceFileStream, timeStamp, code))
+	{
+		fsCloseStream(&sourceFileStream);
+		return false;
+	}
+#endif
+
+#ifndef NX64
+	eastl::string shaderDefines;
+	// Apply user specified macros
+	for (uint32_t i = 0; i < macroCount; ++i)
+	{
+		shaderDefines += (eastl::string(pMacros[i].definition) + pMacros[i].value);
+	}
+#ifdef _DEBUG
+	shaderDefines += "_DEBUG";
+#else
+	shaderDefines += "NDEBUG";
+#endif
+
+	char extension[FS_MAX_PATH] = { 0 };
+	fsGetPathExtension(loadDesc.pFileName, extension);
+	char fileName[FS_MAX_PATH] = { 0 };
+	fsGetPathFileName(loadDesc.pFileName, fileName);
+	eastl::string appName(pRenderer->pName);
+
+#ifdef __linux__
+	appName.make_lower();
+	appName = appName != pRenderer->pName ? appName : appName + "_";
+#endif
+
+	eastl::string binaryShaderComponent = rendererApi + "_" + fileName +
+		eastl::string().sprintf("_%zu", eastl::string_hash<eastl::string>()(shaderDefines)) + extension +
+		eastl::string().sprintf("%u", target);
+#ifdef DIRECT3D11
+	if (gSelectedRendererApi == RENDERER_API_D3D11)
+		binaryShaderComponent += eastl::string().sprintf("%u", pRenderer->mD3D11.mFeatureLevel);
+#endif
+	binaryShaderComponent += ".bin";
+
+	// Shader source is newer than binary
+	if (!check_for_byte_code(pRenderer, binaryShaderComponent.c_str(), timeStamp, pOut))
+	{
+		switch (gSelectedRendererApi)
+		{
+#if defined(DIRECT3D12)
+		case RENDERER_API_D3D12:
+			d3d12_compileShader(
+				pRenderer, target, stage, fileNameAPI.c_str(), (uint32_t)code.size(), code.c_str(),
+				loadDesc.mFlags & SHADER_STAGE_LOAD_FLAG_ENABLE_PS_PRIMITIVEID, macroCount, pMacros, pOut, loadDesc.pEntryPointName);
+
+			if (!save_byte_code(binaryShaderComponent.c_str(), (char*)(pOut->pByteCode), pOut->mByteCodeSize))
+			{
+				LOGF(LogLevel::eWARNING, "Failed to save byte code for file %s", loadDesc.pFileName);
+			}
+			break;
+#endif
+#if defined(DIRECT3D11)
+		case RENDERER_API_D3D11:
+			d3d11_compileShader(
+				pRenderer, target, stage, fileNameAPI.c_str(), (uint32_t)code.size(), code.c_str(),
+				loadDesc.mFlags & SHADER_STAGE_LOAD_FLAG_ENABLE_PS_PRIMITIVEID, macroCount, pMacros, pOut, loadDesc.pEntryPointName);
+
+			if (!save_byte_code(binaryShaderComponent.c_str(), (char*)(pOut->pByteCode), pOut->mByteCodeSize))
+			{
+				LOGF(LogLevel::eWARNING, "Failed to save byte code for file %s", loadDesc.pFileName);
+			}
+			break;
+#endif
+#if defined(VULKAN)
+		case RENDERER_API_VULKAN:
+#if defined(__ANDROID__)
+			vk_compileShader(
+				pRenderer, stage, (uint32_t)code.size(), code.c_str(), binaryShaderComponent.c_str(), macroCount, pMacros, pOut,
+				loadDesc.pEntryPointName);
+			if (!save_byte_code(binaryShaderComponent.c_str(), (char*)(pOut->pByteCode), pOut->mByteCodeSize))
+			{
+				LOGF(LogLevel::eWARNING, "Failed to save byte code for file %s", loadDesc.pFileName);
+			}
+#else
+			vk_compileShader(
+				pRenderer, target, stage, fileNameAPI.c_str(), binaryShaderComponent.c_str(), macroCount, pMacros, pOut,
+				loadDesc.pEntryPointName);
+#endif
+			break;
+#endif
+#if defined(METAL)
+		case RENDERER_API_METAL:
+			mtl_compileShader(
+				pRenderer, metalShaderPath, binaryShaderComponent.c_str(), macroCount, pMacros, pOut, loadDesc.pEntryPointName);
+			break;
+#endif
+#if defined(GLES)
+		case RENDERER_API_GLES:
+			gl_compileShader(
+				pRenderer, target, stage, loadDesc.pFileName, (uint32_t)code.size(), code.c_str(), binaryShaderComponent.c_str(),
+				macroCount, pMacros, pOut, loadDesc.pEntryPointName);
+			break;
+#endif
+#if defined(ORBIS)
+		case RENDERER_API_ORBIS:
+			orbis_compileShader(
+				pRenderer, stage, allStages, loadDesc.pFileName, binaryShaderComponent.c_str(), macroCount, pMacros, pOut,
+				loadDesc.pEntryPointName);
+			break;
+#endif
+#if defined(PROSPERO)
+		case RENDERER_API_PROSPERO:
+			prospero_compileShader(
+				pRenderer, stage, allStages, loadDesc.pFileName, binaryShaderComponent.c_str(), macroCount, pMacros, pOut,
+				loadDesc.pEntryPointName);
+			break;
+#endif
+		default: break;
+		}
+
+#if !defined(PROSPERO) && !defined(ORBIS)
+		if (!pOut->pByteCode)
+		{
+			LOGF(eERROR, "Error while generating bytecode for shader %s", loadDesc.pFileName);
+			fsCloseStream(&sourceFileStream);
+			ASSERT(false);
+			return false;
+		}
+#endif
+	}
+#else    // ndef NX64
+#endif
+
+	fsCloseStream(&sourceFileStream);
+	return true;
+}
+
+bool find_shader_stage(const char* extension, BinaryShaderDesc* pBinaryDesc, BinaryShaderStageDesc** pOutStage, ShaderStage* pStage)
+{
+	if (stricmp(extension, "vert") == 0)
+	{
+		*pOutStage = &pBinaryDesc->mVert;
+		*pStage = SHADER_STAGE_VERT;
+	}
+	else if (stricmp(extension, "frag") == 0)
+	{
+		*pOutStage = &pBinaryDesc->mFrag;
+		*pStage = SHADER_STAGE_FRAG;
+	}
+#ifndef METAL
+	else if (stricmp(extension, "tesc") == 0)
+	{
+		*pOutStage = &pBinaryDesc->mHull;
+		*pStage = SHADER_STAGE_HULL;
+	}
+	else if (stricmp(extension, "tese") == 0)
+	{
+		*pOutStage = &pBinaryDesc->mDomain;
+		*pStage = SHADER_STAGE_DOMN;
+	}
+	else if (stricmp(extension, "geom") == 0)
+	{
+		*pOutStage = &pBinaryDesc->mGeom;
+		*pStage = SHADER_STAGE_GEOM;
+	}
+#endif
+	else if (stricmp(extension, "comp") == 0)
+	{
+		*pOutStage = &pBinaryDesc->mComp;
+		*pStage = SHADER_STAGE_COMP;
+	}
+	else if (
+		(stricmp(extension, "rgen") == 0) || (stricmp(extension, "rmiss") == 0) || (stricmp(extension, "rchit") == 0) ||
+		(stricmp(extension, "rint") == 0) || (stricmp(extension, "rahit") == 0) || (stricmp(extension, "rcall") == 0))
+	{
+		*pOutStage = &pBinaryDesc->mComp;
+#ifndef METAL
+		* pStage = SHADER_STAGE_RAYTRACING;
+#else
+		* pStage = SHADER_STAGE_COMP;
+#endif
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void addShader(Renderer* pRenderer, const ShaderLoadDesc* pDesc, Shader** ppShader)
+{
+#ifndef DIRECT3D11
+	if ((uint32_t)pDesc->mTarget > pRenderer->mShaderTarget)
+	{
+		eastl::string error = eastl::string().sprintf(
+			"Requested shader target (%u) is higher than the shader target that the renderer supports (%u). Shader wont be compiled",
+			(uint32_t)pDesc->mTarget, (uint32_t)pRenderer->mShaderTarget);
+		LOGF(LogLevel::eERROR, error.c_str());
+		return;
+	}
+#endif
+
+#ifndef TARGET_IOS
+	BinaryShaderDesc binaryDesc = {};
+#if defined(METAL)
+	char* pSources[SHADER_STAGE_COUNT] = {};
+#endif
+
+	ShaderStageLoadFlags combinedFlags = SHADER_STAGE_LOAD_FLAG_NONE;
+
+	ShaderStage stages = SHADER_STAGE_NONE;
+	for (uint32_t i = 0; i < SHADER_STAGE_COUNT; ++i)
+	{
+		if (pDesc->mStages[i].pFileName && pDesc->mStages[i].pFileName[0] != 0)
+		{
+			ShaderStage            stage;
+			BinaryShaderStageDesc* pStage = NULL;
+			char                   ext[FS_MAX_PATH] = { 0 };
+			fsGetPathExtension(pDesc->mStages[i].pFileName, ext);
+			if (find_shader_stage(ext, &binaryDesc, &pStage, &stage))
+				stages |= stage;
+		}
+	}
+	for (uint32_t i = 0; i < SHADER_STAGE_COUNT; ++i)
+	{
+		if (pDesc->mStages[i].pFileName && pDesc->mStages[i].pFileName[0] != 0)
+		{
+			const char* fileName = pDesc->mStages[i].pFileName;
+
+			ShaderStage            stage;
+			BinaryShaderStageDesc* pStage = NULL;
+			char                   ext[FS_MAX_PATH] = { 0 };
+			fsGetPathExtension(fileName, ext);
+			if (find_shader_stage(ext, &binaryDesc, &pStage, &stage))
+			{
+				combinedFlags |= pDesc->mStages[i].mFlags;
+				uint32_t macroCount = pDesc->mStages[i].mMacroCount + pRenderer->mBuiltinShaderDefinesCount;
+#if defined(QUEST_VR)
+				if (pDesc->mStages[i].mFlags & SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW)
+					++macroCount;
+#endif
+
+				eastl::vector<ShaderMacro> macros(macroCount);
+				for (uint32_t macro = 0; macro < pRenderer->mBuiltinShaderDefinesCount; ++macro)
+					macros[macro] = pRenderer->pBuiltinShaderDefines[macro];
+				for (uint32_t macro = 0; macro < pDesc->mStages[i].mMacroCount; ++macro)
+					macros[pRenderer->mBuiltinShaderDefinesCount + macro] = pDesc->mStages[i].pMacros[macro];
+#if defined(QUEST_VR)
+				if (pDesc->mStages[i].mFlags & SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW)
+					macros[pRenderer->mBuiltinShaderDefinesCount + pDesc->mStages[i].mMacroCount] = { "VR_MULTIVIEW_ENABLED", "1" };
+#endif
+
+				if (!load_shader_stage_byte_code(
+					pRenderer, pDesc->mTarget, stage, stages, pDesc->mStages[i], macroCount, macros.data(), pStage))
+					return;
+
+				binaryDesc.mStages |= stage;
+#if defined(METAL)
+				if (pDesc->mStages[i].pEntryPointName)
+					pStage->pEntryPoint = pDesc->mStages[i].pEntryPointName;
+				else
+					pStage->pEntryPoint = "stageMain";
+
+				char metalFileName[FS_MAX_PATH] = { 0 };
+				fsAppendPathExtension(fileName, "metal", metalFileName);
+
+				FileStream fh = {};
+				fsOpenStreamFromPath(RD_SHADER_SOURCES, metalFileName, FM_READ_BINARY, NULL, &fh);
+				size_t metalFileSize = fsGetStreamFileSize(&fh);
+				pSources[i] = (char*)tf_malloc(metalFileSize + 1);
+				pStage->pSource = pSources[i];
+				pStage->mSourceSize = (uint32_t)metalFileSize;
+				fsReadFromStream(&fh, pSources[i], metalFileSize);
+				pSources[i][metalFileSize] = 0;    // Ensure the shader text is null-terminated
+				fsCloseStream(&fh);
+#elif !defined(ORBIS) && !defined(PROSPERO)
+				if (pDesc->mStages[i].pEntryPointName)
+					pStage->pEntryPoint = pDesc->mStages[i].pEntryPointName;
+				else
+					pStage->pEntryPoint = "main";
+#endif
+			}
+		}
+	}
+
+#if defined(PROSPERO)
+	binaryDesc.mOwnByteCode = true;
+#endif
+
+	binaryDesc.mConstantCount = pDesc->mConstantCount;
+	binaryDesc.pConstants = pDesc->pConstants;
+
+	addShaderBinary(pRenderer, &binaryDesc, ppShader);
+
+#if defined(QUEST_VR)
+	if (ppShader)
+	{
+		(*ppShader)->mIsMultiviewVR = (combinedFlags & SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW) != 0;
+	}
+#endif
+
+#if defined(METAL)
+	for (uint32_t i = 0; i < SHADER_STAGE_COUNT; ++i)
+	{
+		if (pSources[i])
+		{
+			tf_free(pSources[i]);
+		}
+	}
+#endif
+#if !defined(PROSPERO)
+	if (binaryDesc.mStages & SHADER_STAGE_VERT)
+		tf_free(binaryDesc.mVert.pByteCode);
+	if (binaryDesc.mStages & SHADER_STAGE_FRAG)
+		tf_free(binaryDesc.mFrag.pByteCode);
+	if (binaryDesc.mStages & SHADER_STAGE_COMP)
+		tf_free(binaryDesc.mComp.pByteCode);
+#if !defined(METAL)
+	if (binaryDesc.mStages & SHADER_STAGE_TESC)
+		tf_free(binaryDesc.mHull.pByteCode);
+	if (binaryDesc.mStages & SHADER_STAGE_TESE)
+		tf_free(binaryDesc.mDomain.pByteCode);
+	if (binaryDesc.mStages & SHADER_STAGE_GEOM)
+		tf_free(binaryDesc.mGeom.pByteCode);
+	if (binaryDesc.mStages & SHADER_STAGE_RAYTRACING)
+		tf_free(binaryDesc.mComp.pByteCode);
+#endif
+#endif
+#else
+	// Binary shaders are not supported on iOS.
+	ShaderDesc desc = {};
+	eastl::string codes[SHADER_STAGE_COUNT] = {};
+	ShaderMacro* pMacros[SHADER_STAGE_COUNT] = {};
+	for (uint32_t i = 0; i < SHADER_STAGE_COUNT; ++i)
+	{
+		if (pDesc->mStages[i].pFileName && strlen(pDesc->mStages[i].pFileName))
+		{
+			ShaderStage stage;
+			ShaderStageDesc* pStage = NULL;
+			if (find_shader_stage(pDesc->mStages[i].pFileName, &desc, &pStage, &stage))
+			{
+				char metalFileName[FS_MAX_PATH] = { 0 };
+				fsAppendPathExtension(pDesc->mStages[i].pFileName, "metal", metalFileName);
+				FileStream fh = {};
+				bool sourceExists = fsOpenStreamFromPath(RD_SHADER_SOURCES, metalFileName, FM_READ_BINARY, NULL, &fh);
+				ASSERT(sourceExists);
+
+				pStage->pName = pDesc->mStages[i].pFileName;
+				time_t timestamp = 0;
+				process_source_file(pRenderer->pName, &fh, metalFileName, &fh, timestamp, codes[i]);
+				pStage->pCode = codes[i].c_str();
+				if (pDesc->mStages[i].pEntryPointName)
+					pStage->pEntryPoint = pDesc->mStages[i].pEntryPointName;
+				else
+					pStage->pEntryPoint = "stageMain";
+				// Apply user specified shader macros
+				pStage->mMacroCount = pDesc->mStages[i].mMacroCount + pRenderer->mBuiltinShaderDefinesCount;
+				pMacros[i] = (ShaderMacro*)alloca(pStage->mMacroCount * sizeof(ShaderMacro));
+				pStage->pMacros = pMacros[i];
+				for (uint32_t j = 0; j < pDesc->mStages[i].mMacroCount; j++)
+					pMacros[i][j] = pDesc->mStages[i].pMacros[j];
+				// Apply renderer specified shader macros
+				for (uint32_t j = 0; j < pRenderer->mBuiltinShaderDefinesCount; j++)
+				{
+					pMacros[i][pDesc->mStages[i].mMacroCount + j] = pRenderer->pBuiltinShaderDefines[j];
+				}
+				fsCloseStream(&fh);
+				desc.mStages |= stage;
+			}
+		}
+	}
+
+	desc.mConstantCount = pDesc->mConstantCount;
+	desc.pConstants = pDesc->pConstants;
+
+	addIosShader(pRenderer, &desc, ppShader);
+#endif
+}

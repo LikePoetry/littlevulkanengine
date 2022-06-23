@@ -439,6 +439,31 @@ void fsGetParentPath(const char* path, char* output)
 	return;
 }
 
+/// Get `path`'s file name, without extension or parent path.
+void fsGetPathFileName(const char* path, char* output) 
+{
+	const size_t pathLength = strlen(path);
+	ASSERT(pathLength != 0);
+
+	char parentPath[FS_MAX_PATH] = { 0 };
+	fsGetParentPath(path, parentPath);
+	size_t parentPathLength = strlen(parentPath);
+
+	const char directorySeparator = fsGetDirectorySeparator();
+	const char forwardSlash = '/';    // Forward slash is accepted on all platforms as a path component.
+	if (parentPathLength < pathLength && (path[parentPathLength] == directorySeparator || path[parentPathLength] == forwardSlash))
+	{
+		parentPathLength += 1;
+	}
+
+	char extension[FS_MAX_PATH] = { 0 };
+	fsGetPathExtension(path, extension);
+	const size_t extensionLength = extension[0] != 0 ? strlen(extension) + 1 : 0;    // Include dot in the length
+	const size_t outputLength = pathLength - parentPathLength - extensionLength;
+	strncpy(output, path + parentPathLength, outputLength);
+	output[outputLength] = '\0';
+}
+
 /// Returns `path`'s extension, excluding the '.'.
 void fsGetPathExtension(const char* path, char* output)
 {
@@ -517,6 +542,27 @@ void fsSetPathForResourceDir(IFileSystem* pIO, ResourceMount mount, ResourceDire
 		}
 	}
 
+}
+
+
+/************************************************************************/
+// MARK: - File Queries
+/************************************************************************/
+/// Gets the time of last modification for the file at `fileName`, within 'resourceDir'.
+time_t fsGetLastModifiedTime(ResourceDirectory resourceDir, const char* fileName) 
+{
+	const char* resourcePath = fsGetResourceDirectory(resourceDir);
+	char filePath[FS_MAX_PATH] = { 0 };
+	fsAppendPathComponent(resourcePath, fileName, filePath);
+
+	// Fix paths for Windows 7 - needs to be generalized and propagated
+	//eastl::string path = eastl::string(filePath);
+	//auto directoryPos = path.find(":");
+	//eastl::string cleanPath = path.substr(directoryPos - 1);
+
+	struct stat fileInfo = { 0 };
+	stat(filePath, &fileInfo);
+	return fileInfo.st_mtime;
 }
 
 /************************************************************************/

@@ -234,6 +234,33 @@ typedef struct TextureCopyDesc
 	uint64_t mBufferOffset;
 } TextureCopyDesc;
 
+typedef enum ShaderStageLoadFlags
+{
+	SHADER_STAGE_LOAD_FLAG_NONE = 0x0,
+	/// D3D12 only - Enable passing primitive id to pixel shader
+	SHADER_STAGE_LOAD_FLAG_ENABLE_PS_PRIMITIVEID = 0x1,
+	/// Creates VR multisample variant of the shader
+	SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW = 0x2,
+} ShaderStageLoadFlags;
+MAKE_ENUM_FLAG(uint32_t, ShaderStageLoadFlags);
+
+typedef struct ShaderStageLoadDesc
+{    //-V802 : Very user-facing struct, and order is highly important to convenience
+	const char* pFileName;
+	ShaderMacro* pMacros;
+	uint32_t             mMacroCount;
+	const char* pEntryPointName;
+	ShaderStageLoadFlags mFlags;
+} ShaderStageLoadDesc;
+
+typedef struct ShaderLoadDesc
+{
+	ShaderStageLoadDesc   mStages[SHADER_STAGE_COUNT];
+	ShaderTarget          mTarget;
+	const ShaderConstant* pConstants;
+	uint32_t              mConstantCount;
+} ShaderLoadDesc;
+
 typedef struct ResourceLoaderDesc
 {
 	uint64_t mBufferSize;
@@ -242,6 +269,10 @@ typedef struct ResourceLoaderDesc
 } ResourceLoaderDesc;
 
 extern ResourceLoaderDesc gDefaultResourceLoaderDesc;
+
+// MARK: - Resource Loader Functions
+
+void initResourceLoaderInterface(Renderer* pRenderer, ResourceLoaderDesc* pDesc = nullptr);
 
 /// If token is NULL, the resource will be available when allResourceLoadsCompleted() returns true.
 /// If token is non NULL, the resource will be available after isTokenCompleted(token) returns true.
@@ -255,3 +286,6 @@ void endUpdateResource(TextureUpdateDesc* pTexture, SyncToken* token);
 SyncToken getLastTokenCompleted();
 bool      isTokenCompleted(const SyncToken* token);
 void      waitForToken(const SyncToken* token);
+
+/// Either loads the cached shader bytecode or compiles the shader to create new bytecode depending on whether source is newer than binary
+void addShader(Renderer* pRenderer, const ShaderLoadDesc* pDesc, Shader** pShader);

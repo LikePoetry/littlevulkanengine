@@ -32,6 +32,23 @@ static T* tf_placement_new(void* ptr, Args&&... args)
 {
 	return new (ptr) T(eastl::forward<Args>(args)...);
 }
+
+template <typename T, typename... Args>
+static T* tf_new_internal(const char* f, int l, const char* sf, Args&&... args)
+{
+	T* ptr = (T*)tf_memalign_internal(alignof(T), sizeof(T), f, l, sf);
+	return tf_placement_new<T>(ptr, eastl::forward<Args>(args)...);
+}
+
+template <typename T>
+static void tf_delete_internal(T* ptr, const char* f, int l, const char* sf)
+{
+	if (ptr)
+	{
+		ptr->~T();
+		tf_free_internal(ptr, f, l, sf);
+	}
+}
 #endif
 
 #ifndef tf_malloc
@@ -51,4 +68,13 @@ static T* tf_placement_new(void* ptr, Args&&... args)
 #endif
 #ifndef tf_free
 #define tf_free(ptr) tf_free_internal(ptr, __FILE__, __LINE__, __FUNCTION__)
+#endif
+
+#ifdef __cplusplus
+#ifndef tf_new
+#define tf_new(ObjectType, ...) tf_new_internal<ObjectType>(__FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
+#endif
+#ifndef tf_delete
+#define tf_delete(ptr) tf_delete_internal(ptr, __FILE__, __LINE__, __FUNCTION__)
+#endif
 #endif

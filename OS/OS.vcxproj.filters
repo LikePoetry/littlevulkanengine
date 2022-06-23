@@ -120,6 +120,9 @@
     <ClInclude Include="Interfaces\IOperatingSystem.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
+    <ClInclude Include="Interfaces\IScreenshot.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
     <ClInclude Include="Interfaces\IScripting.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
@@ -179,10 +182,16 @@
     <ClCompile Include="Core\CPUConfig.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="Core\Screenshot.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
     <ClCompile Include="Core\Timer.c">
       <Filter>Core</Filter>
     </ClCompile>
     <ClCompile Include="FileSystem\FileSystem.cpp">
+      <Filter>FileSystem</Filter>
+    </ClCompile>
+    <ClCompile Include="FileSystem\SystemRun.cpp">
       <Filter>FileSystem</Filter>
     </ClCompile>
     <ClCompile Include="Fonts\FontSystem.cpp">

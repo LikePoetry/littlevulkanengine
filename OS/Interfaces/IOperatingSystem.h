@@ -154,3 +154,6 @@ void onRequestReload();
 
 typedef int32_t(*CustomMessageProcessor)(WindowDesc* pWindow, void* msg);
 void setCustomMessageProcessor(CustomMessageProcessor proc);
+
+/// @param stdOutFile The file to which the output of the command should be written. May be NULL.
+int systemRun(const char* command, const char** arguments, size_t argumentCount, const char* stdOutFile);

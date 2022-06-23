@@ -112,6 +112,7 @@
     <ClInclude Include="Interfaces\ILog.h" />
     <ClInclude Include="Interfaces\IMemory.h" />
     <ClInclude Include="Interfaces\IOperatingSystem.h" />
+    <ClInclude Include="Interfaces\IScreenshot.h" />
     <ClInclude Include="Interfaces\IScripting.h" />
     <ClInclude Include="Interfaces\IThread.h" />
     <ClInclude Include="Interfaces\ITime.h" />
@@ -133,8 +134,10 @@
     <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Camera\CameraController.cpp" />
     <ClCompile Include="Core\CPUConfig.cpp" />
+    <ClCompile Include="Core\Screenshot.cpp" />
     <ClCompile Include="Core\Timer.c" />
     <ClCompile Include="FileSystem\FileSystem.cpp" />
+    <ClCompile Include="FileSystem\SystemRun.cpp" />
     <ClCompile Include="Fonts\FontSystem.cpp" />
     <ClCompile Include="Fonts\stbtt.cpp" />
     <ClCompile Include="Input\InputSystem.cpp" />

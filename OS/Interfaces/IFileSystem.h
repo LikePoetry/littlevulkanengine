@@ -214,6 +214,8 @@ extern "C"
 	/// Get `path`'s parent path, excluding the end seperator. 
 	void fsGetParentPath(const char* path, char* output);
 
+	/// Get `path`'s file name, without extension or parent path.
+	void fsGetPathFileName(const char* path, char* output);
 	/// Returns `path`'s extension, excluding the '.'.
 	void fsGetPathExtension(const char* path, char* output);
 	/************************************************************************/
@@ -230,6 +232,13 @@ extern "C"
 	/// Bundled resource folders should only be used for Read operations.
 	/// NOTE: A `resourceDir` can only be set once.
 	void fsSetPathForResourceDir(IFileSystem* pIO, ResourceMount mount, ResourceDirectory resourceDir, const char* bundledFolder);
+
+	/************************************************************************/
+// MARK: - File Queries
+/************************************************************************/
+/// Gets the time of last modification for the file at `fileName`, within 'resourceDir'.
+	time_t fsGetLastModifiedTime(ResourceDirectory resourceDir, const char* fileName);
+
 
 	/// Converts `mode` to a string which is compatible with the C standard library conventions for `fopen`
 	/// parameter strings.

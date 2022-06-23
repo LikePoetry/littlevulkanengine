@@ -184,3 +184,45 @@ project "Sandbox"
 		defines ""
 		runtime "Release"
 		optimize "on"
+
+group "Tools"
+project "SpirvTools"
+		location "SpirvTools"
+		kind "StaticLib"
+		language "C++"
+		cppdialect "C++17"
+		staticruntime "on"
+	
+		targetdir("bin/" ..outputdir.. "/%{prj.name}")
+		objdir("bin-int/" ..outputdir.. "/%{prj.name}")
+	
+		files
+		{
+			"%{prj.name}/*/**.h",
+			"%{prj.name}/*/**.cpp"
+		}
+		
+		defines
+		{
+			"_CRT_SECURE_NO_WARNINGS",
+			"_WINDOWS"
+		}
+	
+		includedirs
+		{
+			"OS",
+			"SpirvTools"
+		}
+	
+		filter "system:windows"
+			systemversion "latest"
+	
+		filter "configurations:Debug"
+			defines ""
+			runtime "Debug"
+			symbols "on"
+	
+		filter "configurations:Release"
+			defines ""
+			runtime "Release"
+			optimize "on"

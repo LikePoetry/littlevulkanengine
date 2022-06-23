@@ -7,6 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OS", "OS\OS.vcxproj", "{C77
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Renderer", "Renderer\Renderer.vcxproj", "{7CCE658F-689B-C09A-91B4-AE427DE0F528}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{DD376B17-49ED-E30C-D2E1-DDE33E96DA10}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SpirvTools", "SpirvTools\SpirvTools.vcxproj", "{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -25,8 +29,15 @@ Global
 		{7CCE658F-689B-C09A-91B4-AE427DE0F528}.Debug|x64.Build.0 = Debug|x64
 		{7CCE658F-689B-C09A-91B4-AE427DE0F528}.Release|x64.ActiveCfg = Release|x64
 		{7CCE658F-689B-C09A-91B4-AE427DE0F528}.Release|x64.Build.0 = Release|x64
+		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}.Debug|x64.ActiveCfg = Debug|x64
+		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}.Debug|x64.Build.0 = Debug|x64
+		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}.Release|x64.ActiveCfg = Release|x64
+		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701} = {DD376B17-49ED-E30C-D2E1-DDE33E96DA10}
 	EndGlobalSection
 EndGlobal

@@ -1081,6 +1081,14 @@ typedef struct ShaderMacro
 	const char* value;
 } ShaderMacro;
 
+/// ShaderConstant only supported by Vulkan and Metal APIs
+typedef struct ShaderConstant
+{
+	const void* pValue;
+	uint32_t       mIndex;
+	uint32_t       mSize;
+} ShaderConstant;
+
 typedef enum ShadingRate
 {
 	SHADING_RATE_NOT_SUPPORTED = 0x0,
@@ -1329,9 +1337,44 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 	uint32_t mGpuCount;
 }RendererContext;
 
+typedef struct BinaryShaderStageDesc
+{
+#if defined(PROSPERO)
+	ProsperoBinaryShaderStageDesc mStruct;
+#else
+	/// Byte code array
+	void* pByteCode;
+	uint32_t    mByteCodeSize;
+	const char* pEntryPoint;
+#if defined(METAL)
+	// Shader source is needed for reflection
+	char* pSource;
+	uint32_t mSourceSize;
+#endif
+#if defined(GLES)
+	GLuint   mShader;
+#endif
+#endif
+} BinaryShaderStageDesc;
+
+typedef struct BinaryShaderDesc
+{
+	ShaderStage           mStages;
+	/// Specify whether shader will own byte code memory
+	uint32_t              mOwnByteCode : 1;
+	BinaryShaderStageDesc mVert;
+	BinaryShaderStageDesc mFrag;
+	BinaryShaderStageDesc mGeom;
+	BinaryShaderStageDesc mHull;
+	BinaryShaderStageDesc mDomain;
+	BinaryShaderStageDesc mComp;
+	const ShaderConstant* pConstants;
+	uint32_t              mConstantCount;
+} BinaryShaderDesc;
+
 typedef struct Shader
 {
-	ShaderStage mStage : 31;
+	ShaderStage mStages : 31;
 	bool mIsMultiviewVR : 1;
 	uint32_t mNumThreadsPerGroup[3];
 	union
@@ -1550,5 +1593,9 @@ void vk_addSampler(Renderer* pRenderer, const SamplerDesc* pDesc, Sampler** ppSa
 
 void vk_setTextureName(Renderer* pRenderer, Texture* pTexture, const char* pName);
 void vk_setBufferName(Renderer* pRenderer, Buffer* pBuffer, const char* pName);
+
+void vk_addSemaphore(Renderer* pRenderer, Semaphore** ppSemaphore);
+
+void vk_addShaderBinary(Renderer* pRenderer, const BinaryShaderDesc* pDesc, Shader** ppShaderProgram);
 
 

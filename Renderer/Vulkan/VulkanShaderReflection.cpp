@@ -1,0 +1,203 @@
+#include "../Include/RendererConfig.h"
+#include "../Include/IRenderer.h"
+
+
+#include "../../OS/Interfaces/ILog.h"
+#include "../../OS/Interfaces/IMemory.h"
+
+void vk_createShaderReflection(const uint8_t* shaderCode, uint32_t shaderSize, ShaderStage shaderStage, ShaderReflection* pOutReflection)
+{
+	if (pOutReflection == NULL)
+	{
+		LOGF(LogLevel::eERROR, "Create Shader Refection failed. Invalid reflection output!");
+		return;    // TODO: error msg
+	}
+
+	CrossCompiler cc;
+
+	CreateCrossCompiler((const uint32_t*)shaderCode, shaderSize / sizeof(uint32_t), &cc);
+
+	ReflectEntryPoint(&cc);
+	ReflectShaderResources(&cc);
+	ReflectShaderVariables(&cc);
+
+	if (shaderStage == SHADER_STAGE_COMP)
+	{
+		ReflectComputeShaderWorkGroupSize(
+			&cc, &pOutReflection->mNumThreadsPerGroup[0], &pOutReflection->mNumThreadsPerGroup[1], &pOutReflection->mNumThreadsPerGroup[2]);
+	}
+	else if (shaderStage == SHADER_STAGE_TESC)
+	{
+		ReflectHullShaderControlPoint(&cc, &pOutReflection->mNumControlPoint);
+	}
+
+	// lets find out the size of the name pool we need
+	// also get number of resources while we are at it
+	uint32_t namePoolSize = 0;
+	uint32_t vertexInputCount = 0;
+	uint32_t resourceCount = 0;
+	uint32_t variablesCount = 0;
+
+	namePoolSize += cc.EntryPointSize + 1;
+
+	for (uint32_t i = 0; i < cc.ShaderResourceCount; ++i)
+	{
+		SPIRV_Resource* resource = cc.pShaderResouces + i;
+
+		// filter out what we don't use
+		if (!filterResource(resource, shaderStage))
+		{
+			namePoolSize += resource->name_size + 1;
+
+			if (resource->type == SPIRV_Resource_Type::SPIRV_TYPE_STAGE_INPUTS && shaderStage == SHADER_STAGE_VERT)
+			{
+				++vertexInputCount;
+			}
+			else
+			{
+				++resourceCount;
+			}
+		}
+	}
+
+	for (uint32_t i = 0; i < cc.UniformVariablesCount; ++i)
+	{
+		SPIRV_Variable* variable = cc.pUniformVariables + i;
+
+		// check if parent buffer was filtered out
+		bool parentFiltered = filterResource(cc.pShaderResouces + variable->parent_index, shaderStage);
+
+		// filter out what we don't use
+		// TODO: log warning
+		if (variable->is_used && !parentFiltered)
+		{
+			namePoolSize += variable->name_size + 1;
+			++variablesCount;
+		}
+	}
+
+	// we now have the size of the memory pool and number of resources
+	char* namePool = NULL;
+	if (namePoolSize)
+		namePool = (char*)tf_calloc(namePoolSize, 1);
+	char* pCurrentName = namePool;
+
+	pOutReflection->pEntryPoint = pCurrentName;
+	ASSERT(pCurrentName);
+	memcpy(pCurrentName, cc.pEntryPoint, cc.EntryPointSize); //-V575
+	pCurrentName += cc.EntryPointSize + 1;
+
+	VertexInput* pVertexInputs = NULL;
+	// start with the vertex input
+	if (shaderStage == SHADER_STAGE_VERT && vertexInputCount > 0)
+	{
+		pVertexInputs = (VertexInput*)tf_malloc(sizeof(VertexInput) * vertexInputCount);
+
+		uint32_t j = 0;
+		for (uint32_t i = 0; i < cc.ShaderResourceCount; ++i)
+		{
+			SPIRV_Resource* resource = cc.pShaderResouces + i;
+
+			// filter out what we don't use
+			if (!filterResource(resource, shaderStage) && resource->type == SPIRV_Resource_Type::SPIRV_TYPE_STAGE_INPUTS)
+			{
+				pVertexInputs[j].size = resource->size;
+				pVertexInputs[j].name = pCurrentName;
+				pVertexInputs[j].name_size = resource->name_size;
+				// we dont own the names memory we need to copy it to the name pool
+				memcpy(pCurrentName, resource->name, resource->name_size);
+				pCurrentName += resource->name_size + 1;
+				++j;
+			}
+		}
+	}
+
+	uint32_t* indexRemap = NULL;
+	ShaderResource* pResources = NULL;
+	// continue with resources
+	if (resourceCount)
+	{
+		indexRemap = (uint32_t*)tf_malloc(sizeof(uint32_t) * cc.ShaderResourceCount);
+		pResources = (ShaderResource*)tf_malloc(sizeof(ShaderResource) * resourceCount);
+
+		uint32_t j = 0;
+		for (uint32_t i = 0; i < cc.ShaderResourceCount; ++i)
+		{
+			// set index remap
+			indexRemap[i] = (uint32_t)-1;
+
+			SPIRV_Resource* resource = cc.pShaderResouces + i;
+
+			// filter out what we don't use
+			if (!filterResource(resource, shaderStage) && resource->type != SPIRV_Resource_Type::SPIRV_TYPE_STAGE_INPUTS)
+			{
+				// set new index
+				indexRemap[i] = j;
+
+				pResources[j].type = sSPIRV_TO_DESCRIPTOR[resource->type];
+				pResources[j].set = resource->set;
+				pResources[j].reg = resource->binding;
+				pResources[j].size = resource->size;
+				pResources[j].used_stages = shaderStage;
+
+				pResources[j].name = pCurrentName;
+				pResources[j].name_size = resource->name_size;
+				pResources[j].dim = sSPIRV_TO_RESOURCE_DIM[resource->dim];
+				// we dont own the names memory we need to copy it to the name pool
+				memcpy(pCurrentName, resource->name, resource->name_size);
+				pCurrentName += resource->name_size + 1;
+				++j;
+			}
+		}
+	}
+
+	ShaderVariable* pVariables = NULL;
+	// now do variables
+	if (variablesCount)
+	{
+		pVariables = (ShaderVariable*)tf_malloc(sizeof(ShaderVariable) * variablesCount);
+
+		uint32_t j = 0;
+		for (uint32_t i = 0; i < cc.UniformVariablesCount; ++i)
+		{
+			SPIRV_Variable* variable = cc.pUniformVariables + i;
+
+			// check if parent buffer was filtered out
+			bool parentFiltered = filterResource(cc.pShaderResouces + variable->parent_index, shaderStage);
+
+			// filter out what we don't use
+			if (variable->is_used && !parentFiltered)
+			{
+				pVariables[j].offset = variable->offset;
+				pVariables[j].size = variable->size;
+				ASSERT(indexRemap);
+				pVariables[j].parent_index = indexRemap[variable->parent_index]; //-V522
+
+				pVariables[j].name = pCurrentName;
+				pVariables[j].name_size = variable->name_size;
+				// we dont own the names memory we need to copy it to the name pool
+				memcpy(pCurrentName, variable->name, variable->name_size);
+				pCurrentName += variable->name_size + 1;
+				++j;
+			}
+		}
+	}
+
+	tf_free(indexRemap);
+	DestroyCrossCompiler(&cc);
+
+	// all refection structs should be built now
+	pOutReflection->mShaderStage = shaderStage;
+
+	pOutReflection->pNamePool = namePool;
+	pOutReflection->mNamePoolSize = namePoolSize;
+
+	pOutReflection->pVertexInputs = pVertexInputs;
+	pOutReflection->mVertexInputsCount = vertexInputCount;
+
+	pOutReflection->pShaderResources = pResources;
+	pOutReflection->mShaderResourceCount = resourceCount;
+
+	pOutReflection->pVariables = pVariables;
+	pOutReflection->mVariableCount = variablesCount;
+}

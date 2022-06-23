@@ -62,6 +62,9 @@
     <ClCompile Include="..\ThirdParty\OpenSource\meshoptimizer\src\vfetchoptimizer.cpp">
       <Filter>ThirdParty\OpenSource\meshoptimizer\src</Filter>
     </ClCompile>
+    <ClCompile Include="Source\CommonShaderReflection.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Renderer.cpp">
       <Filter>Source</Filter>
     </ClCompile>
@@ -72,6 +75,9 @@
       <Filter>Vulkan</Filter>
     </ClCompile>
     <ClCompile Include="Vulkan\VulkanRaytracing.cpp">
+      <Filter>Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="Vulkan\VulkanShaderReflection.cpp">
       <Filter>Vulkan</Filter>
     </ClCompile>
   </ItemGroup>

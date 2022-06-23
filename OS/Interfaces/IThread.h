@@ -36,9 +36,25 @@ extern "C"
 		void* pHandle;
 	} ConditionVariable;
 
+	bool initConditionVariable(ConditionVariable* cv);
+
 	void waitConditionVariable(ConditionVariable* cv, const Mutex* pMutex, uint32_t timeout);
 	void wakeOneConditionVariable(ConditionVariable* cv);
 	void wakeAllConditionVariable(ConditionVariable* cv);
+
+	typedef void (*ThreadFunction)(void*);
+
+#define MAX_THREAD_AFFINITY_MASK_BITS 31
+
+	typedef struct ThreadDesc
+	{
+		/// Work item description and thread index (Main thread => 0)
+		ThreadFunction pFunc;
+		void* pData;
+		uint32_t       mHasAffinityMask : 1;
+		uint32_t       mAffinityMask : MAX_THREAD_AFFINITY_MASK_BITS;
+		char           mThreadName[MAX_THREAD_NAME_LENGTH];
+	} ThreadDesc;
 
 	void setMainThread(void);
 	void setCurrentThreadName(const char* name);
@@ -47,6 +63,8 @@ extern "C"
 	void getCurrentThreadName(char* buffer, int buffer_size);
 
 	typedef void* ThreadHandle;
+
+	void         initThread(ThreadDesc* pItem, ThreadHandle* pHandle);
 #ifdef __cplusplus
 }    // extern "C"
 
