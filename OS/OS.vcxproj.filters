@@ -146,6 +146,9 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL\EAStdC</Filter>
+    </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EASprintf.cpp">
       <Filter>ThirdParty\OpenSource\EASTL\EAStdC</Filter>
     </ClCompile>
@@ -155,7 +158,25 @@
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp">
       <Filter>ThirdParty\OpenSource\EASTL</Filter>
     </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\fixed_pool.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\hashtable.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\intrusive_list.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\numeric_limits.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\red_black_tree.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\string.cpp">
+      <Filter>ThirdParty\OpenSource\EASTL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\thread_support.cpp">
       <Filter>ThirdParty\OpenSource\EASTL</Filter>
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp">

@@ -122,10 +122,17 @@
     <ClInclude Include="UI\imgui_user.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EASprintf.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\allocator_forge.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\assert.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\fixed_pool.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\hashtable.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\intrusive_list.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\numeric_limits.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\red_black_tree.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\string.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\EASTL\thread_support.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
     <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp" />

@@ -157,41 +157,7 @@ extern "C"
 		void* pUser;
 	};
 
-	/************************************************************************/
-	// MARK: - File IO
-	/************************************************************************/
-	/// Opens the file at `filePath` using the mode `mode`, returning a new FileStream that can be used
-	/// to read from or modify the file. May return NULL if the file could not be opened.
-	bool fsOpenStreamFromPath(const ResourceDirectory resourceDir, const char* fileName,
-		FileMode mode, const char* password, FileStream* pOut);
-
-	/// Opens a memory buffer as a FileStream, returning a stream that must be closed with `fsCloseStream`.
-	bool fsOpenStreamFromMemory(const void* buffer, size_t bufferSize, FileMode mode, bool owner, FileStream* pOut);
-
-	/// Closes and invalidates the file stream.
-	bool fsCloseStream(FileStream* stream);
-
-	/// Gets the current seek position in the file.
-	ssize_t fsGetStreamSeekPosition(const FileStream* stream);
-
-	/// Seeks to the specified position in the file, using `baseOffset` as the reference offset.
-	bool fsSeekStream(FileStream* pStream, SeekBaseOffset baseOffset, ssize_t seekOffset);
-
-	/// Returns the number of bytes read.
-	size_t fsReadFromStream(FileStream* stream, void* outputBuffer, size_t bufferSizeInBytes);
-
-	/// Reads at most `bufferSizeInBytes` bytes from sourceBuffer and writes them into the file.
-	/// Returns the number of bytes written.
-	size_t fsWriteToStream(FileStream* stream, const void* sourceBuffer, size_t byteCount);
-
-	/// Gets the current size of the file. Returns -1 if the size is unknown or unavailable.
-	ssize_t fsGetStreamFileSize(const FileStream* stream);
-
-	/// Flushes all writes to the file stream to the underlying subsystem.
-	bool fsFlushStream(FileStream* stream);
-
-	/// Returns whether the current seek position is at the end of the file stream.
-	bool fsStreamAtEnd(const FileStream* stream);
+	
 
 	/// Default file system using C File IO or Bundled File IO (Android) based on the ResourceDirectory
 	extern IFileSystem* pSystemFileIO;
@@ -232,6 +198,42 @@ extern "C"
 	/// Bundled resource folders should only be used for Read operations.
 	/// NOTE: A `resourceDir` can only be set once.
 	void fsSetPathForResourceDir(IFileSystem* pIO, ResourceMount mount, ResourceDirectory resourceDir, const char* bundledFolder);
+
+	/************************************************************************/
+	// MARK: - File IO
+	/************************************************************************/
+	/// Opens the file at `filePath` using the mode `mode`, returning a new FileStream that can be used
+	/// to read from or modify the file. May return NULL if the file could not be opened.
+	bool fsOpenStreamFromPath(const ResourceDirectory resourceDir, const char* fileName,
+		FileMode mode, const char* password, FileStream* pOut);
+
+	/// Opens a memory buffer as a FileStream, returning a stream that must be closed with `fsCloseStream`.
+	bool fsOpenStreamFromMemory(const void* buffer, size_t bufferSize, FileMode mode, bool owner, FileStream* pOut);
+
+	/// Closes and invalidates the file stream.
+	bool fsCloseStream(FileStream* stream);
+
+	/// Gets the current seek position in the file.
+	ssize_t fsGetStreamSeekPosition(const FileStream* stream);
+
+	/// Seeks to the specified position in the file, using `baseOffset` as the reference offset.
+	bool fsSeekStream(FileStream* pStream, SeekBaseOffset baseOffset, ssize_t seekOffset);
+
+	/// Returns the number of bytes read.
+	size_t fsReadFromStream(FileStream* stream, void* outputBuffer, size_t bufferSizeInBytes);
+
+	/// Reads at most `bufferSizeInBytes` bytes from sourceBuffer and writes them into the file.
+	/// Returns the number of bytes written.
+	size_t fsWriteToStream(FileStream* stream, const void* sourceBuffer, size_t byteCount);
+
+	/// Gets the current size of the file. Returns -1 if the size is unknown or unavailable.
+	ssize_t fsGetStreamFileSize(const FileStream* stream);
+
+	/// Flushes all writes to the file stream to the underlying subsystem.
+	bool fsFlushStream(FileStream* stream);
+
+	/// Returns whether the current seek position is at the end of the file stream.
+	bool fsStreamAtEnd(const FileStream* stream);
 
 	/************************************************************************/
 // MARK: - File Queries

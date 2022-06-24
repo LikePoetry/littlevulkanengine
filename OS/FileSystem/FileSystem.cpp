@@ -643,7 +643,6 @@ bool fsOpenStreamFromPath(const ResourceDirectory resourceDir, const char* fileN
 		LOGF(LogLevel::eERROR, "Trying to get an unset resource directory '%d', make sure the resourceDirectory is set on start of the application", resourceDir);
 		return false;
 	}
-
 	return io->Open(io, resourceDir, fileName, mode, password, pOut);
 }
 

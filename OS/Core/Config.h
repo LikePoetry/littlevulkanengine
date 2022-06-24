@@ -3,7 +3,14 @@
 
 # define PTR_SIZE 8
 
+#ifdef __cplusplus
+#define FORGE_CONSTEXPR constexpr
+#define FORGE_EXTERN_C extern "C"
+#else
 #define FORGE_CONSTEXPR
+#define FORGE_EXTERN_C
+#endif
+
 
 #define UNREF_PARAM(x) (x)
 #define ALIGNAS(x) __declspec( align( x ) ) 
