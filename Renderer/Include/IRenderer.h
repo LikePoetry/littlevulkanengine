@@ -148,6 +148,7 @@ typedef struct Pipeline           Pipeline;
 typedef struct Buffer             Buffer;
 typedef struct Texture            Texture;
 typedef struct RenderTarget       RenderTarget;
+typedef struct Shader             Shader;
 typedef struct DescriptorSet      DescriptorSet;
 typedef struct DescriptorIndexMap DescriptorIndexMap;
 
@@ -421,6 +422,7 @@ typedef enum BufferCreationFlags
 	BUFFER_CREATION_FLAG_HOST_VISIBLE = 0x100,
 	BUFFER_CREATION_FLAG_HOST_COHERENT = 0x200,
 } BufferCreationFlags;
+MAKE_ENUM_FLAG(uint32_t, BufferCreationFlags)
 
 typedef enum TextureCreationFlags
 {
@@ -797,6 +799,26 @@ typedef struct DEFINE_ALIGNED(DescriptorInfo, 16)
 	} mVulkan;
 } DescriptorInfo;
 COMPILE_ASSERT(sizeof(DescriptorInfo) == 4 * sizeof(uint64_t));
+
+typedef enum RootSignatureFlags
+{
+	/// Default flag
+	ROOT_SIGNATURE_FLAG_NONE = 0,
+	/// Local root signature used mainly in raytracing shaders
+	ROOT_SIGNATURE_FLAG_LOCAL_BIT = 0x1,
+} RootSignatureFlags;
+MAKE_ENUM_FLAG(uint32_t, RootSignatureFlags)
+
+typedef struct RootSignatureDesc
+{
+	Shader** ppShaders;
+	uint32_t           mShaderCount;
+	uint32_t           mMaxBindlessTextures;
+	const char** ppStaticSamplerNames;
+	Sampler** ppStaticSamplers;
+	uint32_t           mStaticSamplerCount;
+	RootSignatureFlags mFlags;
+} RootSignatureDesc;
 
 typedef struct DEFINE_ALIGNED(RootSignature, 64)
 {
@@ -1337,6 +1359,14 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 	uint32_t mGpuCount;
 }RendererContext;
 
+typedef struct DescriptorSetDesc
+{
+	RootSignature* pRootSignature;
+	DescriptorUpdateFrequency mUpdateFrequency;
+	uint32_t                  mMaxSets;
+	uint32_t                  mNodeIndex;
+} DescriptorSetDesc;
+
 typedef struct BinaryShaderStageDesc
 {
 #if defined(PROSPERO)
@@ -1598,4 +1628,13 @@ void vk_addSemaphore(Renderer* pRenderer, Semaphore** ppSemaphore);
 
 void vk_addShaderBinary(Renderer* pRenderer, const BinaryShaderDesc* pDesc, Shader** ppShaderProgram);
 
+void vk_addRootSignature(Renderer* pRenderer, const RootSignatureDesc* pRootSignatureDesc, RootSignature** ppRootSignature);
 
+void vk_addDescriptorSet(Renderer* pRenderer, const DescriptorSetDesc* pDesc, DescriptorSet** ppDescriptorSet);
+
+
+
+/************************************************************************/
+/************************************************************************/
+uint32_t getDescriptorIndexFromName(const RootSignature* pRootSignature, const char* pName);
+// clang-format on

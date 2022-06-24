@@ -570,30 +570,51 @@ static UploadFunctionResult updateTexture(Renderer* pRenderer, CopyEngine* pCopy
 {
 	// When this call comes from updateResource, staging buffer data is already filled
 	// All that is left to do is record and execute the Copy commands
-	bool dataAlreadyFilled = texUpdateDesc.mRange.pBuffer ? true : false;
+	bool                  dataAlreadyFilled = texUpdateDesc.mRange.pBuffer ? true : false;
 	Texture* texture = texUpdateDesc.pTexture;
 	const TinyImageFormat fmt = (TinyImageFormat)texture->mFormat;
-	FileStream stream = texUpdateDesc.mStream;
+	FileStream            stream = texUpdateDesc.mStream;
 	Cmd* cmd = acquireCmd(pCopyEngine, activeSet);
 
 	ASSERT(pCopyEngine->pQueue->mNodeIndex == texUpdateDesc.pTexture->mNodeIndex);
 
 	const uint32_t sliceAlignment = util_get_texture_subresource_alignment(pRenderer, fmt);
 	const uint32_t rowAlignment = util_get_texture_row_alignment(pRenderer);
-	const uint32_t requiredSize = util_get_surface_size(fmt, texture->mWidth, texture->mHeight, texture->mDepth, rowAlignment, sliceAlignment, texUpdateDesc.mBaseMipLevel,
+	const uint64_t requiredSize = util_get_surface_size(
+		fmt, texture->mWidth, texture->mHeight, texture->mDepth, rowAlignment, sliceAlignment, texUpdateDesc.mBaseMipLevel,
 		texUpdateDesc.mMipLevels, texUpdateDesc.mBaseArrayLayer, texUpdateDesc.mLayerCount);
 
+#if defined(VULKAN)
 	TextureBarrier barrier;
 	if (gSelectedRendererApi == RENDERER_API_VULKAN)
 	{
 		barrier = { texture, RESOURCE_STATE_UNDEFINED, RESOURCE_STATE_COPY_DEST };
 		vk_cmdResourceBarrier(cmd, 0, NULL, 1, &barrier, 0, NULL);
 	}
+#endif
 
-	MappedMemoryRange upload = dataAlreadyFilled
-		? texUpdateDesc.mRange
-		: allocateStagingMemory(requiredSize, sliceAlignment, texture->mNodeIndex);
+	MappedMemoryRange upload = dataAlreadyFilled ? texUpdateDesc.mRange : allocateStagingMemory(requiredSize, sliceAlignment, texture->mNodeIndex);
 	uint64_t          offset = 0;
+
+	// #TODO: Investigate - fsRead crashes if we pass the upload buffer mapped address. Allocating temporary buffer as a workaround. Does NX support loading from disk to GPU shared memory?
+#ifdef NX64
+	void* nxTempBuffer = NULL;
+	if (!dataAlreadyFilled)
+	{
+		size_t remainingBytes = fsGetStreamFileSize(&stream) - fsGetStreamSeekPosition(&stream);
+		nxTempBuffer = tf_malloc(remainingBytes);
+		ssize_t bytesRead = fsReadFromStream(&stream, nxTempBuffer, remainingBytes);
+		if (bytesRead != remainingBytes)
+		{
+			fsCloseStream(&stream);
+			tf_free(nxTempBuffer);
+			return UPLOAD_FUNCTION_RESULT_INVALID_REQUEST;
+		}
+
+		fsCloseStream(&stream);
+		fsOpenStreamFromMemory(nxTempBuffer, remainingBytes, FM_READ_BINARY, true, &stream);
+	}
+#endif
 
 	if (!upload.pData)
 	{
@@ -666,19 +687,23 @@ static UploadFunctionResult updateTexture(Renderer* pRenderer, CopyEngine* pCopy
 				subresourceDesc.mArrayLayer = layer;
 				subresourceDesc.mMipLevel = mip;
 				subresourceDesc.mSrcOffset = upload.mOffset + offset;
+#if defined(DIRECT3D11) || defined(METAL) || defined(VULKAN)
 				subresourceDesc.mRowPitch = subRowPitch;
 				subresourceDesc.mSlicePitch = subSlicePitch;
+#endif
 				vk_cmdUpdateSubresource(cmd, texture, upload.pBuffer, &subresourceDesc);
 				offset += subDepth * subSlicePitch;
 			}
 		}
 	}
 
+#if defined(VULKAN)
 	if (gSelectedRendererApi == RENDERER_API_VULKAN)
 	{
 		barrier = { texture, RESOURCE_STATE_COPY_DEST, RESOURCE_STATE_SHADER_RESOURCE };
 		vk_cmdResourceBarrier(cmd, 0, NULL, 1, &barrier, 0, NULL);
 	}
+#endif
 
 	if (stream.pIO)
 	{
@@ -686,7 +711,6 @@ static UploadFunctionResult updateTexture(Renderer* pRenderer, CopyEngine* pCopy
 	}
 
 	return UPLOAD_FUNCTION_RESULT_COMPLETED;
-
 }
 
 static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, const UpdateRequest& pTextureUpdate)
@@ -702,16 +726,24 @@ static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 	if (pTextureDesc->pFileName)
 	{
 		FileStream stream = {};
-		char fileName[FS_MAX_PATH] = {};
-		bool success = false;
+		char       fileName[FS_MAX_PATH] = {};
+		bool       success = false;
+
 		TextureUpdateDescInternal updateDesc = {};
 		TextureContainerType      container = pTextureDesc->mContainer;
 		static const char* extensions[] = { NULL, "dds", "ktx", "gnf", "basis", "svt" };
 
 		if (TEXTURE_CONTAINER_DEFAULT == container)
 		{
+#if defined(TARGET_IOS) || defined(__ANDROID__) || defined(NX64)
+			container = TEXTURE_CONTAINER_KTX;
+#elif defined(_WINDOWS) || defined(XBOX) || defined(__APPLE__) || defined(__linux__)
 			container = TEXTURE_CONTAINER_DDS;
+#elif defined(ORBIS) || defined(PROSPERO)
+			container = TEXTURE_CONTAINER_GNF;
+#endif
 		}
+
 		TextureDesc textureDesc = {};
 		textureDesc.pName = pTextureDesc->pFileName;
 		textureDesc.mFlags |= pTextureDesc->mCreationFlag;
@@ -729,13 +761,28 @@ static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 		{
 		case TEXTURE_CONTAINER_DDS:
 		{
+#if defined(XBOX)
+			success = fsOpenStreamFromPath(RD_TEXTURES, fileName, FM_READ_BINARY, pTextureDesc->pFilePassword, &stream);
+			uint32_t res = 1;
+			if (success)
+			{
+				extern uint32_t loadXDDSTexture(
+					Renderer * pRenderer, FileStream * stream, const char* name, TextureCreationFlags flags, Texture * *ppTexture);
+				res = loadXDDSTexture(pRenderer, &stream, fileName, pTextureDesc->mCreationFlag, pTextureDesc->ppTexture);
+				fsCloseStream(&stream);
+			}
+
+			return res ? UPLOAD_FUNCTION_RESULT_INVALID_REQUEST : UPLOAD_FUNCTION_RESULT_COMPLETED;
+#else
 			success = fsOpenStreamFromPath(RD_TEXTURES, fileName, FM_READ_BINARY, pTextureDesc->pFilePassword, &stream);
 			if (success)
 			{
 				success = loadDDSTextureDesc(&stream, &textureDesc);
 			}
+#endif
 			break;
-		}case TEXTURE_CONTAINER_KTX:
+		}
+		case TEXTURE_CONTAINER_KTX:
 		{
 			success = fsOpenStreamFromPath(RD_TEXTURES, fileName, FM_READ_BINARY, pTextureDesc->pFilePassword, &stream);
 			if (success)
@@ -769,7 +816,19 @@ static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 		}
 		case TEXTURE_CONTAINER_GNF:
 		{
+#if defined(ORBIS) || defined(PROSPERO)
+			success = fsOpenStreamFromPath(RD_TEXTURES, fileName, FM_READ_BINARY, pTextureDesc->pFilePassword, &stream);
+			uint32_t res = 1;
+			if (success)
+			{
+				extern uint32_t loadGnfTexture(
+					Renderer * pRenderer, FileStream * stream, const char* name, TextureCreationFlags flags, Texture * *ppTexture);
+				res = loadGnfTexture(pRenderer, &stream, fileName, pTextureDesc->mCreationFlag, pTextureDesc->ppTexture);
+				fsCloseStream(&stream);
+			}
 
+			return res ? UPLOAD_FUNCTION_RESULT_INVALID_REQUEST : UPLOAD_FUNCTION_RESULT_COMPLETED;
+#endif
 		}
 		default: break;
 		}
@@ -793,8 +852,10 @@ static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 				}
 			}
 
+#if defined(VULKAN)
 			if (NULL != pTextureDesc->pDesc)
 				textureDesc.pVkSamplerYcbcrConversionInfo = pTextureDesc->pDesc->pVkSamplerYcbcrConversionInfo;
+#endif
 			vk_addTexture(pRenderer, &textureDesc, pTextureDesc->ppTexture);
 
 			updateDesc.mStream = stream;
@@ -809,6 +870,7 @@ static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 		/************************************************************************/
 		// Sparse Textures
 		/************************************************************************/
+#if defined(DIRECT3D12) || defined(VULKAN)
 		if (TEXTURE_CONTAINER_SVT == container)
 		{
 			if (fsOpenStreamFromPath(RD_TEXTURES, fileName, FM_READ_BINARY, pTextureDesc->pFilePassword, &stream))
@@ -850,6 +912,7 @@ static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 
 			return UPLOAD_FUNCTION_RESULT_INVALID_REQUEST;
 		}
+#endif
 	}
 
 	return UPLOAD_FUNCTION_RESULT_INVALID_REQUEST;
@@ -1599,6 +1662,15 @@ static void streamerThreadFunc(void* pThreadData)
 	ResourceLoader* pLoader = (ResourceLoader*)pThreadData;
 	ASSERT(pLoader);
 
+#if defined(GLES)
+	GLContext localContext;
+	if (gSelectedRendererApi == RENDERER_API_GLES)
+	{
+		if (!pLoader->mDesc.mSingleThreaded)
+			initGLContext(pLoader->ppRenderers[0]->mGLES.pConfig, &localContext, pLoader->ppRenderers[0]->mGLES.pContext);
+	}
+#endif
+
 	SyncToken maxToken = {};
 
 	while (pLoader->mRun)
@@ -1607,9 +1679,9 @@ static void streamerThreadFunc(void* pThreadData)
 
 		// Check for pending tokens
 		// Safe to use mTokenCounter as we are inside critical section
-		bool allTokensSingnaled = (pLoader->mTokenCompleted == tfrg_atomic64_load_relaxed(&pLoader->mTokenCounter));
+		bool allTokensSignaled = (pLoader->mTokenCompleted == tfrg_atomic64_load_relaxed(&pLoader->mTokenCounter));
 
-		while (!areTasksAvailable(pLoader) && allTokensSingnaled && pLoader->mRun)
+		while (!areTasksAvailable(pLoader) && allTokensSignaled && pLoader->mRun)
 		{
 			// No waiting if not running dedicated resource loader thread.
 			if (pLoader->mDesc.mSingleThreaded)
@@ -1747,12 +1819,27 @@ static void streamerThreadFunc(void* pThreadData)
 	for (uint32_t nodeIndex = 0; nodeIndex < pLoader->mGpuCount; ++nodeIndex)
 	{
 		streamerFlush(&pLoader->pCopyEngines[nodeIndex], pLoader->mNextSet);
-		{
-			vk_waitQueueIdle(pLoader->pCopyEngines[nodeIndex].pQueue);
-		}
+#if defined(DIRECT3D11)
+		if (gSelectedRendererApi != RENDERER_API_D3D11)
+#endif
+#if defined(GLES)
+			if (gSelectedRendererApi != RENDERER_API_GLES)
+#endif
+			{
+				vk_waitQueueIdle(pLoader->pCopyEngines[nodeIndex].pQueue);
+			}
 		cleanupCopyEngine(pLoader->ppRenderers[nodeIndex], &pLoader->pCopyEngines[nodeIndex]);
 	}
+
 	freeAllUploadMemory();
+
+#if defined(GLES)
+	if (gSelectedRendererApi == RENDERER_API_GLES)
+	{
+		if (!pResourceLoader->mDesc.mSingleThreaded)
+			removeGLContext(&localContext);
+	}
+#endif
 }
 
 static void addResourceLoader(Renderer** ppRenderers, uint32_t rendererCount, ResourceLoaderDesc* pDesc, ResourceLoader** ppLoader)
@@ -1805,6 +1892,15 @@ static void addResourceLoader(Renderer** ppRenderers, uint32_t rendererCount, Re
 	threadDesc.mAffinityMask = 1;
 #endif
 
+#if defined(DIRECT3D11)
+	if (gSelectedRendererApi == RENDERER_API_D3D11)
+		pLoader->mDesc.mSingleThreaded = true;
+#endif
+
+#if defined(ANDROID) && defined(USE_MULTIPLE_RENDER_APIS)
+	gUma = gSelectedRendererApi == RENDERER_API_VULKAN;
+#endif
+
 	// Create dedicated resource loader thread.
 	if (!pLoader->mDesc.mSingleThreaded)
 	{
@@ -1847,6 +1943,21 @@ static void queueTextureLoad(ResourceLoader* pLoader, TextureLoadDesc* pTextureU
 		*token = max(t, *token);
 }
 
+static void queueBufferBarrier(ResourceLoader* pLoader, Buffer* pBuffer, ResourceState state, SyncToken* token)
+{
+	uint32_t nodeIndex = pBuffer->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest{ BufferBarrier{ pBuffer, RESOURCE_STATE_UNDEFINED, state } });
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
+
 static void queueTextureBarrier(ResourceLoader* pLoader, Texture* pTexture, ResourceState state, SyncToken* token)
 {
 	uint32_t nodeIndex = pTexture->mNodeIndex;
@@ -1882,6 +1993,85 @@ static void waitForToken(ResourceLoader* pLoader, const SyncToken* token)
 void initResourceLoaderInterface(Renderer* pRenderer, ResourceLoaderDesc* pDesc)
 {
 	addResourceLoader(&pRenderer, 1, pDesc, &pResourceLoader);
+}
+
+void addResource(BufferLoadDesc* pBufferDesc, SyncToken* token) 
+{
+	uint64_t stagingBufferSize = pResourceLoader->pCopyEngines[0].bufferSize;
+	bool     update = pBufferDesc->pData || pBufferDesc->mForceReset;
+
+	ASSERT(stagingBufferSize > 0);
+	if (RESOURCE_MEMORY_USAGE_GPU_ONLY == pBufferDesc->mDesc.mMemoryUsage && !pBufferDesc->mDesc.mStartState && (!update || gUma))
+	{
+		pBufferDesc->mDesc.mStartState = util_determine_resource_start_state(&pBufferDesc->mDesc);
+		LOGF(
+			eWARNING, "Buffer start state not provided. Determined the start state as (%u) based on the provided BufferDesc",
+			(uint32_t)pBufferDesc->mDesc.mStartState);
+	}
+
+	if (pBufferDesc->mDesc.mMemoryUsage == RESOURCE_MEMORY_USAGE_GPU_ONLY && update && !gUma)
+	{
+		pBufferDesc->mDesc.mStartState = RESOURCE_STATE_COMMON;
+	}
+	vk_addBuffer(pResourceLoader->ppRenderers[pBufferDesc->mDesc.mNodeIndex], &pBufferDesc->mDesc, pBufferDesc->ppBuffer);
+
+	if (update)
+	{
+		if (!gUma && pBufferDesc->mDesc.mSize > stagingBufferSize && pBufferDesc->mDesc.mMemoryUsage == RESOURCE_MEMORY_USAGE_GPU_ONLY)
+		{
+			// The data is too large for a single staging buffer copy, so perform it in stages.
+
+			// Save the data parameter so we can restore it later.
+			const void* data = pBufferDesc->pData;
+
+			BufferUpdateDesc updateDesc = {};
+			updateDesc.pBuffer = *pBufferDesc->ppBuffer;
+			for (uint64_t offset = 0; offset < pBufferDesc->mDesc.mSize; offset += stagingBufferSize)
+			{
+				size_t chunkSize = (size_t)min(stagingBufferSize, pBufferDesc->mDesc.mSize - offset);
+				updateDesc.mSize = chunkSize;
+				updateDesc.mDstOffset = offset;
+				beginUpdateResource(&updateDesc);
+				if (pBufferDesc->mForceReset)
+				{
+					memset(updateDesc.pMappedData, 0, chunkSize);
+				}
+				else
+				{
+					ASSERT(data);
+					memcpy(updateDesc.pMappedData, (char*)data + offset, chunkSize);    //-V769
+				}
+				endUpdateResource(&updateDesc, token);
+			}
+		}
+		else
+		{
+			BufferUpdateDesc updateDesc = {};
+			updateDesc.pBuffer = *pBufferDesc->ppBuffer;
+			beginUpdateResource(&updateDesc);
+			if (pBufferDesc->mForceReset)
+			{
+				memset(updateDesc.pMappedData, 0, (size_t)pBufferDesc->mDesc.mSize);
+			}
+			else
+			{
+				ASSERT(!pBufferDesc->mDesc.mSize || pBufferDesc->pData);
+				if (pBufferDesc->pData)
+					memcpy(updateDesc.pMappedData, pBufferDesc->pData, (size_t)pBufferDesc->mDesc.mSize);
+			}
+			endUpdateResource(&updateDesc, token);
+		}
+	}
+	else
+	{
+		// Transition GPU buffer to desired state for Vulkan since all Vulkan resources are created in undefined state
+#if defined(VULKAN)
+		if (gSelectedRendererApi == RENDERER_API_VULKAN && pBufferDesc->mDesc.mMemoryUsage == RESOURCE_MEMORY_USAGE_GPU_ONLY &&
+			// Check whether this is required (user specified a state other than undefined / common)
+			(pBufferDesc->mDesc.mStartState != RESOURCE_STATE_UNDEFINED && pBufferDesc->mDesc.mStartState != RESOURCE_STATE_COMMON))
+			queueBufferBarrier(pResourceLoader, *pBufferDesc->ppBuffer, pBufferDesc->mDesc.mStartState, token);
+#endif
+	}
 }
 
 void addResource(TextureLoadDesc* pTextureDesc, SyncToken* token)
@@ -2034,6 +2224,7 @@ bool      isTokenCompleted(const SyncToken* token)
 
 void waitForToken(const SyncToken* token) { waitForToken(pResourceLoader, token); }
 
+#ifndef NX64
 static eastl::string fsReadFromStreamSTLLine(FileStream* stream)
 {
 	eastl::string result;
@@ -2065,6 +2256,7 @@ static eastl::string fsReadFromStreamSTLLine(FileStream* stream)
 
 	return result;
 }
+#endif
 
 bool check_for_byte_code(Renderer* pRenderer, const char* binaryShaderPath, time_t sourceTimeStamp, BinaryShaderStageDesc* pOut)
 {
@@ -2101,6 +2293,8 @@ bool check_for_byte_code(Renderer* pRenderer, const char* binaryShaderPath, time
 	return true;
 }
 
+// Function to generate the timestamp of this shader source file considering all include file timestamp
+#if !defined(NX64)
 static bool process_source_file(
 	const char* pAppName, FileStream* original, const char* filePath, FileStream* file, time_t& outTimeStamp, eastl::string& outCode)
 {
@@ -2208,6 +2402,7 @@ static bool process_source_file(
 
 	return true;
 }
+#endif
 
 // PC:
 // Vulkan has no builtin functions to compile source to spirv

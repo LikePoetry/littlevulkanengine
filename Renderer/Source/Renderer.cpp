@@ -58,3 +58,16 @@ void initRenderer(const char* appName, const RendererDesc* pSettings, Renderer**
 	}
 #endif
 }
+
+uint32_t getDescriptorIndexFromName(const RootSignature* pRootSignature, const char* pName)
+{
+	for (uint32_t i = 0; i < pRootSignature->mDescriptorCount; ++i)
+	{
+		if (!strcmp(pName, pRootSignature->pDescriptors[i].pName))
+		{
+			return i;
+		}
+	}
+
+	return UINT32_MAX;
+}

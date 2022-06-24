@@ -39,11 +39,99 @@ public:
 		return true;
 	}
 
+	bool initRender(Renderer* renderer, int width_, int height_, uint32_t ringSizeBytes) 
+	{
+		pRenderer = renderer;
+
+		// create image
+		TextureDesc desc = {};
+		desc.mArraySize = 1;
+		desc.mDepth = 1;
+		desc.mDescriptors = DESCRIPTOR_TYPE_TEXTURE;
+		desc.mFormat = TinyImageFormat_R8_UNORM;
+		desc.mHeight = height_;
+		desc.mMipLevels = 1;
+		desc.mSampleCount = SAMPLE_COUNT_1;
+		desc.mStartState = RESOURCE_STATE_COMMON;
+		desc.mWidth = width_;
+		desc.pName = "Fontstash Texture";
+		TextureLoadDesc loadDesc = {};
+		loadDesc.ppTexture = &pCurrentTexture;
+		loadDesc.pDesc = &desc;
+		addResource(&loadDesc, NULL);
+
+		/************************************************************************/
+		// Rendering resources
+		/************************************************************************/
+		SamplerDesc samplerDesc = { FILTER_LINEAR,
+									FILTER_LINEAR,
+									MIPMAP_MODE_NEAREST,
+									ADDRESS_MODE_CLAMP_TO_EDGE,
+									ADDRESS_MODE_CLAMP_TO_EDGE,
+									ADDRESS_MODE_CLAMP_TO_EDGE };
+		vk_addSampler(pRenderer, &samplerDesc, &pDefaultSampler);
+
+#ifdef ENABLE_TEXT_PRECOMPILED_SHADERS
+		BinaryShaderDesc binaryShaderDesc = {};
+		binaryShaderDesc.mStages = SHADER_STAGE_VERT | SHADER_STAGE_FRAG;
+		binaryShaderDesc.mVert.mByteCodeSize = sizeof(gShaderFontstash2DVert);
+		binaryShaderDesc.mVert.pByteCode = (char*)gShaderFontstash2DVert;
+		binaryShaderDesc.mVert.pEntryPoint = "main";
+		binaryShaderDesc.mFrag.mByteCodeSize = sizeof(gShaderFontstashFrag);
+		binaryShaderDesc.mFrag.pByteCode = (char*)gShaderFontstashFrag;
+		binaryShaderDesc.mFrag.pEntryPoint = "main";
+		addShaderBinary(pRenderer, &binaryShaderDesc, &pShaders[0]);
+		binaryShaderDesc.mVert.mByteCodeSize = sizeof(gShaderFontstash3DVert);
+		binaryShaderDesc.mVert.pByteCode = (char*)gShaderFontstash3DVert;
+		binaryShaderDesc.mVert.pEntryPoint = "main";
+		addShaderBinary(pRenderer, &binaryShaderDesc, &pShaders[1]);
+#else
+		ShaderLoadDesc text2DShaderDesc = {};
+		text2DShaderDesc.mStages[0] = { "fontstash2D.vert", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW };
+		text2DShaderDesc.mStages[1] = { "fontstash.frag", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW };
+		ShaderLoadDesc text3DShaderDesc = {};
+		text3DShaderDesc.mStages[0] = { "fontstash3D.vert", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW };
+		text3DShaderDesc.mStages[1] = { "fontstash.frag", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW };
+
+		addShader(pRenderer, &text2DShaderDesc, &pShaders[0]);
+		addShader(pRenderer, &text3DShaderDesc, &pShaders[1]);
+#endif
+
+		RootSignatureDesc textureRootDesc = { pShaders, 2 };
+		const char* pStaticSamplers[] = { "uSampler0" };
+		textureRootDesc.mStaticSamplerCount = 1;
+		textureRootDesc.ppStaticSamplerNames = pStaticSamplers;
+		textureRootDesc.ppStaticSamplers = &pDefaultSampler;
+		vk_addRootSignature(pRenderer, &textureRootDesc, &pRootSignature);
+		mRootConstantIndex = getDescriptorIndexFromName(pRootSignature, "uRootConstants");
+
+		addUniformGPURingBuffer(pRenderer, 65536, &pUniformRingBuffer, true);
+
+		DescriptorSetDesc setDesc = { pRootSignature, DESCRIPTOR_UPDATE_FREQ_NONE, 1 };
+		vk_addDescriptorSet(pRenderer, &setDesc, &pDescriptorSets);
+		DescriptorData setParams[1] = {};
+		setParams[0].pName = "uTex0";
+		setParams[0].ppTextures = &pCurrentTexture;
+		vk_updateDescriptorSet(pRenderer, 0, pDescriptorSets, 1, setParams);
+
+		BufferDesc vbDesc = {};
+		vbDesc.mDescriptors = DESCRIPTOR_TYPE_VERTEX_BUFFER;
+		vbDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_TO_GPU;
+		vbDesc.mSize = ringSizeBytes;
+		vbDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
+		addGPURingBuffer(pRenderer, &vbDesc, &pMeshRingBuffer);
+		/************************************************************************/
+		/************************************************************************/
+
+		return true;
+	}
+
 	static int  fonsImplementationGenerateTexture(void* userPtr, int width, int height);
 	static void fonsImplementationModifyTexture(void* userPtr, int* rect, const unsigned char* data);
 	static void fonsImplementationRenderText(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts);
 	static void fonsImplementationRemoveTexture(void* userPtr);
 
+	Renderer* pRenderer;
 	FONScontext* pContext;
 
 	const uint8_t* pPixels;
@@ -62,10 +150,12 @@ public:
 	mat4 mWorldMat;
 	Cmd* pCmd;
 
+	Shader* pShaders[2];
 	RootSignature* pRootSignature;
 	DescriptorSet* pDescriptorSets;
 	Pipeline* pPipelines[2];
-
+	/// Default states
+	Sampler* pDefaultSampler;
 
 	GPURingBuffer* pUniformRingBuffer;
 	GPURingBuffer* pMeshRingBuffer;
@@ -81,6 +171,8 @@ float                  m_fFontMaxSize;
 int32_t                mWidth;
 int32_t                mHeight;
 _Impl_FontStash* impl;
+
+bool renderInitialized = false;
 
 const int TextureAtlasDimension = 2048;
 
@@ -125,6 +217,65 @@ uint32_t fntGetRawFontDataSize(uint32_t fontID)
 		return UINT_MAX;
 	
 }
+
+bool initFontSystem(FontSystemDesc* pDesc) 
+{
+#ifdef ENABLE_FORGE_FONTS
+	ASSERT(!renderInitialized);
+
+	bool success = impl->initRender((Renderer*)pDesc->pRenderer, mWidth, mHeight, pDesc->mFontstashRingSizeBytes);
+	if (success)
+		renderInitialized = true;
+
+	return success;
+#else
+	return true;
+#endif
+}
+
+void fntDefineFonts(const FontDesc* pDescs, uint32_t count, uint32_t* pOutIDs)
+{
+#ifdef ENABLE_FORGE_FONTS
+	ASSERT(pDescs);
+	ASSERT(pOutIDs);
+	ASSERT(count > 0);
+
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		//uint32_t id = (uint32_t)pFontStash->defineFont(pDescs[i].pFontName, pDescs[i].pFontPath);
+		uint32_t id;
+		FONScontext* fs = impl->pContext;
+
+		FileStream fh = {};
+		if (fsOpenStreamFromPath(RD_FONTS, pDescs[i].pFontPath, FM_READ_BINARY, pDescs[i].pFontPassword, &fh))
+		{
+			ssize_t bytes = fsGetStreamFileSize(&fh);
+			void* buffer = tf_malloc(bytes);
+			fsReadFromStream(&fh, buffer, bytes);
+
+			// add buffer to font buffers for cleanup
+			impl->mFontBuffers.emplace_back(buffer);
+			impl->mFontBufferSizes.emplace_back((uint32_t)bytes);
+			impl->mFontNames.emplace_back(pDescs[i].pFontPath);
+
+			fsCloseStream(&fh);
+
+			id = fonsAddFontMem(fs, pDescs[i].pFontName, (unsigned char*)buffer, (int)bytes, 0);
+		}
+		else
+		{
+			id = INT32_MAX;
+		}
+
+		ASSERT(id != INT32_MAX);
+
+		pOutIDs[i] = id;
+	}
+
+
+#endif
+}
+
 
 // --  FONS renderer implementation --
 int _Impl_FontStash::fonsImplementationGenerateTexture(void* userPtr, int width, int height)

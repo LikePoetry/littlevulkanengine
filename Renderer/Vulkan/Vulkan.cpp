@@ -234,7 +234,7 @@ struct DynamicUniformData
 /************************************************************************/
 /************************************************************************/
 static inline VkPipelineColorBlendStateCreateInfo util_to_blend_desc(
-	const BlendStateDesc* pDesc, 
+	const BlendStateDesc* pDesc,
 	VkPipelineColorBlendAttachmentState* pAttachments)
 {
 	int blendDescIndex = 0;
@@ -382,7 +382,7 @@ static void add_descriptor_pool(Renderer* pRenderer, uint32_t numDescriptorSets,
 	CHECK_VKRESULT(vkCreateDescriptorPool(pRenderer->mVulkan.pVkDevice, &poolCreateInfo, &gVkAllocationCallbacks, pPool));
 }
 
-static void consume_descriptor_sets(VkDevice pDevice,VkDescriptorPool pPool,const VkDescriptorSetLayout* pLayouts, uint32_t numDescriptorSets, VkDescriptorSet** pSets)
+static void consume_descriptor_sets(VkDevice pDevice, VkDescriptorPool pPool, const VkDescriptorSetLayout* pLayouts, uint32_t numDescriptorSets, VkDescriptorSet** pSets)
 {
 	DECLARE_ZERO(VkDescriptorSetAllocateInfo, alloc_info);
 	alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -775,6 +775,59 @@ VkAccessFlags util_to_vk_access_flags(ResourceState state)
 	}
 	return ret;
 }
+
+VkDescriptorType util_to_vk_descriptor_type(DescriptorType type)
+{
+	switch (type)
+	{
+	case DESCRIPTOR_TYPE_UNDEFINED: ASSERT(false && "Invalid DescriptorInfo Type"); return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+	case DESCRIPTOR_TYPE_SAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
+	case DESCRIPTOR_TYPE_TEXTURE: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	case DESCRIPTOR_TYPE_UNIFORM_BUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	case DESCRIPTOR_TYPE_RW_TEXTURE: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	case DESCRIPTOR_TYPE_BUFFER:
+	case DESCRIPTOR_TYPE_RW_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	case DESCRIPTOR_TYPE_INPUT_ATTACHMENT: return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	case DESCRIPTOR_TYPE_TEXEL_BUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+	case DESCRIPTOR_TYPE_RW_TEXEL_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+	case DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+#ifdef VK_RAYTRACING_AVAILABLE
+	case DESCRIPTOR_TYPE_RAY_TRACING: return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+#endif
+	default:
+		ASSERT(false && "Invalid DescriptorInfo Type");
+		return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+		break;
+	}
+}
+
+VkShaderStageFlags util_to_vk_shader_stage_flags(ShaderStage stages)
+{
+	VkShaderStageFlags res = 0;
+	if (stages & SHADER_STAGE_ALL_GRAPHICS)
+		return VK_SHADER_STAGE_ALL_GRAPHICS;
+
+	if (stages & SHADER_STAGE_VERT)
+		res |= VK_SHADER_STAGE_VERTEX_BIT;
+	if (stages & SHADER_STAGE_GEOM)
+		res |= VK_SHADER_STAGE_GEOMETRY_BIT;
+	if (stages & SHADER_STAGE_TESE)
+		res |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+	if (stages & SHADER_STAGE_TESC)
+		res |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+	if (stages & SHADER_STAGE_COMP)
+		res |= VK_SHADER_STAGE_COMPUTE_BIT;
+#ifdef VK_RAYTRACING_AVAILABLE
+	if (stages & SHADER_STAGE_RAYTRACING)
+		res |=
+		(VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+			VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR | VK_SHADER_STAGE_CALLABLE_BIT_KHR);
+#endif
+
+	ASSERT(res != 0);
+	return res;
+}
+
 
 /************************************************************************/
 // Multi GPU Helper Functions
@@ -3989,7 +4042,7 @@ void vk_cmdDraw(Cmd* pCmd, uint32_t vertex_count, uint32_t first_vertex)
 	vkCmdDraw(pCmd->mVulkan.pVkCmdBuf, vertex_count, 1, first_vertex, 0);
 }
 
-void vk_addCmdPool(Renderer* pRenderer, const CmdPoolDesc* pDesc, CmdPool** ppCmdPool) 
+void vk_addCmdPool(Renderer* pRenderer, const CmdPoolDesc* pDesc, CmdPool** ppCmdPool)
 {
 	ASSERT(pRenderer);
 	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
@@ -4042,7 +4095,7 @@ void vk_removeCmd(Renderer* pRenderer, Cmd* pCmd)
 	SAFE_FREE(pCmd);
 }
 
-void vk_addCmd(Renderer* pRenderer, const CmdDesc* pDesc, Cmd** ppCmd) 
+void vk_addCmd(Renderer* pRenderer, const CmdDesc* pDesc, Cmd** ppCmd)
 {
 	ASSERT(pRenderer);
 	ASSERT(VK_NULL_HANDLE != pDesc->pPool);
@@ -4230,7 +4283,7 @@ void vk_removeSemaphore(Renderer* pRenderer, Semaphore* pSemaphore)
 	SAFE_FREE(pSemaphore);
 }
 
-void vk_addFence(Renderer* pRenderer, Fence** ppFence) 
+void vk_addFence(Renderer* pRenderer, Fence** ppFence)
 {
 	ASSERT(pRenderer);
 	ASSERT(ppFence);
@@ -4948,7 +5001,7 @@ void util_set_object_name(VkDevice pDevice, uint64_t handle, VkDebugReportObject
 #endif
 
 
-void vk_setBufferName(Renderer* pRenderer, Buffer* pBuffer, const char* pName) 
+void vk_setBufferName(Renderer* pRenderer, Buffer* pBuffer, const char* pName)
 {
 	ASSERT(pRenderer);
 	ASSERT(pBuffer);
@@ -5001,7 +5054,7 @@ void vk_addSemaphore(Renderer* pRenderer, Semaphore** ppSemaphore)
 	*ppSemaphore = pSemaphore;
 }
 
-void vk_addShaderBinary(Renderer* pRenderer, const BinaryShaderDesc* pDesc, Shader** ppShaderProgram) 
+void vk_addShaderBinary(Renderer* pRenderer, const BinaryShaderDesc* pDesc, Shader** ppShaderProgram)
 {
 	ASSERT(pRenderer);
 	ASSERT(pDesc);
@@ -5210,6 +5263,592 @@ void vk_addShaderBinary(Renderer* pRenderer, const BinaryShaderDesc* pDesc, Shad
 	createPipelineReflection(stageReflections, counter, pShaderProgram->pReflection);
 
 	*ppShaderProgram = pShaderProgram;
+}
+/************************************************************************/
+// Root Signature Functions
+/************************************************************************/
+typedef struct vk_UpdateFrequencyLayoutInfo
+{
+	/// Array of all bindings in the descriptor set
+	eastl::vector<VkDescriptorSetLayoutBinding> mBindings{};
+	/// Array of all descriptors in this descriptor set
+	eastl::vector<DescriptorInfo*> mDescriptors{};
+	/// Array of all descriptors marked as dynamic in this descriptor set (applicable to DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+	eastl::vector<DescriptorInfo*> mDynamicDescriptors{};
+	/// Hash map to get index of the descriptor in the root signature
+	eastl::hash_map<DescriptorInfo*, uint32_t> mDescriptorIndexMap{};
+} UpdateFrequencyLayoutInfo;
+
+void vk_addRootSignature(Renderer* pRenderer, const RootSignatureDesc* pRootSignatureDesc, RootSignature** ppRootSignature)
+{
+	ASSERT(pRenderer);
+	ASSERT(pRootSignatureDesc);
+	ASSERT(ppRootSignature);
+
+	static constexpr uint32_t                kMaxLayoutCount = DESCRIPTOR_UPDATE_FREQ_COUNT;
+	UpdateFrequencyLayoutInfo                layouts[kMaxLayoutCount] = {};
+	VkPushConstantRange                      pushConstants[SHADER_STAGE_COUNT] = {};
+	uint32_t                                 pushConstantCount = 0;
+	eastl::vector<ShaderResource>            shaderResources;
+	eastl::hash_map<eastl::string, Sampler*> staticSamplerMap;
+
+	for (uint32_t i = 0; i < pRootSignatureDesc->mStaticSamplerCount; ++i)
+	{
+		ASSERT(pRootSignatureDesc->ppStaticSamplers[i]);
+		staticSamplerMap.insert({ { pRootSignatureDesc->ppStaticSamplerNames[i], pRootSignatureDesc->ppStaticSamplers[i] } });
+	}
+
+	PipelineType       pipelineType = PIPELINE_TYPE_UNDEFINED;
+	DescriptorIndexMap indexMap;
+
+	// Collect all unique shader resources in the given shaders
+	// Resources are parsed by name (two resources named "XYZ" in two shaders will be considered the same resource)
+	for (uint32_t sh = 0; sh < pRootSignatureDesc->mShaderCount; ++sh)
+	{
+		PipelineReflection const* pReflection = pRootSignatureDesc->ppShaders[sh]->pReflection;
+
+		if (pReflection->mShaderStages & SHADER_STAGE_COMP)
+			pipelineType = PIPELINE_TYPE_COMPUTE;
+#ifdef VK_RAYTRACING_AVAILABLE
+		else if (pReflection->mShaderStages & SHADER_STAGE_RAYTRACING)
+			pipelineType = PIPELINE_TYPE_RAYTRACING;
+#endif
+		else
+			pipelineType = PIPELINE_TYPE_GRAPHICS;
+
+		for (uint32_t i = 0; i < pReflection->mShaderResourceCount; ++i)
+		{
+			ShaderResource const* pRes = &pReflection->pShaderResources[i];
+			// uint32_t              setIndex = pRes->set;
+
+			// if (pRes->type == DESCRIPTOR_TYPE_ROOT_CONSTANT)
+			// 	setIndex = 0;
+
+			eastl::string_hash_map<uint32_t>::iterator it = indexMap.mMap.find(pRes->name);
+			if (it == indexMap.mMap.end())
+			{
+				decltype(shaderResources)::iterator it = eastl::find(
+					shaderResources.begin(), shaderResources.end(), *pRes, [](const ShaderResource& a, const ShaderResource& b) {
+						return (a.type == b.type) && (a.used_stages == b.used_stages) && (((a.reg ^ b.reg) | (a.set ^ b.set)) == 0);
+					});
+				if (it == shaderResources.end())
+				{
+					indexMap.mMap.insert(pRes->name, (uint32_t)shaderResources.size());
+					shaderResources.push_back(*pRes);
+				}
+				else
+				{
+					ASSERT(pRes->type == it->type);
+					if (pRes->type != it->type)
+					{
+						LOGF(
+							LogLevel::eERROR,
+							"\nFailed to create root signature\n"
+							"Shared shader resources %s and %s have mismatching types (%u) and (%u). All shader resources "
+							"sharing the same register and space addRootSignature "
+							"must have the same type",
+							pRes->name, it->name, (uint32_t)pRes->type, (uint32_t)it->type);
+						return;
+					}
+
+					indexMap.mMap.insert(pRes->name, indexMap.mMap[it->name]);
+					it->used_stages |= pRes->used_stages;
+				}
+			}
+			else
+			{
+				if (shaderResources[it->second].reg != pRes->reg)
+				{
+					LOGF(
+						LogLevel::eERROR,
+						"\nFailed to create root signature\n"
+						"Shared shader resource %s has mismatching binding. All shader resources "
+						"shared by multiple shaders specified in addRootSignature "
+						"must have the same binding and set",
+						pRes->name);
+					return;
+				}
+				if (shaderResources[it->second].set != pRes->set)
+				{
+					LOGF(
+						LogLevel::eERROR,
+						"\nFailed to create root signature\n"
+						"Shared shader resource %s has mismatching set. All shader resources "
+						"shared by multiple shaders specified in addRootSignature "
+						"must have the same binding and set",
+						pRes->name);
+					return;
+				}
+
+				for (ShaderResource& res : shaderResources)
+				{
+					if (strcmp(res.name, it->first) == 0)
+					{
+						res.used_stages |= pRes->used_stages;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	size_t totalSize = sizeof(RootSignature);
+	totalSize += shaderResources.size() * sizeof(DescriptorInfo);
+	totalSize += sizeof(DescriptorIndexMap);
+	RootSignature* pRootSignature = (RootSignature*)tf_calloc_memalign(1, alignof(RootSignature), totalSize);
+	ASSERT(pRootSignature);
+
+	pRootSignature->pDescriptors = (DescriptorInfo*)(pRootSignature + 1);                                                        //-V1027
+	pRootSignature->pDescriptorNameToIndexMap = (DescriptorIndexMap*)(pRootSignature->pDescriptors + shaderResources.size());    //-V1027
+	ASSERT(pRootSignature->pDescriptorNameToIndexMap);
+	tf_placement_new<DescriptorIndexMap>(pRootSignature->pDescriptorNameToIndexMap);
+
+	if ((uint32_t)shaderResources.size())
+	{
+		pRootSignature->mDescriptorCount = (uint32_t)shaderResources.size();
+	}
+
+	pRootSignature->mPipelineType = pipelineType;
+	pRootSignature->pDescriptorNameToIndexMap->mMap = indexMap.mMap;
+
+	// Fill the descriptor array to be stored in the root signature
+	for (uint32_t i = 0; i < (uint32_t)shaderResources.size(); ++i)
+	{
+		DescriptorInfo* pDesc = &pRootSignature->pDescriptors[i];
+		ShaderResource const* pRes = &shaderResources[i];
+		uint32_t                  setIndex = pRes->set;
+		DescriptorUpdateFrequency updateFreq = (DescriptorUpdateFrequency)setIndex;
+
+		// Copy the binding information generated from the shader reflection into the descriptor
+		pDesc->mVulkan.mReg = pRes->reg;
+		pDesc->mSize = pRes->size;
+		pDesc->mType = pRes->type;
+		pDesc->pName = pRes->name;
+		pDesc->mDim = pRes->dim;
+
+		// If descriptor is not a root constant create a new layout binding for this descriptor and add it to the binding array
+		if (pDesc->mType != DESCRIPTOR_TYPE_ROOT_CONSTANT)
+		{
+			VkDescriptorSetLayoutBinding binding = {};
+			binding.binding = pRes->reg;
+			binding.descriptorCount = pDesc->mSize;
+			binding.descriptorType = util_to_vk_descriptor_type((DescriptorType)pDesc->mType);
+
+			// If a user specified a uniform buffer to be used as a dynamic uniform buffer change its type to VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+			// Also log a message for debugging purpose
+			if (isDescriptorRootCbv(pRes->name))
+			{
+				if (pDesc->mSize == 1)
+				{
+					LOGF(LogLevel::eINFO, "Descriptor (%s) : User specified VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC", pDesc->pName);
+					binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+				}
+				else
+				{
+					LOGF(
+						LogLevel::eWARNING, "Descriptor (%s) : Cannot use VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC for arrays",
+						pDesc->pName);
+				}
+			}
+
+			binding.stageFlags = util_to_vk_shader_stage_flags(pRes->used_stages);
+
+			// Store the vulkan related info in the descriptor to avoid constantly calling the util_to_vk mapping functions
+			pDesc->mVulkan.mVkType = binding.descriptorType;
+			pDesc->mVulkan.mVkStages = binding.stageFlags;
+			pDesc->mUpdateFrequency = updateFreq;
+
+			// Find if the given descriptor is a static sampler
+			decltype(staticSamplerMap)::iterator it = staticSamplerMap.find(pDesc->pName);
+			bool                                 hasStaticSampler = it != staticSamplerMap.end();
+			if (hasStaticSampler)
+			{
+				LOGF(LogLevel::eINFO, "Descriptor (%s) : User specified Static Sampler", pDesc->pName);
+				binding.pImmutableSamplers = &it->second->mVulkan.pVkSampler;
+			}
+
+			// Set the index to an invalid value so we can use this later for error checking if user tries to update a static sampler
+			// In case of Combined Image Samplers, skip invalidating the index
+			// because we do not to introduce new ways to update the descriptor in the Interface
+			if (hasStaticSampler && pDesc->mType != DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+			{
+				pDesc->mStaticSampler = true;
+			}
+			else
+			{
+				layouts[setIndex].mDescriptors.emplace_back(pDesc);
+			}
+
+			if (binding.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+			{
+				layouts[setIndex].mDynamicDescriptors.emplace_back(pDesc);
+				pDesc->mRootDescriptor = true;
+			}
+
+			layouts[setIndex].mBindings.push_back(binding);
+
+			// Update descriptor pool size for this descriptor type
+			VkDescriptorPoolSize* poolSize = NULL;
+			for (uint32_t i = 0; i < MAX_DESCRIPTOR_POOL_SIZE_ARRAY_COUNT; ++i)
+			{
+				if (binding.descriptorType == pRootSignature->mVulkan.mPoolSizes[setIndex][i].type && pRootSignature->mVulkan.mPoolSizes[setIndex][i].descriptorCount)
+				{
+					poolSize = &pRootSignature->mVulkan.mPoolSizes[setIndex][i];
+					break;
+				}
+			}
+			if (!poolSize)
+			{
+				poolSize = &pRootSignature->mVulkan.mPoolSizes[setIndex][pRootSignature->mVulkan.mPoolSizeCount[setIndex]++];
+				poolSize->type = binding.descriptorType;
+			}
+
+			poolSize->descriptorCount += binding.descriptorCount;
+		}
+		// If descriptor is a root constant, add it to the root constant array
+		else
+		{
+			LOGF(LogLevel::eINFO, "Descriptor (%s) : User specified Push Constant", pDesc->pName);
+
+			pDesc->mRootDescriptor = true;
+			pDesc->mVulkan.mVkStages = util_to_vk_shader_stage_flags(pRes->used_stages);
+			setIndex = 0;
+			pDesc->mHandleIndex = pushConstantCount++;
+
+			pushConstants[pDesc->mHandleIndex] = {};
+			pushConstants[pDesc->mHandleIndex].offset = 0;
+			pushConstants[pDesc->mHandleIndex].size = pDesc->mSize;
+			pushConstants[pDesc->mHandleIndex].stageFlags = pDesc->mVulkan.mVkStages;
+		}
+
+		layouts[setIndex].mDescriptorIndexMap[pDesc] = i;
+	}
+
+	// Create descriptor layouts
+	// Put least frequently changed params first
+	for (uint32_t layoutIndex = kMaxLayoutCount; layoutIndex-- > 0U;)
+	{
+		UpdateFrequencyLayoutInfo& layout = layouts[layoutIndex];
+
+		if (layouts[layoutIndex].mBindings.size())
+		{
+			// sort table by type (CBV/SRV/UAV) by register
+			eastl::stable_sort(
+				layout.mBindings.begin(), layout.mBindings.end(),
+				[](const VkDescriptorSetLayoutBinding& lhs, const VkDescriptorSetLayoutBinding& rhs) { return lhs.binding > rhs.binding; });
+			eastl::stable_sort(
+				layout.mBindings.begin(), layout.mBindings.end(),
+				[](const VkDescriptorSetLayoutBinding& lhs, const VkDescriptorSetLayoutBinding& rhs) {
+					return lhs.descriptorType > rhs.descriptorType;
+				});
+		}
+
+		bool createLayout = layout.mBindings.size() > 0;
+		// Check if we need to create an empty layout in case there is an empty set between two used sets
+		// Example: set = 0 is used, set = 2 is used. In this case, set = 1 needs to exist even if it is empty
+		if (!createLayout && layoutIndex < kMaxLayoutCount - 1)
+		{
+			createLayout = pRootSignature->mVulkan.mVkDescriptorSetLayouts[layoutIndex + 1] != VK_NULL_HANDLE;
+		}
+
+		if (createLayout)
+		{
+			if (layout.mBindings.size())
+			{
+				VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+				layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				layoutInfo.pNext = NULL;
+				layoutInfo.bindingCount = (uint32_t)layout.mBindings.size();
+				layoutInfo.pBindings = layout.mBindings.data();
+				layoutInfo.flags = 0;
+
+				CHECK_VKRESULT(vkCreateDescriptorSetLayout(
+					pRenderer->mVulkan.pVkDevice, &layoutInfo, &gVkAllocationCallbacks, &pRootSignature->mVulkan.mVkDescriptorSetLayouts[layoutIndex]));
+			}
+			else
+			{
+				pRootSignature->mVulkan.mVkDescriptorSetLayouts[layoutIndex] = pRenderer->mVulkan.pEmptyDescriptorSetLayout;
+			}
+		}
+
+		if (!layout.mBindings.size())
+		{
+			continue;
+		}
+
+		// Loop through descriptors belonging to this update frequency and increment the cumulative descriptor count
+		uint32_t descriptorMemSize = 0;
+
+		for (uint32_t descIndex = 0; descIndex < (uint32_t)layout.mDescriptors.size(); ++descIndex)
+		{
+			DescriptorInfo* pDesc = layout.mDescriptors[descIndex];
+			if (!pDesc->mRootDescriptor)
+			{
+				pDesc->mHandleIndex = pRootSignature->mVulkan.mVkCumulativeDescriptorCounts[layoutIndex];
+				pRootSignature->mVulkan.mVkCumulativeDescriptorCounts[layoutIndex] += pDesc->mSize;
+
+				if (!pDesc->mStaticSampler)
+				{
+					DescriptorType type = (DescriptorType)pDesc->mType;
+
+					switch (type)
+					{
+					case DESCRIPTOR_TYPE_SAMPLER:
+					case DESCRIPTOR_TYPE_TEXTURE:
+					case DESCRIPTOR_TYPE_RW_TEXTURE:
+					case DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+						descriptorMemSize += pDesc->mSize * sizeof(VkDescriptorImageInfo);
+						break;
+					case DESCRIPTOR_TYPE_BUFFER:
+					case DESCRIPTOR_TYPE_BUFFER_RAW:
+					case DESCRIPTOR_TYPE_RW_BUFFER:
+					case DESCRIPTOR_TYPE_RW_BUFFER_RAW:
+					case DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+						descriptorMemSize += pDesc->mSize * sizeof(VkDescriptorBufferInfo);
+						break;
+#ifdef VK_RAYTRACING_AVAILABLE
+					case DESCRIPTOR_TYPE_RAY_TRACING:
+						descriptorMemSize += pDesc->mSize * sizeof(VkAccelerationStructureKHR);
+						break;
+#endif
+					case DESCRIPTOR_TYPE_TEXEL_BUFFER:
+					case DESCRIPTOR_TYPE_RW_TEXEL_BUFFER:
+						descriptorMemSize += pDesc->mSize * sizeof(VkBufferView);
+						break;
+					default:
+						break;
+					}
+				}
+			}
+		}
+
+		pRootSignature->mVulkan.mCumulativeDescriptorSizes[layoutIndex] = descriptorMemSize;
+
+		if (layout.mDynamicDescriptors.size())
+		{
+			// vkCmdBindDescriptorSets - pDynamicOffsets - entries are ordered by the binding numbers in the descriptor set layouts
+			eastl::stable_sort(
+				layout.mDynamicDescriptors.begin(), layout.mDynamicDescriptors.end(),
+				[](const DescriptorInfo* lhs, const DescriptorInfo* rhs) {
+					return lhs->mVulkan.mReg < rhs->mVulkan.mReg;
+				});
+
+			pRootSignature->mVulkan.mVkDynamicDescriptorCounts[layoutIndex] = (uint32_t)layout.mDynamicDescriptors.size();
+			for (uint32_t descIndex = 0; descIndex < (uint32_t)layout.mDynamicDescriptors.size(); ++descIndex)
+			{
+				DescriptorInfo* pDesc = layout.mDynamicDescriptors[descIndex];
+				pDesc->mHandleIndex = descIndex;
+			}
+		}
+	}
+	/************************************************************************/
+	// Pipeline layout
+	/************************************************************************/
+	VkDescriptorSetLayout descriptorSetLayouts[kMaxLayoutCount] = {};
+	uint32_t              descriptorSetLayoutCount = 0;
+	for (uint32_t i = 0; i < DESCRIPTOR_UPDATE_FREQ_COUNT; ++i)
+	{
+		if (pRootSignature->mVulkan.mVkDescriptorSetLayouts[i])
+		{
+			descriptorSetLayouts[descriptorSetLayoutCount++] = pRootSignature->mVulkan.mVkDescriptorSetLayouts[i];
+		}
+	}
+
+	DECLARE_ZERO(VkPipelineLayoutCreateInfo, add_info);
+	add_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	add_info.pNext = NULL;
+	add_info.flags = 0;
+	add_info.setLayoutCount = descriptorSetLayoutCount;
+	add_info.pSetLayouts = descriptorSetLayouts;
+	add_info.pushConstantRangeCount = pushConstantCount;
+	add_info.pPushConstantRanges = pushConstants;
+	CHECK_VKRESULT(vkCreatePipelineLayout(
+		pRenderer->mVulkan.pVkDevice, &add_info, &gVkAllocationCallbacks, &(pRootSignature->mVulkan.pPipelineLayout)));
+	/************************************************************************/
+	// Update templates
+	/************************************************************************/
+	for (uint32_t setIndex = 0; setIndex < DESCRIPTOR_UPDATE_FREQ_COUNT; ++setIndex)
+	{
+		const UpdateFrequencyLayoutInfo& layout = layouts[setIndex];
+
+		if (!layout.mDescriptors.size() && pRootSignature->mVulkan.mVkDescriptorSetLayouts[setIndex] != VK_NULL_HANDLE)
+		{
+			pRootSignature->mVulkan.pEmptyDescriptorSet[setIndex] = pRenderer->mVulkan.pEmptyDescriptorSet;
+			if (pRootSignature->mVulkan.mVkDescriptorSetLayouts[setIndex] != pRenderer->mVulkan.pEmptyDescriptorSetLayout)
+			{
+				add_descriptor_pool(pRenderer, 1, 0,
+					pRootSignature->mVulkan.mPoolSizes[setIndex], pRootSignature->mVulkan.mPoolSizeCount[setIndex],
+					&pRootSignature->mVulkan.pEmptyDescriptorPool[setIndex]);
+				VkDescriptorSet* emptySet[] = { &pRootSignature->mVulkan.pEmptyDescriptorSet[setIndex] };
+				consume_descriptor_sets(pRenderer->mVulkan.pVkDevice, pRootSignature->mVulkan.pEmptyDescriptorPool[setIndex],
+					&pRootSignature->mVulkan.mVkDescriptorSetLayouts[setIndex],
+					1, emptySet);
+			}
+		}
+	}
+
+	*ppRootSignature = pRootSignature;
+}
+
+void vk_addDescriptorSet(Renderer* pRenderer, const DescriptorSetDesc* pDesc, DescriptorSet** ppDescriptorSet)
+{
+	ASSERT(pRenderer);
+	ASSERT(pDesc);
+	ASSERT(ppDescriptorSet);
+
+	const RootSignature* pRootSignature = pDesc->pRootSignature;
+	const DescriptorUpdateFrequency updateFreq = pDesc->mUpdateFrequency;
+	const uint32_t                  nodeIndex = pRenderer->mGpuMode == GPU_MODE_LINKED ? pDesc->mNodeIndex : 0;
+	const uint32_t                  dynamicOffsetCount = pRootSignature->mVulkan.mVkDynamicDescriptorCounts[updateFreq];
+	const uint32_t                  descriptorMemSize = pRootSignature->mVulkan.mCumulativeDescriptorSizes[updateFreq];
+
+	uint32_t totalSize = sizeof(DescriptorSet);
+
+	if (VK_NULL_HANDLE != pRootSignature->mVulkan.mVkDescriptorSetLayouts[updateFreq])
+	{
+		totalSize += pDesc->mMaxSets * sizeof(VkDescriptorSet);
+		totalSize += descriptorMemSize;
+	}
+
+	totalSize += pDesc->mMaxSets * dynamicOffsetCount * sizeof(DynamicUniformData);
+
+	DescriptorSet* pDescriptorSet = (DescriptorSet*)tf_calloc_memalign(1, alignof(DescriptorSet), totalSize);
+
+	pDescriptorSet->mVulkan.pRootSignature = pRootSignature;
+	pDescriptorSet->mVulkan.mUpdateFrequency = updateFreq;
+	pDescriptorSet->mVulkan.mDynamicOffsetCount = dynamicOffsetCount;
+	pDescriptorSet->mVulkan.mNodeIndex = nodeIndex;
+	pDescriptorSet->mVulkan.mMaxSets = pDesc->mMaxSets;
+
+	uint8_t* pMem = (uint8_t*)(pDescriptorSet + 1);
+	pDescriptorSet->mVulkan.pHandles = (VkDescriptorSet*)pMem;
+	pMem += pDesc->mMaxSets * sizeof(VkDescriptorSet);
+	pDescriptorSet->mVulkan.pDescriptorData = (uint8_t*)pMem;
+	pMem += descriptorMemSize;
+
+	if (VK_NULL_HANDLE != pRootSignature->mVulkan.mVkDescriptorSetLayouts[updateFreq])
+	{
+		VkDescriptorSetLayout* pLayouts = (VkDescriptorSetLayout*)alloca(pDesc->mMaxSets * sizeof(VkDescriptorSetLayout));
+		VkDescriptorSet** pHandles = (VkDescriptorSet**)alloca(pDesc->mMaxSets * sizeof(VkDescriptorSet*));
+
+		for (uint32_t i = 0; i < pDesc->mMaxSets; ++i)
+		{
+			pLayouts[i] = pRootSignature->mVulkan.mVkDescriptorSetLayouts[updateFreq];
+			pHandles[i] = &pDescriptorSet->mVulkan.pHandles[i];
+		}
+
+		VkDescriptorPoolSize poolSizes[MAX_DESCRIPTOR_POOL_SIZE_ARRAY_COUNT] = {};
+		for (uint32_t i = 0; i < pRootSignature->mVulkan.mPoolSizeCount[updateFreq]; ++i)
+		{
+			poolSizes[i] = pRootSignature->mVulkan.mPoolSizes[updateFreq][i];
+			poolSizes[i].descriptorCount *= pDesc->mMaxSets;
+		}
+		add_descriptor_pool(pRenderer, pDesc->mMaxSets, 0,
+			poolSizes, pRootSignature->mVulkan.mPoolSizeCount[updateFreq],
+			&pDescriptorSet->mVulkan.pDescriptorPool);
+		consume_descriptor_sets(pRenderer->mVulkan.pVkDevice, pDescriptorSet->mVulkan.pDescriptorPool, pLayouts, pDesc->mMaxSets, pHandles);
+
+		for (uint32_t descIndex = 0; descIndex < pRootSignature->mDescriptorCount; ++descIndex)
+		{
+			const DescriptorInfo* descInfo = &pRootSignature->pDescriptors[descIndex];
+			if (descInfo->mUpdateFrequency != updateFreq || descInfo->mRootDescriptor || descInfo->mStaticSampler)
+			{
+				continue;
+			}
+
+			uint32_t count = descInfo->mSize;
+			DescriptorType type = (DescriptorType)descInfo->mType;
+
+			VkWriteDescriptorSet writeSet = {};
+			writeSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeSet.pNext = NULL;
+			writeSet.descriptorCount = count;
+			writeSet.descriptorType = (VkDescriptorType)descInfo->mVulkan.mVkType;
+			writeSet.dstArrayElement = 0;
+			writeSet.dstBinding = descInfo->mVulkan.mReg;
+
+			for (uint32_t index = 0; index < pDesc->mMaxSets; ++index)
+			{
+				writeSet.dstSet = pDescriptorSet->mVulkan.pHandles[index];
+
+				switch (type)
+				{
+				case DESCRIPTOR_TYPE_SAMPLER:
+				{
+					VkDescriptorImageInfo* updateData = (VkDescriptorImageInfo*)pDescriptorSet->mVulkan.pDescriptorData;
+					writeSet.pImageInfo = updateData;
+					for (uint32_t arr = 0; arr < descInfo->mSize; ++arr)
+					{
+						updateData[arr] = { pRenderer->pNullDescriptors->pDefaultSampler->mVulkan.pVkSampler, VK_NULL_HANDLE };
+					}
+					vkUpdateDescriptorSets(pRenderer->mVulkan.pVkDevice, 1, &writeSet, 0, NULL);
+					break;
+				}
+				case DESCRIPTOR_TYPE_TEXTURE:
+				case DESCRIPTOR_TYPE_RW_TEXTURE:
+				{
+					VkImageView srcView = (type == DESCRIPTOR_TYPE_RW_TEXTURE) ?
+						pRenderer->pNullDescriptors->pDefaultTextureUAV[nodeIndex][descInfo->mDim]->mVulkan.pVkUAVDescriptors[0] :
+						pRenderer->pNullDescriptors->pDefaultTextureSRV[nodeIndex][descInfo->mDim]->mVulkan.pVkSRVDescriptor;
+					VkImageLayout layout = (type == DESCRIPTOR_TYPE_RW_TEXTURE) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					VkDescriptorImageInfo* updateData = (VkDescriptorImageInfo*)pDescriptorSet->mVulkan.pDescriptorData;
+					writeSet.pImageInfo = updateData;
+					for (uint32_t arr = 0; arr < descInfo->mSize; ++arr)
+					{
+						updateData[arr] = { VK_NULL_HANDLE, srcView, layout };
+					}
+					vkUpdateDescriptorSets(pRenderer->mVulkan.pVkDevice, 1, &writeSet, 0, NULL);
+					break;
+				}
+				case DESCRIPTOR_TYPE_BUFFER:
+				case DESCRIPTOR_TYPE_BUFFER_RAW:
+				case DESCRIPTOR_TYPE_RW_BUFFER:
+				case DESCRIPTOR_TYPE_RW_BUFFER_RAW:
+				case DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+				{
+					VkDescriptorBufferInfo* updateData = (VkDescriptorBufferInfo*)pDescriptorSet->mVulkan.pDescriptorData;
+					writeSet.pBufferInfo = updateData;
+					for (uint32_t arr = 0; arr < descInfo->mSize; ++arr)
+					{
+						updateData[arr] = { pRenderer->pNullDescriptors->pDefaultBufferSRV[nodeIndex]->mVulkan.pVkBuffer, 0, VK_WHOLE_SIZE };
+					}
+					vkUpdateDescriptorSets(pRenderer->mVulkan.pVkDevice, 1, &writeSet, 0, NULL);
+					break;
+				}
+				case DESCRIPTOR_TYPE_TEXEL_BUFFER:
+				case DESCRIPTOR_TYPE_RW_TEXEL_BUFFER:
+				{
+					VkBufferView srcView = (type == DESCRIPTOR_TYPE_RW_TEXEL_BUFFER) ?
+						pRenderer->pNullDescriptors->pDefaultBufferUAV[nodeIndex]->mVulkan.pVkStorageTexelView :
+						pRenderer->pNullDescriptors->pDefaultBufferSRV[nodeIndex]->mVulkan.pVkUniformTexelView;
+					VkBufferView* updateData = (VkBufferView*)pDescriptorSet->mVulkan.pDescriptorData;
+					writeSet.pTexelBufferView = updateData;
+					for (uint32_t arr = 0; arr < descInfo->mSize; ++arr)
+					{
+						updateData[arr] = srcView;
+					}
+					vkUpdateDescriptorSets(pRenderer->mVulkan.pVkDevice, 1, &writeSet, 0, NULL);
+					break;
+				}
+				default:
+					break;
+				}
+			}
+		}
+	}
+	else
+	{
+		LOGF(LogLevel::eERROR, "NULL Descriptor Set Layout for update frequency %u. Cannot allocate descriptor set", (uint32_t)updateFreq);
+		ASSERT(false && "NULL Descriptor Set Layout for update frequency. Cannot allocate descriptor set");
+	}
+
+	if (pDescriptorSet->mVulkan.mDynamicOffsetCount)
+	{
+		pDescriptorSet->mVulkan.pDynamicUniformData = (DynamicUniformData*)pMem;
+		pMem += pDescriptorSet->mVulkan.mMaxSets * pDescriptorSet->mVulkan.mDynamicOffsetCount * sizeof(DynamicUniformData);
+	}
+
+	*ppDescriptorSet = pDescriptorSet;
 }
 
 void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Renderer** ppRenderer)

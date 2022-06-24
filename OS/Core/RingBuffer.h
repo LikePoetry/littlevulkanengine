@@ -1,6 +1,8 @@
 #pragma once
 #include "../Core/Config.h"
 #include "../Renderer/Include/IRenderer.h"
+#include "../Renderer/Include/IResourceLoader.h"
+
 
 
 /************************************************************************/
@@ -22,46 +24,46 @@ typedef struct GPURingBufferOffset
 	uint64_t mOffset;
 } GPURingBufferOffset;
 
-//static inline void addGPURingBuffer(Renderer* pRenderer, const BufferDesc* pBufferDesc, GPURingBuffer** ppRingBuffer)
-//{
-//	GPURingBuffer* pRingBuffer = (GPURingBuffer*)tf_calloc(1, sizeof(GPURingBuffer));
-//	pRingBuffer->pRenderer = pRenderer;
-//	pRingBuffer->mMaxBufferSize = pBufferDesc->mSize;
-//	pRingBuffer->mBufferAlignment = sizeof(float[4]);
-//	BufferLoadDesc loadDesc = {};
-//	loadDesc.mDesc = *pBufferDesc;
-//	loadDesc.ppBuffer = &pRingBuffer->pBuffer;
-//	addResource(&loadDesc, NULL);
-//
-//	*ppRingBuffer = pRingBuffer;
-//}
-//
-//static inline void addUniformGPURingBuffer(Renderer* pRenderer, uint32_t requiredUniformBufferSize, GPURingBuffer** ppRingBuffer, bool const ownMemory = false, ResourceMemoryUsage memoryUsage = RESOURCE_MEMORY_USAGE_CPU_TO_GPU)
-//{
-//	GPURingBuffer* pRingBuffer = (GPURingBuffer*)tf_calloc(1, sizeof(GPURingBuffer));
-//	pRingBuffer->pRenderer = pRenderer;
-//
-//	const uint32_t uniformBufferAlignment = (uint32_t)pRenderer->pActiveGpuSettings->mUniformBufferAlignment;
-//	const uint32_t maxUniformBufferSize = requiredUniformBufferSize;
-//	pRingBuffer->mBufferAlignment = uniformBufferAlignment;
-//	pRingBuffer->mMaxBufferSize = maxUniformBufferSize;
-//
-//	BufferDesc ubDesc = {};
-//	ubDesc.mDescriptors = DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-//	ubDesc.mMemoryUsage = memoryUsage;
-//	ubDesc.mFlags = (ubDesc.mMemoryUsage != RESOURCE_MEMORY_USAGE_GPU_ONLY ? BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT : BUFFER_CREATION_FLAG_NONE) |
-//		BUFFER_CREATION_FLAG_NO_DESCRIPTOR_VIEW_CREATION;
-//
-//	if (ownMemory)
-//		ubDesc.mFlags |= BUFFER_CREATION_FLAG_OWN_MEMORY_BIT;
-//	ubDesc.mSize = maxUniformBufferSize;
-//	BufferLoadDesc loadDesc = {};
-//	loadDesc.mDesc = ubDesc;
-//	loadDesc.ppBuffer = &pRingBuffer->pBuffer;
-//	addResource(&loadDesc, NULL);
-//
-//	*ppRingBuffer = pRingBuffer;
-//}
+static inline void addGPURingBuffer(Renderer* pRenderer, const BufferDesc* pBufferDesc, GPURingBuffer** ppRingBuffer)
+{
+	GPURingBuffer* pRingBuffer = (GPURingBuffer*)tf_calloc(1, sizeof(GPURingBuffer));
+	pRingBuffer->pRenderer = pRenderer;
+	pRingBuffer->mMaxBufferSize = pBufferDesc->mSize;
+	pRingBuffer->mBufferAlignment = sizeof(float[4]);
+	BufferLoadDesc loadDesc = {};
+	loadDesc.mDesc = *pBufferDesc;
+	loadDesc.ppBuffer = &pRingBuffer->pBuffer;
+	addResource(&loadDesc, NULL);
+
+	*ppRingBuffer = pRingBuffer;
+}
+
+static inline void addUniformGPURingBuffer(Renderer* pRenderer, uint32_t requiredUniformBufferSize, GPURingBuffer** ppRingBuffer, bool const ownMemory = false, ResourceMemoryUsage memoryUsage = RESOURCE_MEMORY_USAGE_CPU_TO_GPU)
+{
+	GPURingBuffer* pRingBuffer = (GPURingBuffer*)tf_calloc(1, sizeof(GPURingBuffer));
+	pRingBuffer->pRenderer = pRenderer;
+
+	const uint32_t uniformBufferAlignment = (uint32_t)pRenderer->pActiveGpuSettings->mUniformBufferAlignment;
+	const uint32_t maxUniformBufferSize = requiredUniformBufferSize;
+	pRingBuffer->mBufferAlignment = uniformBufferAlignment;
+	pRingBuffer->mMaxBufferSize = maxUniformBufferSize;
+
+	BufferDesc ubDesc = {};
+	ubDesc.mDescriptors = DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	ubDesc.mMemoryUsage = memoryUsage;
+	ubDesc.mFlags = (ubDesc.mMemoryUsage != RESOURCE_MEMORY_USAGE_GPU_ONLY ? BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT : BUFFER_CREATION_FLAG_NONE) |
+		BUFFER_CREATION_FLAG_NO_DESCRIPTOR_VIEW_CREATION;
+
+	if (ownMemory)
+		ubDesc.mFlags |= BUFFER_CREATION_FLAG_OWN_MEMORY_BIT;
+	ubDesc.mSize = maxUniformBufferSize;
+	BufferLoadDesc loadDesc = {};
+	loadDesc.mDesc = ubDesc;
+	loadDesc.ppBuffer = &pRingBuffer->pBuffer;
+	addResource(&loadDesc, NULL);
+
+	*ppRingBuffer = pRingBuffer;
+}
 //
 //static inline void removeGPURingBuffer(GPURingBuffer* pRingBuffer)
 //{

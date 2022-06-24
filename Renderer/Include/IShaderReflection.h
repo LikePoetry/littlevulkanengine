@@ -121,3 +121,14 @@ struct PipelineReflection
 };
 
 void createPipelineReflection(ShaderReflection* pReflection, uint32_t stageCount, PipelineReflection* pOutReflection);
+
+inline bool isDescriptorRootCbv(const char* resourceName)
+{
+	char lower[MAX_RESOURCE_NAME_LENGTH] = {};
+	uint32_t length = (uint32_t)strlen(resourceName);
+	for (uint32_t i = 0; i < length; ++i)
+	{
+		lower[i] = tolower(resourceName[i]);
+	}
+	return strstr(lower, "rootcbv");
+}
