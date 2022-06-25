@@ -1663,6 +1663,29 @@ void CreateInstance(
 					"internal_vk_init_instance");
 			}
 		}
+#else
+#if defined(__ANDROID__)
+		if (vkCreateDebugReportCallbackEXT)
+#endif
+		{
+			DECLARE_ZERO(VkDebugReportCallbackCreateInfoEXT, create_info);
+			create_info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
+			create_info.pNext = NULL;
+			create_info.pfnCallback = internal_debug_report_callback;
+			create_info.flags = VK_DEBUG_REPORT_WARNING_BIT_EXT |
+#if defined(NX64) || defined(__ANDROID__)
+				VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |    // Performance warnings are not very vaild on desktop
+#endif
+				VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT /* | VK_DEBUG_REPORT_INFORMATION_BIT_EXT*/;
+			VkResult res = vkCreateDebugReportCallbackEXT(
+				pRenderer->mVulkan.pVkInstance, &create_info, &gVkAllocationCallbacks, &(pRenderer->mVulkan.pVkDebugReport));
+			if (VK_SUCCESS != res)
+			{
+				internal_log(
+					eERROR, "vkCreateDebugReportCallbackEXT failed - disabling Vulkan debug callbacks",
+					"internal_vk_init_instance");
+			}
+		}
 #endif
 	}
 }
@@ -1682,6 +1705,16 @@ static void RemoveInstance(Renderer* pRenderer)
 
 static bool initCommon(const char* appName, const RendererDesc* pDesc, Renderer* pRenderer)
 {
+#if defined(VK_USE_DISPATCH_TABLES)
+	VkResult vkRes = volkInitializeWithDispatchTables(pRenderer);
+	if (vkRes != VK_SUCCESS)
+	{
+		LOGF(LogLevel::eERROR, "Failed to initialize Vulkan");
+		nvapiExit();
+		agsExit();
+		return false;
+	}
+#else
 	const char** instanceLayers = (const char**)alloca((2 + pDesc->mVulkan.mInstanceLayerCount) * sizeof(char*));
 	uint32_t     instanceLayerCount = 0;
 
@@ -1689,11 +1722,13 @@ static bool initCommon(const char* appName, const RendererDesc* pDesc, Renderer*
 	// this turns on all validation layers
 	instanceLayers[instanceLayerCount++] = "VK_LAYER_KHRONOS_validation";
 #endif
+
 	// this turns on render doc layer for gpu capture
 #ifdef ENABLE_RENDER_DOC
 	instanceLayers[instanceLayerCount++] = "VK_LAYER_RENDERDOC_Capture";
 #endif
 
+	// Add user specified instance layers for instance creation
 	for (uint32_t i = 0; i < (uint32_t)pDesc->mVulkan.mInstanceLayerCount; ++i)
 		instanceLayers[instanceLayerCount++] = pDesc->mVulkan.ppInstanceLayers[i];
 
@@ -1707,6 +1742,7 @@ static bool initCommon(const char* appName, const RendererDesc* pDesc, Renderer*
 #endif
 
 	CreateInstance(appName, pDesc, instanceLayerCount, instanceLayers, pRenderer);
+#endif
 
 	pRenderer->mUnlinkedRendererIndex = 0;
 	pRenderer->mVulkan.mOwnInstance = true;
@@ -1868,9 +1904,9 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 {
 	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkInstance);
 
-	// There are the extensions that we have loaded
+	// These are the extensions that we have loaded
 	const char* deviceExtensionCache[MAX_DEVICE_EXTENSIONS] = {};
-	//TODO VK_KHR_device_group_creation
+
 #if VK_KHR_device_group_creation
 	VkDeviceGroupDeviceCreateInfoKHR   deviceGroupInfo = { VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO_KHR };
 	VkPhysicalDeviceGroupPropertiesKHR props[MAX_LINKED_GPUS] = {};
@@ -1929,6 +1965,7 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 		*pRenderer->pActiveGpuSettings = pDesc->pContext->pGpus[pDesc->mGpuIndex].mSettings;
 	}
 
+
 	uint32_t layerCount = 0;
 	uint32_t extCount = 0;
 	vkEnumerateDeviceLayerProperties(pRenderer->mVulkan.pVkActiveGPU, &layerCount, NULL);
@@ -1953,8 +1990,8 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 	}
 
 	uint32_t extension_count = 0;
-	bool	dedicatedAllocationExtension = false;
-	bool	memoryReq2Extension = false;
+	bool     dedicatedAllocationExtension = false;
+	bool     memoryReq2Extension = false;
 #if VK_EXT_fragment_shader_interlock
 	bool     fragmentShaderInterlockExtension = false;
 #endif
@@ -1962,14 +1999,12 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 	bool     externalMemoryExtension = false;
 	bool     externalMemoryWin32Extension = false;
 #endif
-
 	// Standalone extensions
 	{
 		const char* layer_name = NULL;
 		uint32_t                   initialCount = sizeof(gVkWantedDeviceExtensions) / sizeof(gVkWantedDeviceExtensions[0]);
 		const uint32_t             userRequestedCount = (uint32_t)pDesc->mVulkan.mDeviceExtensionCount;
 		eastl::vector<const char*> wantedDeviceExtensions(initialCount + userRequestedCount);
-
 		for (uint32_t i = 0; i < initialCount; ++i)
 		{
 			wantedDeviceExtensions[i] = gVkWantedDeviceExtensions[i];
@@ -1993,6 +2028,7 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 					if (strcmp(wantedDeviceExtensions[k], properties[j].extensionName) == 0)
 					{
 						deviceExtensionCache[extension_count++] = wantedDeviceExtensions[k];
+
 #ifndef ENABLE_DEBUG_UTILS_EXTENSION
 						if (strcmp(wantedDeviceExtensions[k], VK_EXT_DEBUG_MARKER_EXTENSION_NAME) == 0)
 							pRenderer->mVulkan.mDebugMarkerSupport = true;
@@ -2001,7 +2037,6 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 							dedicatedAllocationExtension = true;
 						if (strcmp(wantedDeviceExtensions[k], VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME) == 0)
 							memoryReq2Extension = true;
-
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 						if (strcmp(wantedDeviceExtensions[k], VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) == 0)
 							externalMemoryExtension = true;
@@ -2012,9 +2047,6 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 						if (strcmp(wantedDeviceExtensions[k], VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME) == 0)
 							pRenderer->mVulkan.mDrawIndirectCountExtension = true;
 #endif
-
-
-
 						if (strcmp(wantedDeviceExtensions[k], VK_AMD_DRAW_INDIRECT_COUNT_EXTENSION_NAME) == 0)
 							pRenderer->mVulkan.mAMDDrawIndirectCountExtension = true;
 						if (strcmp(wantedDeviceExtensions[k], VK_AMD_GCN_SHADER_EXTENSION_NAME) == 0)
@@ -2088,11 +2120,13 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 						break;
 					}
 				}
-			}
+						}
 			SAFE_FREE((void*)properties);
-		}
-	}
+					}
+				}
 
+#if !defined(VK_USE_DISPATCH_TABLES)
+	//-V:ADD_TO_NEXT_CHAIN:506, 1027
 #define ADD_TO_NEXT_CHAIN(condition, next)        \
 	if ((condition))                              \
 	{                                             \
@@ -2258,7 +2292,10 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 	if (pRenderer->mGpuMode != GPU_MODE_UNLINKED)
 		volkLoadDevice(pRenderer->mVulkan.pVkDevice);
 #endif
+#endif
+
 	pRenderer->mVulkan.mDedicatedAllocationExtension = dedicatedAllocationExtension && memoryReq2Extension;
+
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 	pRenderer->mVulkan.mExternalMemoryExtension = externalMemoryExtension && externalMemoryWin32Extension;
 #endif
@@ -2302,9 +2339,6 @@ static bool AddDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 	{
 		LOGF(LogLevel::eINFO, "Successfully loaded Khronos Ray Tracing extensions");
 	}
-
-	pRenderer->mVulkan.mDebugMarkerSupport = (&vkCmdBeginDebugUtilsLabelEXT) && (&vkCmdEndDebugUtilsLabelEXT) && (&vkCmdInsertDebugUtilsLabelEXT) &&
-		(&vkSetDebugUtilsObjectNameEXT);
 
 #ifdef ENABLE_DEBUG_UTILS_EXTENSION
 	pRenderer->mVulkan.mDebugMarkerSupport = (&vkCmdBeginDebugUtilsLabelEXT) && (&vkCmdEndDebugUtilsLabelEXT) && (&vkCmdInsertDebugUtilsLabelEXT) &&
@@ -2529,6 +2563,15 @@ void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffe
 	if (pDesc->mFlags & BUFFER_CREATION_FLAG_HOST_COHERENT)
 		vma_mem_reqs.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
+#if defined(ANDROID) || defined(NX64)
+	// UMA for Android and NX64 devices
+	if (vma_mem_reqs.usage != VMA_MEMORY_USAGE_GPU_TO_CPU)
+	{
+		vma_mem_reqs.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+		vma_mem_reqs.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	}
+#endif
+
 	VmaAllocationInfo alloc_info = {};
 	CHECK_VKRESULT(vmaCreateBuffer(
 		pRenderer->mVulkan.pVmaAllocator, &add_info, &vma_mem_reqs, &pBuffer->mVulkan.pVkBuffer, &pBuffer->mVulkan.pVkAllocation,
@@ -2635,6 +2678,7 @@ void vk_addBuffer(Renderer* pRenderer, const BufferDesc* pDesc, Buffer** ppBuffe
 void vk_getFenceStatus(Renderer* pRenderer, Fence* pFence, FenceStatus* pFenceStatus)
 {
 	*pFenceStatus = FENCE_STATUS_COMPLETE;
+
 	if (pFence->mVulkan.mSubmitted)
 	{
 		VkResult vkRes = vkGetFenceStatus(pRenderer->mVulkan.pVkDevice, pFence->mVulkan.pVkFence);
@@ -2668,7 +2712,21 @@ void vk_waitForFences(Renderer* pRenderer, uint32_t fenceCount, Fence** ppFences
 
 	if (numValidFences)
 	{
+#if defined(ENABLE_NSIGHT_AFTERMATH)
+		VkResult result = vkWaitForFences(pRenderer->mVulkan.pVkDevice, numValidFences, fences, VK_TRUE, UINT64_MAX);
+		if (pRenderer->mAftermathSupport)
+		{
+			if (VK_ERROR_DEVICE_LOST == result)
+			{
+				// Device lost notification is asynchronous to the NVIDIA display
+				// driver's GPU crash handling. Give the Nsight Aftermath GPU crash dump
+				// thread some time to do its work before terminating the process.
+				sleep(3000);
+			}
+		}
+#else
 		CHECK_VKRESULT(vkWaitForFences(pRenderer->mVulkan.pVkDevice, numValidFences, fences, VK_TRUE, UINT64_MAX));
+#endif
 		CHECK_VKRESULT(vkResetFences(pRenderer->mVulkan.pVkDevice, numValidFences, fences));
 	}
 
@@ -2682,6 +2740,7 @@ void vk_removeBuffer(Renderer* pRenderer, Buffer* pBuffer)
 	ASSERT(pBuffer);
 	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
 	ASSERT(VK_NULL_HANDLE != pBuffer->mVulkan.pVkBuffer);
+
 	if (pBuffer->mVulkan.pVkUniformTexelView)
 	{
 		vkDestroyBufferView(pRenderer->mVulkan.pVkDevice, pBuffer->mVulkan.pVkUniformTexelView, &gVkAllocationCallbacks);
@@ -4655,7 +4714,7 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 
 	// Initialize the Vulkan internal bits
 	{
-		ASSERT(pDesc->mGpuMode != GPU_MODE_UNLINKED || pDesc->pContext);
+		ASSERT(pDesc->mGpuMode != GPU_MODE_UNLINKED || pDesc->pContext); // context required in unlinked mode
 		if (pDesc->pContext)
 		{
 			ASSERT(pDesc->mGpuIndex < pDesc->pContext->mGpuCount);
@@ -4688,6 +4747,7 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 		if (pRenderer->pActiveGpuSettings->mGpuVendorPreset.mPresetLevel < GPU_PRESET_LOW)
 		{
 			//have the condition in the assert as well so its cleared when the assert message box appears
+
 			ASSERT(pRenderer->pActiveGpuSettings->mGpuVendorPreset.mPresetLevel >= GPU_PRESET_LOW);    //-V547
 
 			SAFE_FREE(pRenderer->pName);
@@ -4706,7 +4766,6 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 			*ppRenderer = NULL;
 			return;
 		}
-
 		/************************************************************************/
 		// Memory allocator
 		/************************************************************************/
@@ -4747,7 +4806,6 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 		vulkanFunctions.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
 		vulkanFunctions.vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges;
 		vulkanFunctions.vkCmdCopyBuffer = vkCmdCopyBuffer;
-
 #if VMA_BIND_MEMORY2 || VMA_VULKAN_VERSION >= 1001000
 		/// Fetch "vkBindBufferMemory2" on Vulkan >= 1.1, fetch "vkBindBufferMemory2KHR" when using VK_KHR_bind_memory2 extension.
 		vulkanFunctions.vkBindBufferMemory2KHR = vkBindBufferMemory2KHR;
@@ -4762,11 +4820,10 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 #endif
 #endif
 #if VMA_VULKAN_VERSION >= 1003000
-		//TODO
 		/// Fetch from "vkGetDeviceBufferMemoryRequirements" on Vulkan >= 1.3, but you can also fetch it from "vkGetDeviceBufferMemoryRequirementsKHR" if you enabled extension VK_KHR_maintenance4.
-		vulkanFunctions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirementsKHR;
+		vulkanFunctions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
 		/// Fetch from "vkGetDeviceImageMemoryRequirements" on Vulkan >= 1.3, but you can also fetch it from "vkGetDeviceImageMemoryRequirementsKHR" if you enabled extension VK_KHR_maintenance4.
-		vulkanFunctions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirementsKHR;
+		vulkanFunctions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements;
 #endif
 
 		createInfo.pVulkanFunctions = &vulkanFunctions;
@@ -4843,7 +4900,6 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 
 	// Renderer is good!
 	*ppRenderer = pRenderer;
-
 }
 
 void vk_addQueue(Renderer* pRenderer, QueueDesc* pDesc, Queue** ppQueue)
@@ -4880,6 +4936,12 @@ void vk_addQueue(Renderer* pRenderer, QueueDesc* pDesc, Queue** ppQueue)
 	ASSERT(VK_NULL_HANDLE != pQueue->mVulkan.pVkQueue);
 
 	*ppQueue = pQueue;
+
+#if defined(QUEST_VR)
+	extern Queue* pSynchronisationQueue;
+	if (pDesc->mType == QUEUE_TYPE_GRAPHICS)
+		pSynchronisationQueue = pQueue;
+#endif
 }
 
 void vk_addSampler(Renderer* pRenderer, const SamplerDesc* pDesc, Sampler** ppSampler)

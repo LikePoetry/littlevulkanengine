@@ -452,15 +452,27 @@ static bool waitCopyEngineSet(Renderer* pRenderer, CopyEngine* pCopyEngine, size
 {
 	ASSERT(!pCopyEngine->isRecording);
 	CopyResourceSet& resourceSet = pCopyEngine->resourceSets[activeSet];
-	bool completed = true;
-
-	FenceStatus status;
-	vk_getFenceStatus(pRenderer, resourceSet.pFence, &status);
-	completed = status != FENCE_STATUS_INCOMPLETE;
-	if (wait && !completed)
+	bool             completed = true;
+#if defined(DIRECT3D11)
+	if (gSelectedRendererApi != RENDERER_API_D3D11)
 	{
-		vk_waitForFences(pRenderer, 1, &resourceSet.pFence);
+#endif
+		FenceStatus status;
+		vk_getFenceStatus(pRenderer, resourceSet.pFence, &status);
+		completed = status != FENCE_STATUS_INCOMPLETE;
+		if (wait && !completed)
+		{
+			vk_waitForFences(pRenderer, 1, &resourceSet.pFence);
+		}
+#if defined(DIRECT3D11)
 	}
+	else
+	{
+		UNREF_PARAM(pRenderer);
+		UNREF_PARAM(pCopyEngine);
+		UNREF_PARAM(activeSet);
+	}
+#endif
 	return completed;
 }
 

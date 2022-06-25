@@ -261,4 +261,7 @@
       <Filter>Windows</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\ThirdParty\OpenSource\EASTL\EASTL.natvis" />
+  </ItemGroup>
 </Project>

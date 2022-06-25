@@ -1,6 +1,7 @@
 #pragma once
-
 #include "../Core/Config.h"
+
+#define IMEMORY_FROM_HEADER
 
 #ifdef __cplusplus
 #include <new>
@@ -8,12 +9,13 @@
 #else
 #include <stdint.h>
 #endif
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
 	bool initMemAlloc(const char* appName);
+	void exitMemAlloc(void);
 
 	void* tf_malloc_internal(size_t size, const char* f, int l, const char* sf);
 	void* tf_memalign_internal(size_t align, size_t size, const char* f, int l, const char* sf);
@@ -77,4 +79,38 @@ static void tf_delete_internal(T* ptr, const char* f, int l, const char* sf)
 #ifndef tf_delete
 #define tf_delete(ptr) tf_delete_internal(ptr, __FILE__, __LINE__, __FUNCTION__)
 #endif
+#endif
+
+
+
+#ifndef IMEMORY_FROM_HEADER
+#ifndef malloc
+#define malloc(size) static_assert(false, "Please use tf_malloc");
+#endif
+#ifndef calloc
+#define calloc(count, size) static_assert(false, "Please use tf_calloc");
+#endif
+#ifndef memalign
+#define memalign(align, size) static_assert(false, "Please use tf_memalign");
+#endif
+#ifndef realloc
+#define realloc(ptr, size) static_assert(false, "Please use tf_realloc");
+#endif
+#ifndef free
+#define free(ptr) static_assert(false, "Please use tf_free");
+#endif
+
+#ifdef __cplusplus
+#ifndef new
+#define new static_assert(false, "Please use tf_placement_new");
+#endif
+#ifndef delete
+#define delete static_assert(false, "Please use tf_free with explicit destructor call");
+#endif
+#endif
+
+#endif
+
+#ifdef IMEMORY_FROM_HEADER
+#undef IMEMORY_FROM_HEADER
 #endif

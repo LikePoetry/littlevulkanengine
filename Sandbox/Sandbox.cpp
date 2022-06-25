@@ -274,7 +274,7 @@ public:
 	}
 	const char* GetName() { return "Test Demo"; }
 
-	void initMarkers() 
+	void initMarkers()
 	{
 		BufferLoadDesc breadcrumbBuffer = {};
 		breadcrumbBuffer.mDesc.mDescriptors = DESCRIPTOR_TYPE_UNDEFINED;

@@ -1059,6 +1059,24 @@ typedef struct DEFINE_ALIGNED(Buffer, 64)
 	void* pCpuMappedAddress;
 	union
 	{
+#if defined(DIRECT3D12)
+		struct
+		{
+			/// GPU Address - Cache to avoid calls to ID3D12Resource::GetGpuVirtualAddress
+			D3D12_GPU_VIRTUAL_ADDRESS mDxGpuAddress;
+			/// Descriptor handle of the CBV in a CPU visible descriptor heap (applicable to BUFFER_USAGE_UNIFORM)
+			DxDescriptorID mDescriptors;
+			/// Offset from mDxDescriptors for srv descriptor handle
+			uint8_t mSrvDescriptorOffset;
+			/// Offset from mDxDescriptors for uav descriptor handle
+			uint8_t mUavDescriptorOffset;
+			/// Native handle of the underlying resource
+			ID3D12Resource* pDxResource;
+			/// Contains resource allocation info such as parent heap, offset in heap
+			D3D12MA::Allocation* pDxAllocation;
+		} mD3D12;
+#endif
+#if defined(VULKAN)
 		struct
 		{
 			/// Native handle of the underlying resource
@@ -1068,14 +1086,51 @@ typedef struct DEFINE_ALIGNED(Buffer, 64)
 			VkBufferView pVkUniformTexelView;
 			/// Contains resource allocation info such as parent heap, offset in heap
 			struct VmaAllocation_T* pVkAllocation;
-			uint64_t mOffset;
+			uint64_t                mOffset;
 		} mVulkan;
-		uint64_t mSize : 32;
-		uint64_t mDescriptors : 20;
-		uint64_t mMemoryUsage : 3;
-		uint64_t mNodeIndex : 4;
+#endif
+#if defined(METAL)
+		struct
+		{
+			struct VmaAllocation_T* pAllocation;
+			id<MTLBuffer>                mtlBuffer;
+			id<MTLIndirectCommandBuffer> mtlIndirectCommandBuffer API_AVAILABLE(macos(10.14), ios(12.0));
+			uint64_t                                              mOffset;
+			uint64_t                                              mPadB;
+		};
+#endif
+#if defined(DIRECT3D11)
+		struct
+		{
+			ID3D11Buffer* pDxResource;
+			ID3D11ShaderResourceView* pDxSrvHandle;
+			ID3D11UnorderedAccessView* pDxUavHandle;
+			uint64_t                   mFlags;
+			uint64_t                   mPadA;
+		} mD3D11;
+#endif
+#if defined(GLES)
+		struct
+		{
+			GLuint mBuffer;
+			GLenum mTarget;
+			void* pGLCpuMappedAddress;
+		} mGLES;
+#endif
+#if defined(ORBIS)
+		OrbisBuffer mStruct;
+#endif
+#if defined(PROSPERO)
+		ProsperoBuffer mStruct;
+#endif
 	};
+	uint64_t mSize : 32;
+	uint64_t mDescriptors : 20;
+	uint64_t mMemoryUsage : 3;
+	uint64_t mNodeIndex : 4;
 } Buffer;
+// One cache line
+COMPILE_ASSERT(sizeof(Buffer) == 8 * sizeof(uint64_t));
 
 typedef struct Queue
 {
@@ -1277,16 +1332,20 @@ typedef struct DEFINE_ALIGNED(Renderer, 64)
 {
 	struct
 	{
-		VkInstance						pVkInstance;
-		VkPhysicalDevice				pVkActiveGPU;
+		VkInstance                   pVkInstance;
+		VkPhysicalDevice             pVkActiveGPU;
 		VkPhysicalDeviceProperties2* pVkActiveGPUProperties;
-		VkDevice					pVkDevice;
-		VkDebugUtilsMessengerEXT	pVkDebugUtilsMessenger;
+		VkDevice                     pVkDevice;
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+		VkDebugUtilsMessengerEXT pVkDebugUtilsMessenger;
+#else
+		VkDebugReportCallbackEXT                 pVkDebugReport;
+#endif
 		uint32_t** pAvailableQueueCount;
 		uint32_t** pUsedQueueCount;
-		VkDescriptorPool		pEmptyDescriptorPool;
-		VkDescriptorSetLayout	pEmptyDescriptorSetLayout;
-		VkDescriptorSet			pEmptyDescriptorSet;
+		VkDescriptorPool       pEmptyDescriptorPool;
+		VkDescriptorSetLayout  pEmptyDescriptorSetLayout;
+		VkDescriptorSet        pEmptyDescriptorSet;
 		struct VmaAllocator_T* pVmaAllocator;
 		uint32_t               mRaytracingSupported : 1;
 		uint32_t               mYCbCrExtension : 1;
@@ -1305,7 +1364,9 @@ typedef struct DEFINE_ALIGNED(Renderer, 64)
 		uint32_t               mExternalMemoryExtension : 1;
 		uint32_t               mDebugMarkerSupport : 1;
 		uint32_t               mOwnInstance : 1;
-
+#if defined(QUEST_VR)
+		uint32_t               mMultiviewExtension : 1;
+#endif
 		union
 		{
 			struct
@@ -1316,8 +1377,15 @@ typedef struct DEFINE_ALIGNED(Renderer, 64)
 			};
 			uint8_t mQueueFamilyIndices[3];
 		};
-	}mVulkan;
+	} mVulkan;
 
+#if defined(ENABLE_NSIGHT_AFTERMATH)
+	// GPU crash dump tracker using Nsight Aftermath instrumentation
+	AftermathTracker mAftermathTracker;
+	bool             mAftermathSupport;
+	bool             mDiagnosticsConfigSupport;
+	bool             mDiagnosticCheckPointsSupport;
+#endif
 	struct NullDescriptors* pNullDescriptors;
 	char* pName;
 	GPUSettings* pActiveGpuSettings;
@@ -1330,8 +1398,8 @@ typedef struct DEFINE_ALIGNED(Renderer, 64)
 	uint32_t                mEnableGpuBasedValidation : 1;
 	char* pApiName;
 	uint32_t                mBuiltinShaderDefinesCount;
-
 } Renderer;
+COMPILE_ASSERT(sizeof(Renderer) <= 24 * sizeof(uint64_t));
 
 typedef struct GpuInfo
 {
@@ -1358,6 +1426,7 @@ typedef struct DEFINE_ALIGNED(RendererContext, 64)
 	GpuInfo* pGpus;
 	uint32_t mGpuCount;
 }RendererContext;
+COMPILE_ASSERT(sizeof(RendererContext) <= 8 * sizeof(uint64_t));
 
 typedef struct DescriptorSetDesc
 {

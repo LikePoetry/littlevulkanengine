@@ -1,6 +1,9 @@
 #pragma once
 #include "../Core/Config.h"
 #include "../Interfaces/IOperatingSystem.h"
+#include "../ThirdParty/OpenSource/EASTL/string.h"
+
+#include "../Interfaces/ILog.h"
 
 class IApp
 {
