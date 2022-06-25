@@ -8,11 +8,18 @@
 
 #include "../../ThirdParty/OpenSource/VulkanMemoryAllocator/VulkanMemoryAllocator.h"
 
+#ifdef __cplusplus
+#ifndef MAKE_ENUM_FLAG
 #define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
 	static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b)); } \
 	static inline ENUM_TYPE operator&(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) & (TYPE)(b)); } \
 	static inline ENUM_TYPE operator|=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a | b); }                      \
 	static inline ENUM_TYPE operator&=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a & b); }
+
+#endif
+#else
+#define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)
+#endif
 
 // default capability levels of the renderer
 enum
@@ -211,6 +218,7 @@ typedef enum DescriptorType
 	/// RTV / DSV per depth slice
 	DESCRIPTOR_TYPE_RENDER_TARGET_DEPTH_SLICES = (DESCRIPTOR_TYPE_RENDER_TARGET_ARRAY_SLICES << 1),
 	DESCRIPTOR_TYPE_RAY_TRACING = (DESCRIPTOR_TYPE_RENDER_TARGET_DEPTH_SLICES << 1),
+#if defined(VULKAN)
 	/// Subpass input (descriptor type only available in Vulkan)
 	DESCRIPTOR_TYPE_INPUT_ATTACHMENT = (DESCRIPTOR_TYPE_RAY_TRACING << 1),
 	DESCRIPTOR_TYPE_TEXEL_BUFFER = (DESCRIPTOR_TYPE_INPUT_ATTACHMENT << 1),
@@ -222,6 +230,12 @@ typedef enum DescriptorType
 	DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_BUILD_INPUT = (DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE << 1),
 	DESCRIPTOR_TYPE_SHADER_DEVICE_ADDRESS = (DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_BUILD_INPUT << 1),
 	DESCRIPTOR_TYPE_SHADER_BINDING_TABLE = (DESCRIPTOR_TYPE_SHADER_DEVICE_ADDRESS << 1),
+#endif
+#if defined(METAL)
+	DESCRIPTOR_TYPE_ARGUMENT_BUFFER = (DESCRIPTOR_TYPE_RAY_TRACING << 1),
+	DESCRIPTOR_TYPE_INDIRECT_COMMAND_BUFFER = (DESCRIPTOR_TYPE_ARGUMENT_BUFFER << 1),
+	DESCRIPTOR_TYPE_RENDER_PIPELINE_STATE = (DESCRIPTOR_TYPE_INDIRECT_COMMAND_BUFFER << 1),
+#endif
 } DescriptorType;
 MAKE_ENUM_FLAG(uint32_t, DescriptorType)
 
@@ -771,6 +785,7 @@ typedef struct DEFINE_ALIGNED(Sampler, 16)
 		} mVulkan;
 	};
 } Sampler;
+COMPILE_ASSERT(sizeof(Sampler) <= 8 * sizeof(uint64_t)); 
 
 typedef enum DescriptorUpdateFrequency
 {
@@ -964,6 +979,7 @@ typedef struct DEFINE_ALIGNED(Cmd, 64)
 	Renderer* pRenderer;
 	Queue* pQueue;
 } Cmd;
+COMPILE_ASSERT(sizeof(Cmd) <= 64 * sizeof(uint64_t));
 
 typedef enum FenceStatus
 {
@@ -1561,6 +1577,7 @@ typedef struct DEFINE_ALIGNED(Pipeline, 64)
 		} mVulkan;
 	};
 } Pipeline;
+COMPILE_ASSERT(sizeof(Pipeline) == 8 * sizeof(uint64_t));
 
 typedef enum PipelineCacheFlags
 {
