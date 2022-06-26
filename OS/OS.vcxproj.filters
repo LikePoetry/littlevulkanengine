@@ -144,6 +144,9 @@
     <ClInclude Include="UI\imgui_user.h">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="Interfaces\IProfiler.h" />
+    <ClInclude Include="Profiler\ProfilerBase.h" />
+    <ClInclude Include="Profiler\GpuProfiler.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">
@@ -260,6 +263,8 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
+    <ClCompile Include="Profiler\ProfilerBase.cpp" />
+    <ClCompile Include="Profiler\GpuProfiler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\ThirdParty\OpenSource\EASTL\EASTL.natvis" />

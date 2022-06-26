@@ -796,9 +796,15 @@ typedef enum DescriptorUpdateFrequency
 	DESCRIPTOR_UPDATE_FREQ_COUNT,
 } DescriptorUpdateFrequency;
 
+/// Data structure holding the layout for a descriptor
 typedef struct DEFINE_ALIGNED(DescriptorInfo, 16)
 {
 	const char* pName;
+#if defined(ORBIS)
+	OrbisDescriptorInfo mStruct;
+#elif defined(PROSPERO)
+	ProsperoDescriptorInfo mStruct;
+#else
 	uint32_t    mType : 21;
 	uint32_t    mDim : 4;
 	uint32_t    mRootDescriptor : 1;
@@ -808,12 +814,60 @@ typedef struct DEFINE_ALIGNED(DescriptorInfo, 16)
 	uint32_t    mHandleIndex;
 	union
 	{
-		uint32_t mVkType;
-		uint32_t mReg : 20;
-		uint32_t mVkStages : 8;
-	} mVulkan;
+#if defined(DIRECT3D12)
+		struct
+		{
+			uint64_t mPadA;
+		} mD3D12;
+#endif
+#if defined(VULKAN)
+		struct
+		{
+			uint32_t mVkType;
+			uint32_t mReg : 20;
+			uint32_t mVkStages : 8;
+		} mVulkan;
+#endif
+#if defined(METAL)
+		struct
+		{
+			id<MTLSamplerState> mtlStaticSampler;
+			uint32_t            mUsedStages : 6;
+			uint32_t            mReg : 10;
+			uint32_t            mIsArgumentBufferField : 1;
+			MTLResourceUsage    mUsage;
+			uint64_t            mPadB[2];
+		};
+#endif
+#if defined(DIRECT3D11)
+		struct
+		{
+			uint32_t mUsedStages : 6;
+			uint32_t mReg : 20;
+			uint32_t mPadA;
+		} mD3D11;
+#endif
+#if defined(GLES)
+		struct
+		{
+			union
+			{
+				uint32_t mGlType;
+				uint32_t mUBOSize;
+				uint32_t mVariableStart;
+			};
+		} mGLES;
+#endif
+	};
+#endif
 } DescriptorInfo;
+#if defined(METAL)
+COMPILE_ASSERT(sizeof(DescriptorInfo) == 8 * sizeof(uint64_t));
+#elif defined(ORBIS) || defined(PROSPERO)
+COMPILE_ASSERT(sizeof(DescriptorInfo) == 2 * sizeof(uint64_t));
+#else
 COMPILE_ASSERT(sizeof(DescriptorInfo) == 4 * sizeof(uint64_t));
+#endif
 
 typedef enum RootSignatureFlags
 {
@@ -847,6 +901,21 @@ typedef struct DEFINE_ALIGNED(RootSignature, 64)
 	DescriptorIndexMap* pDescriptorNameToIndexMap;
 	union
 	{
+#if defined(DIRECT3D12)
+		struct
+		{
+			ID3D12RootSignature* pDxRootSignature;
+			uint8_t              mDxViewDescriptorTableRootIndices[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint8_t              mDxSamplerDescriptorTableRootIndices[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint32_t             mDxCumulativeViewDescriptorCounts[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint32_t             mDxCumulativeSamplerDescriptorCounts[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint16_t             mDxViewDescriptorCounts[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint16_t             mDxSamplerDescriptorCounts[DESCRIPTOR_UPDATE_FREQ_COUNT];
+			uint64_t             mPadA;
+			uint64_t             mPadB;
+		} mD3D12;
+#endif
+#if defined(VULKAN)
 		struct
 		{
 			VkPipelineLayout            pPipelineLayout;
@@ -859,9 +928,60 @@ typedef struct DEFINE_ALIGNED(RootSignature, 64)
 			VkDescriptorPool            pEmptyDescriptorPool[DESCRIPTOR_UPDATE_FREQ_COUNT];
 			VkDescriptorSet             pEmptyDescriptorSet[DESCRIPTOR_UPDATE_FREQ_COUNT];
 		} mVulkan;
+#endif
+#if defined(METAL)
+		struct
+		{
+			NSMutableArray<MTLArgumentDescriptor*>*
+				mArgumentDescriptors[DESCRIPTOR_UPDATE_FREQ_COUNT] API_AVAILABLE(macos(10.13), ios(11.0));
+			uint32_t mRootTextureCount : 10;
+			uint32_t mRootBufferCount : 10;
+			uint32_t mRootSamplerCount : 10;
+		};
+#endif
+#if defined(DIRECT3D11)
+		struct
+		{
+			ID3D11SamplerState** ppStaticSamplers;
+			uint32_t* pStaticSamplerSlots;
+			ShaderStage* pStaticSamplerStages;
+			uint32_t             mStaticSamplerCount;
+			uint32_t             mSrvCount : 10;
+			uint32_t             mUavCount : 10;
+			uint32_t             mCbvCount : 10;
+			uint32_t             mSamplerCount : 10;
+			uint32_t             mDynamicCbvCount : 10;
+			uint32_t             mPadA;
+		} mD3D11;
+#endif
+#if defined(GLES)
+		struct
+		{
+			uint32_t           mProgramCount : 6;
+			uint32_t           mVariableCount : 10;
+			uint32_t* pProgramTargets;
+			int32_t* pDescriptorGlLocations;
+			struct GlVariable* pVariables;
+			Sampler* pSampler;
+		} mGLES;
+#endif
+#if defined(ORBIS)
+		OrbisRootSignature mStruct;
+#endif
+#if defined(PROSPERO)
+		ProsperoRootSignature mStruct;
+#endif
 	};
 } RootSignature;
+#if defined(VULKAN)
 COMPILE_ASSERT(sizeof(RootSignature) <= 72 * sizeof(uint64_t));
+#elif defined(ORBIS) || defined(PROSPERO) || defined(DIRECT3D12)
+// 2 cache lines
+COMPILE_ASSERT(sizeof(RootSignature) <= 16 * sizeof(uint64_t));
+#else
+// 1 cache line
+COMPILE_ASSERT(sizeof(RootSignature) == 8 * sizeof(uint64_t));
+#endif
 
 typedef struct DescriptorDataRange
 {
@@ -922,6 +1042,27 @@ typedef struct DEFINE_ALIGNED(DescriptorSet, 64)
 {
 	union
 	{
+#if defined(DIRECT3D12)
+		struct
+		{
+			/// Start handle to cbv srv uav descriptor table
+			DxDescriptorID               mCbvSrvUavHandle;
+			/// Start handle to sampler descriptor table
+			DxDescriptorID               mSamplerHandle;
+			/// Stride of the cbv srv uav descriptor table (number of descriptors * descriptor size)
+			uint32_t                   mCbvSrvUavStride;
+			/// Stride of the sampler descriptor table (number of descriptors * descriptor size)
+			uint32_t                   mSamplerStride;
+			const RootSignature* pRootSignature;
+			uint32_t                   mMaxSets : 16;
+			uint32_t                   mUpdateFrequency : 3;
+			uint32_t                   mNodeIndex : 4;
+			uint32_t                   mCbvSrvUavRootIndex : 4;
+			uint32_t                   mSamplerRootIndex : 4;
+			uint32_t                   mPipelineType : 3;
+		} mD3D12;
+#endif
+#if defined(VULKAN)
 		struct
 		{
 			VkDescriptorSet* pHandles;
@@ -935,6 +1076,49 @@ typedef struct DEFINE_ALIGNED(DescriptorSet, 64)
 			uint8_t                      mNodeIndex;
 			uint8_t                      mPadA;
 		} mVulkan;
+#endif
+#if defined(METAL)
+		struct
+		{
+			id<MTLArgumentEncoder> mArgumentEncoder API_AVAILABLE(macos(10.13), ios(11.0));
+			Buffer* mArgumentBuffer API_AVAILABLE(macos(10.13), ios(11.0));
+			const RootSignature* pRootSignature;
+			/// Descriptors that are bound without argument buffers
+			/// This is necessary since there are argument buffers bugs in some iOS Metal drivers which causes shader compiler crashes or incorrect shader generation. This makes it necessary to keep fallback descriptor binding path alive
+			struct RootDescriptorData* pRootDescriptorData;
+			uint32_t                   mChunkSize;
+			uint32_t                   mMaxSets;
+			uint32_t                   mRootBufferCount : 10;
+			uint32_t                   mRootTextureCount : 10;
+			uint32_t                   mRootSamplerCount : 10;
+			uint8_t                    mUpdateFrequency;
+			uint8_t                    mNodeIndex;
+			uint8_t                    mStages;
+		};
+#endif
+#if defined(DIRECT3D11)
+		struct
+		{
+			struct DescriptorDataArray* pHandles;
+			const RootSignature* pRootSignature;
+			uint16_t                    mMaxSets;
+		} mD3D11;
+#endif
+#if defined(GLES)
+		struct
+		{
+			struct DescriptorDataArray* pHandles;
+			uint8_t                     mUpdateFrequency;
+			const RootSignature* pRootSignature;
+			uint16_t                    mMaxSets;
+		} mGLES;
+#endif
+#if defined(ORBIS)
+		OrbisDescriptorSet mStruct;
+#endif
+#if defined(PROSPERO)
+		ProsperoDescriptorSet mStruct;
+#endif
 	};
 } DescriptorSet;
 
@@ -1346,54 +1530,142 @@ typedef struct GPUSettings
 
 typedef struct DEFINE_ALIGNED(Renderer, 64)
 {
-	struct
+#if defined(USE_MULTIPLE_RENDER_APIS)
+	union
 	{
-		VkInstance                   pVkInstance;
-		VkPhysicalDevice             pVkActiveGPU;
-		VkPhysicalDeviceProperties2* pVkActiveGPUProperties;
-		VkDevice                     pVkDevice;
-#ifdef ENABLE_DEBUG_UTILS_EXTENSION
-		VkDebugUtilsMessengerEXT pVkDebugUtilsMessenger;
-#else
-		VkDebugReportCallbackEXT                 pVkDebugReport;
 #endif
-		uint32_t** pAvailableQueueCount;
-		uint32_t** pUsedQueueCount;
-		VkDescriptorPool       pEmptyDescriptorPool;
-		VkDescriptorSetLayout  pEmptyDescriptorSetLayout;
-		VkDescriptorSet        pEmptyDescriptorSet;
-		struct VmaAllocator_T* pVmaAllocator;
-		uint32_t               mRaytracingSupported : 1;
-		uint32_t               mYCbCrExtension : 1;
-		uint32_t               mKHRSpirv14Extension : 1;
-		uint32_t               mKHRAccelerationStructureExtension : 1;
-		uint32_t               mKHRRayTracingPipelineExtension : 1;
-		uint32_t               mKHRRayQueryExtension : 1;
-		uint32_t               mAMDGCNShaderExtension : 1;
-		uint32_t               mAMDDrawIndirectCountExtension : 1;
-		uint32_t               mDescriptorIndexingExtension : 1;
-		uint32_t               mShaderFloatControlsExtension : 1;
-		uint32_t               mBufferDeviceAddressExtension : 1;
-		uint32_t               mDeferredHostOperationsExtension : 1;
-		uint32_t               mDrawIndirectCountExtension : 1;
-		uint32_t               mDedicatedAllocationExtension : 1;
-		uint32_t               mExternalMemoryExtension : 1;
-		uint32_t               mDebugMarkerSupport : 1;
-		uint32_t               mOwnInstance : 1;
-#if defined(QUEST_VR)
-		uint32_t               mMultiviewExtension : 1;
-#endif
-		union
+#if defined(DIRECT3D12)
+		struct
 		{
-			struct
+			// API specific descriptor heap and memory allocator
+			struct DescriptorHeap** pCPUDescriptorHeaps;
+			struct DescriptorHeap** pCbvSrvUavHeaps;
+			struct DescriptorHeap** pSamplerHeaps;
+			class D3D12MA::Allocator* pResourceAllocator;
+#if defined(XBOX)
+			IDXGIFactory2* pDXGIFactory;
+			IDXGIAdapter* pDxActiveGPU;
+			ID3D12Device* pDxDevice;
+			EsramManager* pESRAMManager;
+#elif defined(DIRECT3D12)
+			IDXGIFactory6* pDXGIFactory;
+			IDXGIAdapter4* pDxActiveGPU;
+			ID3D12Device* pDxDevice;
+#if defined(_WINDOWS) && defined(DRED)
+			ID3D12DeviceRemovedExtendedDataSettings* pDredSettings;
+#else
+			uint64_t mPadA;
+#endif
+#endif
+			ID3D12Debug* pDXDebug;
+#if defined(_WINDOWS)
+			ID3D12InfoQueue* pDxDebugValidation;
+#endif
+		} mD3D12;
+#endif
+#if defined(VULKAN)
+		struct
+		{
+			VkInstance                   pVkInstance;
+			VkPhysicalDevice             pVkActiveGPU;
+			VkPhysicalDeviceProperties2* pVkActiveGPUProperties;
+			VkDevice                     pVkDevice;
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+			VkDebugUtilsMessengerEXT pVkDebugUtilsMessenger;
+#else
+			VkDebugReportCallbackEXT                 pVkDebugReport;
+#endif
+			uint32_t** pAvailableQueueCount;
+			uint32_t** pUsedQueueCount;
+			VkDescriptorPool       pEmptyDescriptorPool;
+			VkDescriptorSetLayout  pEmptyDescriptorSetLayout;
+			VkDescriptorSet        pEmptyDescriptorSet;
+			struct VmaAllocator_T* pVmaAllocator;
+			uint32_t               mRaytracingSupported : 1;
+			uint32_t               mYCbCrExtension : 1;
+			uint32_t               mKHRSpirv14Extension : 1;
+			uint32_t               mKHRAccelerationStructureExtension : 1;
+			uint32_t               mKHRRayTracingPipelineExtension : 1;
+			uint32_t               mKHRRayQueryExtension : 1;
+			uint32_t               mAMDGCNShaderExtension : 1;
+			uint32_t               mAMDDrawIndirectCountExtension : 1;
+			uint32_t               mDescriptorIndexingExtension : 1;
+			uint32_t               mShaderFloatControlsExtension : 1;
+			uint32_t               mBufferDeviceAddressExtension : 1;
+			uint32_t               mDeferredHostOperationsExtension : 1;
+			uint32_t               mDrawIndirectCountExtension : 1;
+			uint32_t               mDedicatedAllocationExtension : 1;
+			uint32_t               mExternalMemoryExtension : 1;
+			uint32_t               mDebugMarkerSupport : 1;
+			uint32_t               mOwnInstance : 1;
+#if defined(QUEST_VR)
+			uint32_t               mMultiviewExtension : 1;
+#endif
+			union
 			{
-				uint8_t mGraphicsQueueFamilyIndex;
-				uint8_t mTransferQueueFamilyIndex;
-				uint8_t mComputeQueueFamilyIndex;
+				struct
+				{
+					uint8_t mGraphicsQueueFamilyIndex;
+					uint8_t mTransferQueueFamilyIndex;
+					uint8_t mComputeQueueFamilyIndex;
+				};
+				uint8_t mQueueFamilyIndices[3];
 			};
-			uint8_t mQueueFamilyIndices[3];
-		};
 	} mVulkan;
+#endif
+#if defined(METAL)
+		struct
+		{
+			id<MTLDevice>          pDevice;
+			struct VmaAllocator_T* pVmaAllocator;
+			NOREFS id<MTLHeap>* pHeaps API_AVAILABLE(macos(10.13), ios(10.0));
+			uint32_t                   mHeapCount;
+			uint32_t                   mHeapCapacity;
+			// #TODO: Store this in GpuSettings struct
+			uint64_t mVRAM;
+			// To synchronize resource allocation done through automatic heaps
+			Mutex* pHeapMutex;
+			uint64_t mPadA[3];
+		};
+#endif
+#if defined(DIRECT3D11)
+		struct
+		{
+			IDXGIFactory1* pDXGIFactory;
+			IDXGIAdapter1* pDxActiveGPU;
+			ID3D11Device* pDxDevice;
+			ID3D11DeviceContext* pDxContext;
+			ID3D11DeviceContext1* pDxContext1;
+			ID3D11BlendState* pDefaultBlendState;
+			ID3D11DepthStencilState* pDefaultDepthState;
+			ID3D11RasterizerState* pDefaultRasterizerState;
+			uint32_t                 mPartialUpdateConstantBufferSupported : 1;
+			D3D_FEATURE_LEVEL        mFeatureLevel;
+#if defined(ENABLE_PERFORMANCE_MARKER)
+			ID3DUserDefinedAnnotation* pUserDefinedAnnotation;
+#else
+			uint64_t                                 mPadB;
+#endif
+			uint32_t mPadA;
+		} mD3D11;
+#endif
+#if defined(GLES)
+		struct
+		{
+			GLContext pContext;
+			GLConfig  pConfig;
+		} mGLES;
+#endif
+#if defined(ORBIS)
+		struct
+		{
+			uint64_t mPadA;
+			uint64_t mPadB;
+		};
+#endif
+#if defined(USE_MULTIPLE_RENDER_APIS)
+};
+#endif
 
 #if defined(ENABLE_NSIGHT_AFTERMATH)
 	// GPU crash dump tracker using Nsight Aftermath instrumentation

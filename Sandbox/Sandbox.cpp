@@ -4,7 +4,9 @@
 #include "../OS/Interfaces/ILog.h"
 #include "../OS/Interfaces/IFont.h"
 #include "../OS/Interfaces/IScreenshot.h"
+#include "../OS/Interfaces/IUI.h"
 #include "../OS/Interfaces/ICameraController.h"
+#include "../OS/Interfaces/IProfiler.h"
 
 
 #include "../Renderer/Include/IRenderer.h"
@@ -53,6 +55,9 @@ DescriptorSet* pDescriptorSetUniforms = { NULL };
 
 Buffer* pProjViewUniformBuffer[gImageCount] = { NULL };
 Buffer* pSkyboxUniformBuffer[gImageCount] = { NULL };
+
+uint32_t gFrameIndex = 0;
+ProfileToken gGpuProfileToken = PROFILE_INVALID_TOKEN;
 
 Shader* pCrashShader = NULL;
 
@@ -210,6 +215,7 @@ public:
 		rootDesc.ppShaders = shaders;
 		vk_addRootSignature(pRenderer, &rootDesc, &pRootSignature);
 
+
 		DescriptorSetDesc desc = { pRootSignature, DESCRIPTOR_UPDATE_FREQ_NONE, 1 };
 		vk_addDescriptorSet(pRenderer, &desc, &pDescriptorSetTexture);
 		desc = { pRootSignature, DESCRIPTOR_UPDATE_FREQ_PER_FRAME, gImageCount * 2 };
@@ -267,6 +273,20 @@ public:
 		if (!initFontSystem(&fontRenderDesc))
 			return false; // report?
 
+		// Initialize Forge User Interface Rendering
+		UserInterfaceDesc uiRenderDesc = {};
+		uiRenderDesc.pRenderer = pRenderer;
+		initUserInterface(&uiRenderDesc);
+
+		// Initialize micro profiler and its UI.
+		ProfilerDesc profiler = {};
+		profiler.pRenderer = pRenderer;
+		profiler.mWidthUI = mSettings.mWidth;
+		profiler.mHeightUI = mSettings.mHeight;
+		initProfiler(&profiler);
+
+		// Gpu profiler can only be added after initProfile
+		gGpuProfileToken = addGpuProfiler(pRenderer, pGraphicsQueue, "Graphics");
 
 
 		LOGF(LogLevel::eERROR, "error ocure");

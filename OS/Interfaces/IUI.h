@@ -354,6 +354,27 @@ typedef struct UIComponent
 
 
 /****************************************************************************/
+// MARK: - Forge User Interface Data Structures
+/****************************************************************************/
+
+struct UserInterfaceDesc
+{
+	void* pRenderer = NULL;
+	void* pCache = NULL;
+
+	uint32_t maxDynamicUIUpdatesPerBatch = 20u;
+};
+
+/****************************************************************************/
+// MARK: - Application Life Cycle 
+/****************************************************************************/
+
+/// Initializes the Forge Rendering objects associated with the User Interface
+/// The Forge's User Interface makes use of ImGUI
+/// To be called at application initialization time by the App Layer
+void initUserInterface(UserInterfaceDesc* pDesc);
+
+/****************************************************************************/
 // MARK: - UI Component Public Functions
 /****************************************************************************/
 

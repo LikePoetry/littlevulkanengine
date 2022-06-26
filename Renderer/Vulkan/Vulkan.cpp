@@ -4821,9 +4821,9 @@ void vk_initRenderer(const char* appName, const RendererDesc* pDesc, Renderer** 
 #endif
 #if VMA_VULKAN_VERSION >= 1003000
 		/// Fetch from "vkGetDeviceBufferMemoryRequirements" on Vulkan >= 1.3, but you can also fetch it from "vkGetDeviceBufferMemoryRequirementsKHR" if you enabled extension VK_KHR_maintenance4.
-		vulkanFunctions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
+		vulkanFunctions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirementsKHR;
 		/// Fetch from "vkGetDeviceImageMemoryRequirements" on Vulkan >= 1.3, but you can also fetch it from "vkGetDeviceImageMemoryRequirementsKHR" if you enabled extension VK_KHR_maintenance4.
-		vulkanFunctions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements;
+		vulkanFunctions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirementsKHR;
 #endif
 
 		createInfo.pVulkanFunctions = &vulkanFunctions;
@@ -5518,6 +5518,7 @@ void vk_addRootSignature(Renderer* pRenderer, const RootSignatureDesc* pRootSign
 			// Store the vulkan related info in the descriptor to avoid constantly calling the util_to_vk mapping functions
 			pDesc->mVulkan.mVkType = binding.descriptorType;
 			pDesc->mVulkan.mVkStages = binding.stageFlags;
+
 			pDesc->mUpdateFrequency = updateFreq;
 
 			// Find if the given descriptor is a static sampler

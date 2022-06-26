@@ -12,6 +12,8 @@
 
 #include "../Interfaces/IMemory.h"
 
+static const uint32_t MAX_FRAMES = 3;
+
 typedef struct UserInterface
 {
 	float					mWidth = 0.f;
@@ -33,8 +35,27 @@ typedef struct UserInterface
 	uint32_t				frameIdx = 0;
 
 	Shader* pShaderTextured = NULL;
+	RootSignature* pRootSignatureTextured = NULL;
 	DescriptorSet* pDescriptorSetUniforms = NULL;
 	DescriptorSet* pDescriptorSetTexture = NULL;
+	Pipeline* pPipelineTextured = NULL;
+	Buffer* pVertexBuffer = NULL;
+	Buffer* pIndexBuffer = NULL;
+	Buffer* pUniformBuffer[MAX_FRAMES] = { NULL };
+	/// Default states
+	Sampler* pDefaultSampler = NULL;
+	VertexLayout     mVertexLayoutTextured = {};
+	uint32_t         mDynamicUIUpdates = 0;
+	float            mNavInputs[ImGuiNavInput_COUNT] = { 0.0f };
+	const float2* pMovePosition = NULL;
+	uint32_t         mLastUpdateCount = 0;
+	float2           mLastUpdateMin[64] = {};
+	float2           mLastUpdateMax[64] = {};
+	bool             mActive = false;
+	bool             mPostUpdateKeyDownStates[512] = { false };
+
+	// Since gestures events always come first, we want to dismiss any other inputs after that
+	bool mHandledGestures = false;
 
 } UserInterface;
 
@@ -770,6 +791,109 @@ bool addImguiFont(void* pFontBuffer, uint32_t fontBufferSize, void* pFontGlyphRa
 	vk_updateDescriptorSet(pUserInterface->pRenderer, (uint32_t)pUserInterface->mFontTextures.size() - 1, pUserInterface->pDescriptorSetTexture, 1, params);
 
 	return true;
+}
+
+/****************************************************************************/
+// MARK: - Public App Layer Life Cycle Functions
+/****************************************************************************/
+void initUserInterface(UserInterfaceDesc* pDesc)
+{
+#ifdef ENABLE_FORGE_UI
+	pUserInterface->pRenderer = (Renderer*)pDesc->pRenderer;
+	pUserInterface->pPipelineCache = (PipelineCache*)pDesc->pCache;
+	pUserInterface->mMaxDynamicUIUpdatesPerBatch = pDesc->maxDynamicUIUpdatesPerBatch;
+
+	/************************************************************************/
+	// Rendering resources
+	/************************************************************************/
+	SamplerDesc samplerDesc = { FILTER_LINEAR,
+								FILTER_LINEAR,
+								MIPMAP_MODE_NEAREST,
+								ADDRESS_MODE_CLAMP_TO_EDGE,
+								ADDRESS_MODE_CLAMP_TO_EDGE,
+								ADDRESS_MODE_CLAMP_TO_EDGE };
+	vk_addSampler(pUserInterface->pRenderer, &samplerDesc, &pUserInterface->pDefaultSampler);
+
+#ifdef ENABLE_UI_PRECOMPILED_SHADERS
+	BinaryShaderDesc binaryShaderDesc = {};
+	binaryShaderDesc.mStages = SHADER_STAGE_VERT | SHADER_STAGE_FRAG;
+	binaryShaderDesc.mVert.mByteCodeSize = sizeof(gShaderImguiVert);
+	binaryShaderDesc.mVert.pByteCode = (char*)gShaderImguiVert;
+	binaryShaderDesc.mVert.pEntryPoint = "main";
+	binaryShaderDesc.mFrag.mByteCodeSize = sizeof(gShaderImguiFrag);
+	binaryShaderDesc.mFrag.pByteCode = (char*)gShaderImguiFrag;
+	binaryShaderDesc.mFrag.pEntryPoint = "main";
+	addShaderBinary(pRenderer, &binaryShaderDesc, &pShaderTextured);
+#else
+	ShaderLoadDesc texturedShaderDesc = {};
+	texturedShaderDesc.mStages[0] = { "imgui.vert", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW };
+	texturedShaderDesc.mStages[1] = { "imgui.frag", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_ENABLE_VR_MULTIVIEW };
+	addShader(pUserInterface->pRenderer, &texturedShaderDesc, &pUserInterface->pShaderTextured);
+#endif
+
+	const char* pStaticSamplerNames[] = { "uSampler" };
+	RootSignatureDesc textureRootDesc = { &pUserInterface->pShaderTextured, 1 };
+	textureRootDesc.mStaticSamplerCount = 1;
+	textureRootDesc.ppStaticSamplerNames = pStaticSamplerNames;
+	textureRootDesc.ppStaticSamplers = &pUserInterface->pDefaultSampler;
+	vk_addRootSignature(pUserInterface->pRenderer, &textureRootDesc, &pUserInterface->pRootSignatureTextured);
+
+	DescriptorSetDesc setDesc = { pUserInterface->pRootSignatureTextured, DESCRIPTOR_UPDATE_FREQ_PER_BATCH, 1 + (pDesc->maxDynamicUIUpdatesPerBatch * MAX_FRAMES) };
+	vk_addDescriptorSet(pUserInterface->pRenderer, &setDesc, &pUserInterface->pDescriptorSetTexture);
+	setDesc = { pUserInterface->pRootSignatureTextured, DESCRIPTOR_UPDATE_FREQ_NONE, MAX_FRAMES };
+	vk_addDescriptorSet(pUserInterface->pRenderer, &setDesc, &pUserInterface->pDescriptorSetUniforms);
+
+	BufferLoadDesc vbDesc = {};
+	vbDesc.mDesc.mDescriptors = DESCRIPTOR_TYPE_VERTEX_BUFFER;
+	vbDesc.mDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_TO_GPU;
+	vbDesc.mDesc.mSize = VERTEX_BUFFER_SIZE * MAX_FRAMES;
+	vbDesc.mDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
+	vbDesc.ppBuffer = &pUserInterface->pVertexBuffer;
+	addResource(&vbDesc, NULL);
+
+	BufferLoadDesc ibDesc = vbDesc;
+	ibDesc.mDesc.mDescriptors = DESCRIPTOR_TYPE_INDEX_BUFFER;
+	ibDesc.mDesc.mSize = INDEX_BUFFER_SIZE * MAX_FRAMES;
+	ibDesc.ppBuffer = &pUserInterface->pIndexBuffer;
+	addResource(&ibDesc, NULL);
+
+	BufferLoadDesc ubDesc = {};
+	ubDesc.mDesc.mDescriptors = DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	ubDesc.mDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_TO_GPU;
+	ubDesc.mDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
+	ubDesc.mDesc.mSize = sizeof(mat4);
+	for (uint32_t i = 0; i < MAX_FRAMES; ++i)
+	{
+		ubDesc.ppBuffer = &pUserInterface->pUniformBuffer[i];
+		addResource(&ubDesc, NULL);
+	}
+
+	pUserInterface->mVertexLayoutTextured.mAttribCount = 3;
+	pUserInterface->mVertexLayoutTextured.mAttribs[0].mSemantic = SEMANTIC_POSITION;
+	pUserInterface->mVertexLayoutTextured.mAttribs[0].mFormat = TinyImageFormat_R32G32_SFLOAT;
+	pUserInterface->mVertexLayoutTextured.mAttribs[0].mBinding = 0;
+	pUserInterface->mVertexLayoutTextured.mAttribs[0].mLocation = 0;
+	pUserInterface->mVertexLayoutTextured.mAttribs[0].mOffset = 0;
+	pUserInterface->mVertexLayoutTextured.mAttribs[1].mSemantic = SEMANTIC_TEXCOORD0;
+	pUserInterface->mVertexLayoutTextured.mAttribs[1].mFormat = TinyImageFormat_R32G32_SFLOAT;
+	pUserInterface->mVertexLayoutTextured.mAttribs[1].mBinding = 0;
+	pUserInterface->mVertexLayoutTextured.mAttribs[1].mLocation = 1;
+	pUserInterface->mVertexLayoutTextured.mAttribs[1].mOffset = TinyImageFormat_BitSizeOfBlock(pUserInterface->mVertexLayoutTextured.mAttribs[0].mFormat) / 8;
+	pUserInterface->mVertexLayoutTextured.mAttribs[2].mSemantic = SEMANTIC_COLOR;
+	pUserInterface->mVertexLayoutTextured.mAttribs[2].mFormat = TinyImageFormat_R8G8B8A8_UNORM;
+	pUserInterface->mVertexLayoutTextured.mAttribs[2].mBinding = 0;
+	pUserInterface->mVertexLayoutTextured.mAttribs[2].mLocation = 2;
+	pUserInterface->mVertexLayoutTextured.mAttribs[2].mOffset =
+		pUserInterface->mVertexLayoutTextured.mAttribs[1].mOffset + TinyImageFormat_BitSizeOfBlock(pUserInterface->mVertexLayoutTextured.mAttribs[1].mFormat) / 8;
+
+	for (uint32_t i = 0; i < MAX_FRAMES; ++i)
+	{
+		DescriptorData params[1] = {};
+		params[0].pName = "uniformBlockVS";
+		params[0].ppBuffers = &pUserInterface->pUniformBuffer[i];
+		vk_updateDescriptorSet(pUserInterface->pRenderer, i, pUserInterface->pDescriptorSetUniforms, 1, params);
+	}
+#endif
 }
 
 /****************************************************************************/

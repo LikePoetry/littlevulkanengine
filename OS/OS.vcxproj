@@ -112,6 +112,7 @@
     <ClInclude Include="Interfaces\ILog.h" />
     <ClInclude Include="Interfaces\IMemory.h" />
     <ClInclude Include="Interfaces\IOperatingSystem.h" />
+    <ClInclude Include="Interfaces\IProfiler.h" />
     <ClInclude Include="Interfaces\IScreenshot.h" />
     <ClInclude Include="Interfaces\IScripting.h" />
     <ClInclude Include="Interfaces\IThread.h" />
@@ -119,6 +120,8 @@
     <ClInclude Include="Interfaces\IUI.h" />
     <ClInclude Include="Logging\Log.h" />
     <ClInclude Include="Math\MathTypes.h" />
+    <ClInclude Include="Profiler\GpuProfiler.h" />
+    <ClInclude Include="Profiler\ProfilerBase.h" />
     <ClInclude Include="UI\imgui_user.h" />
   </ItemGroup>
   <ItemGroup>
@@ -150,6 +153,8 @@
     <ClCompile Include="Input\InputSystem.cpp" />
     <ClCompile Include="Logging\Log.c" />
     <ClCompile Include="MemoryTracking\MemoryTracking.c" />
+    <ClCompile Include="Profiler\GpuProfiler.cpp" />
+    <ClCompile Include="Profiler\ProfilerBase.cpp" />
     <ClCompile Include="Scripting\LuaSystem.cpp" />
     <ClCompile Include="UI\UI.cpp" />
     <ClCompile Include="UI\imgui_user.cpp" />
