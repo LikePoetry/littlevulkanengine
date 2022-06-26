@@ -147,6 +147,7 @@
     <ClInclude Include="Interfaces\IProfiler.h" />
     <ClInclude Include="Profiler\ProfilerBase.h" />
     <ClInclude Include="Profiler\GpuProfiler.h" />
+    <ClInclude Include="Profiler\ProfilerHTML.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">

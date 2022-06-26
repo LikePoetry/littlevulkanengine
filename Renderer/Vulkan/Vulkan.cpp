@@ -29,6 +29,7 @@
 
 extern void vk_createShaderReflection(const uint8_t* shaderCode, uint32_t shaderSize, ShaderStage shaderStage, ShaderReflection* pOutReflection);
 //#ifdef VK_RAYTRACING_AVAILABLE
+extern void vk_addRaytracingPipeline(const PipelineDesc*, Pipeline**);
 extern void vk_FillRaytracingDescriptorData(uint32_t count, AccelerationStructure** const ppAccelerationStructures, VkAccelerationStructureKHR* pOutHandles);
 //#endif
 
@@ -175,6 +176,22 @@ VkAllocationCallbacks gVkAllocationCallbacks =
 	// pfnInternalFree
 	gVkInternalFree
 };
+
+VkAttachmentLoadOp gVkAttachmentLoadOpTranslator[LoadActionType::MAX_LOAD_ACTION] =
+{
+	VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	VK_ATTACHMENT_LOAD_OP_LOAD,
+	VK_ATTACHMENT_LOAD_OP_CLEAR,
+};
+
+VkAttachmentStoreOp gVkAttachmentStoreOpTranslator[StoreActionType::MAX_STORE_ACTION] =
+{
+	VK_ATTACHMENT_STORE_OP_STORE,
+	VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	// Dont care is treated as store op none in most drivers
+	VK_ATTACHMENT_STORE_OP_DONT_CARE,
+};
+
 
 /************************************************************************/
 // Per Thread Render Pass synchronization logic
@@ -476,6 +493,8 @@ static void util_initial_transition(Renderer* pRenderer, Texture* pTexture, Reso
 		tf_free((void*)p_var); \
 	}
 
+VkSampleCountFlagBits util_to_vk_sample_count(SampleCount sampleCount);
+
 static void add_default_resources(Renderer* pRenderer)
 {
 	initMutex(&pRenderer->pNullDescriptors->mSubmitMutex);
@@ -633,6 +652,194 @@ static void add_default_resources(Renderer* pRenderer)
 		}
 	}
 }
+
+/************************************************************************/
+// Render Pass Implementation
+/************************************************************************/
+static const LoadActionType gDefaultLoadActions[MAX_RENDER_TARGET_ATTACHMENTS] = {};
+static const StoreActionType gDefaultStoreActions[MAX_RENDER_TARGET_ATTACHMENTS] = {};
+
+typedef struct RenderPassDesc
+{
+	TinyImageFormat* pColorFormats;
+	const LoadActionType* pLoadActionsColor;
+	const StoreActionType* pStoreActionsColor;
+	bool* pSrgbValues;
+	uint32_t               mRenderTargetCount;
+	SampleCount            mSampleCount;
+	TinyImageFormat        mDepthStencilFormat;
+	LoadActionType         mLoadActionDepth;
+	LoadActionType         mLoadActionStencil;
+	StoreActionType        mStoreActionDepth;
+	StoreActionType        mStoreActionStencil;
+	bool                   mVRMultiview;
+	bool                   mVRFoveatedRendering;
+} RenderPassDesc;
+
+typedef struct RenderPass
+{
+	VkRenderPass   pRenderPass;
+	RenderPassDesc mDesc;
+} RenderPass;
+
+static void add_render_pass(Renderer* pRenderer, const RenderPassDesc* pDesc, RenderPass** ppRenderPass)
+{
+	RenderPass* pRenderPass = (RenderPass*)tf_calloc(1, sizeof(*pRenderPass));
+	pRenderPass->mDesc = *pDesc;
+	/************************************************************************/
+	// Add render pass
+	/************************************************************************/
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+
+	uint32_t colorAttachmentCount = pDesc->mRenderTargetCount;
+	uint32_t depthAttachmentCount = (pDesc->mDepthStencilFormat != TinyImageFormat_UNDEFINED) ? 1 : 0;
+
+	VkAttachmentDescription* attachments = NULL;
+	VkAttachmentReference* color_attachment_refs = NULL;
+	VkAttachmentReference* depth_stencil_attachment_ref = NULL;
+
+	VkSampleCountFlagBits sample_count = util_to_vk_sample_count(pDesc->mSampleCount);
+
+	// Fill out attachment descriptions and references
+	{
+		attachments = (VkAttachmentDescription*)tf_calloc(colorAttachmentCount + depthAttachmentCount + (int)pDesc->mVRFoveatedRendering, sizeof(*attachments));
+		ASSERT(attachments);
+
+		if (colorAttachmentCount > 0)
+		{
+			color_attachment_refs = (VkAttachmentReference*)tf_calloc(colorAttachmentCount, sizeof(*color_attachment_refs));
+			ASSERT(color_attachment_refs);
+		}
+		if (depthAttachmentCount > 0)
+		{
+			depth_stencil_attachment_ref = (VkAttachmentReference*)tf_calloc(1, sizeof(*depth_stencil_attachment_ref));
+			ASSERT(depth_stencil_attachment_ref);
+		}
+
+		// Color
+		for (uint32_t i = 0; i < colorAttachmentCount; ++i)
+		{
+			const uint32_t ssidx = i;
+
+			// descriptions
+			attachments[ssidx].flags = 0;
+			attachments[ssidx].format = (VkFormat)TinyImageFormat_ToVkFormat(pDesc->pColorFormats[i]);
+			attachments[ssidx].samples = sample_count;
+			attachments[ssidx].loadOp = gVkAttachmentLoadOpTranslator[pDesc->pLoadActionsColor[i]];
+			attachments[ssidx].storeOp = gVkAttachmentStoreOpTranslator[pDesc->pStoreActionsColor[i]];
+			attachments[ssidx].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			attachments[ssidx].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+			attachments[ssidx].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			attachments[ssidx].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			// references
+			color_attachment_refs[i].attachment = ssidx;    //-V522
+			color_attachment_refs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		}
+	}
+
+	// Depth stencil
+	if (depthAttachmentCount > 0)
+	{
+		uint32_t idx = colorAttachmentCount;
+		attachments[idx].flags = 0;
+		attachments[idx].format = (VkFormat)TinyImageFormat_ToVkFormat(pDesc->mDepthStencilFormat);
+		attachments[idx].samples = sample_count;
+		attachments[idx].loadOp = gVkAttachmentLoadOpTranslator[pDesc->mLoadActionDepth];
+		attachments[idx].storeOp = gVkAttachmentStoreOpTranslator[pDesc->mStoreActionDepth];
+		attachments[idx].stencilLoadOp = gVkAttachmentLoadOpTranslator[pDesc->mLoadActionStencil];
+		attachments[idx].stencilStoreOp = gVkAttachmentStoreOpTranslator[pDesc->mStoreActionStencil];
+		attachments[idx].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		attachments[idx].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		depth_stencil_attachment_ref[0].attachment = idx;    //-V522
+		depth_stencil_attachment_ref[0].layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	}
+
+	uint32_t attachment_count = colorAttachmentCount;
+	attachment_count += depthAttachmentCount;
+
+	void* render_pass_next = NULL;
+#if defined(QUEST_VR)
+	DECLARE_ZERO(VkRenderPassFragmentDensityMapCreateInfoEXT, frag_density_create_info);
+	if (pDesc->mVRFoveatedRendering && pQuest->mFoveatedRenderingEnabled)
+	{
+		uint32_t idx = colorAttachmentCount + depthAttachmentCount;
+		attachments[idx].flags = 0;
+		attachments[idx].format = VK_FORMAT_R8G8_UNORM;
+		attachments[idx].samples = VK_SAMPLE_COUNT_1_BIT;
+		attachments[idx].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[idx].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attachments[idx].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[idx].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attachments[idx].initialLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT;
+		attachments[idx].finalLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT;
+
+		frag_density_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT;
+		frag_density_create_info.fragmentDensityMapAttachment.attachment = colorAttachmentCount + depthAttachmentCount;
+		frag_density_create_info.fragmentDensityMapAttachment.layout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT;
+
+		render_pass_next = &frag_density_create_info;
+		++attachment_count;
+	}
+
+#endif
+
+	DECLARE_ZERO(VkSubpassDescription, subpass);
+	subpass.flags = 0;
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.inputAttachmentCount = 0;
+	subpass.pInputAttachments = NULL;
+	subpass.colorAttachmentCount = colorAttachmentCount;
+	subpass.pColorAttachments = color_attachment_refs;
+	subpass.pResolveAttachments = NULL;
+	subpass.pDepthStencilAttachment = depth_stencil_attachment_ref;
+	subpass.preserveAttachmentCount = 0;
+	subpass.pPreserveAttachments = NULL;
+
+	DECLARE_ZERO(VkRenderPassCreateInfo, create_info);
+	create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	create_info.pNext = render_pass_next;
+	create_info.flags = 0;
+	create_info.attachmentCount = attachment_count;
+	create_info.pAttachments = attachments;
+	create_info.subpassCount = 1;
+	create_info.pSubpasses = &subpass;
+	create_info.dependencyCount = 0;
+	create_info.pDependencies = NULL;
+
+#if defined(QUEST_VR)
+	const uint viewMask = 0b11;
+	DECLARE_ZERO(VkRenderPassMultiviewCreateInfo, multiview_create_info);
+
+	if (pDesc->mVRMultiview)
+	{
+		multiview_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO;
+		multiview_create_info.pNext = create_info.pNext;
+		multiview_create_info.subpassCount = 1;
+		multiview_create_info.pViewMasks = &viewMask;
+		multiview_create_info.dependencyCount = 0;
+		multiview_create_info.correlationMaskCount = 1;
+		multiview_create_info.pCorrelationMasks = &viewMask;
+
+		create_info.pNext = &multiview_create_info;
+	}
+#endif
+
+	CHECK_VKRESULT(vkCreateRenderPass(pRenderer->mVulkan.pVkDevice, &create_info, &gVkAllocationCallbacks, &(pRenderPass->pRenderPass)));
+
+	SAFE_FREE(attachments);
+	SAFE_FREE(color_attachment_refs);
+	SAFE_FREE(depth_stencil_attachment_ref);
+
+	*ppRenderPass = pRenderPass;
+}
+
+static void remove_render_pass(Renderer* pRenderer, RenderPass* pRenderPass)
+{
+	vkDestroyRenderPass(pRenderer->mVulkan.pVkDevice, pRenderPass->pRenderPass, &gVkAllocationCallbacks);
+	SAFE_FREE(pRenderPass);
+}
+
 
 /************************************************************************/
 // Globals
@@ -4093,12 +4300,58 @@ void vk_cmdBindVertexBuffer(Cmd* pCmd, uint32_t bufferCount, Buffer** ppBuffers,
 	vkCmdBindVertexBuffers(pCmd->mVulkan.pVkCmdBuf, 0, capped_buffer_count, buffers, offsets);
 }
 
+void vk_cmdSetViewport(Cmd* pCmd, float x, float y, float width, float height, float minDepth, float maxDepth) 
+{
+	ASSERT(pCmd);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	DECLARE_ZERO(VkViewport, viewport);
+	viewport.x = x;
+	viewport.y = y + height;
+	viewport.width = width;
+	viewport.height = -height;
+	viewport.minDepth = minDepth;
+	viewport.maxDepth = maxDepth;
+	vkCmdSetViewport(pCmd->mVulkan.pVkCmdBuf, 0, 1, &viewport);
+}
+
+void vk_cmdSetScissor(Cmd* pCmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+	ASSERT(pCmd);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	DECLARE_ZERO(VkRect2D, rect);
+	rect.offset.x = x;
+	rect.offset.y = y;
+	rect.extent.width = width;
+	rect.extent.height = height;
+	vkCmdSetScissor(pCmd->mVulkan.pVkCmdBuf, 0, 1, &rect);
+}
+
+void vk_cmdBindIndexBuffer(Cmd* pCmd, Buffer* pBuffer, uint32_t indexType, uint64_t offset) 
+{
+	ASSERT(pCmd);
+	ASSERT(pBuffer);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	VkIndexType vk_index_type = (INDEX_TYPE_UINT16 == indexType) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+	vkCmdBindIndexBuffer(pCmd->mVulkan.pVkCmdBuf, pBuffer->mVulkan.pVkBuffer, offset, vk_index_type);
+}
+
 void vk_cmdDraw(Cmd* pCmd, uint32_t vertex_count, uint32_t first_vertex)
 {
 	ASSERT(pCmd);
 	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
 
 	vkCmdDraw(pCmd->mVulkan.pVkCmdBuf, vertex_count, 1, first_vertex, 0);
+}
+
+void vk_cmdDrawIndexed(Cmd* pCmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex) 
+{
+	ASSERT(pCmd);
+	ASSERT(VK_NULL_HANDLE != pCmd->mVulkan.pVkCmdBuf);
+
+	vkCmdDrawIndexed(pCmd->mVulkan.pVkCmdBuf, index_count, 1, first_index, first_vertex, 0);
 }
 
 void vk_addCmdPool(Renderer* pRenderer, const CmdPoolDesc* pDesc, CmdPool** ppCmdPool)
@@ -5913,6 +6166,721 @@ void vk_addDescriptorSet(Renderer* pRenderer, const DescriptorSetDesc* pDesc, De
 
 	*ppDescriptorSet = pDescriptorSet;
 }
+
+void vk_removeSampler(Renderer* pRenderer, Sampler* pSampler) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pSampler);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pSampler->mVulkan.pVkSampler);
+
+	vkDestroySampler(pRenderer->mVulkan.pVkDevice, pSampler->mVulkan.pVkSampler, &gVkAllocationCallbacks);
+
+	if (NULL != pSampler->mVulkan.pVkSamplerYcbcrConversion)
+	{
+		vkDestroySamplerYcbcrConversion(pRenderer->mVulkan.pVkDevice, pSampler->mVulkan.pVkSamplerYcbcrConversion, &gVkAllocationCallbacks);
+	}
+
+	SAFE_FREE(pSampler);
+}
+
+void vk_removeShader(Renderer* pRenderer, Shader* pShaderProgram) 
+{
+	ASSERT(pRenderer);
+
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+
+	if (pShaderProgram->mStages & SHADER_STAGE_VERT)
+	{
+		vkDestroyShaderModule(
+			pRenderer->mVulkan.pVkDevice, pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mVertexStageIndex],
+			&gVkAllocationCallbacks);
+	}
+
+	if (pShaderProgram->mStages & SHADER_STAGE_TESC)
+	{
+		vkDestroyShaderModule(
+			pRenderer->mVulkan.pVkDevice, pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mHullStageIndex],
+			&gVkAllocationCallbacks);
+	}
+
+	if (pShaderProgram->mStages & SHADER_STAGE_TESE)
+	{
+		vkDestroyShaderModule(
+			pRenderer->mVulkan.pVkDevice, pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mDomainStageIndex],
+			&gVkAllocationCallbacks);
+	}
+
+	if (pShaderProgram->mStages & SHADER_STAGE_GEOM)
+	{
+		vkDestroyShaderModule(
+			pRenderer->mVulkan.pVkDevice, pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mGeometryStageIndex],
+			&gVkAllocationCallbacks);
+	}
+
+	if (pShaderProgram->mStages & SHADER_STAGE_FRAG)
+	{
+		vkDestroyShaderModule(
+			pRenderer->mVulkan.pVkDevice, pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mPixelStageIndex],
+			&gVkAllocationCallbacks);
+	}
+
+	if (pShaderProgram->mStages & SHADER_STAGE_COMP)
+	{
+		vkDestroyShaderModule(pRenderer->mVulkan.pVkDevice, pShaderProgram->mVulkan.pShaderModules[0], &gVkAllocationCallbacks);
+	}
+#ifdef VK_RAYTRACING_AVAILABLE
+	if (pShaderProgram->mStages & SHADER_STAGE_RAYTRACING)
+	{
+		vkDestroyShaderModule(pRenderer->mVulkan.pVkDevice, pShaderProgram->mVulkan.pShaderModules[0], &gVkAllocationCallbacks);
+	}
+#endif
+
+	destroyPipelineReflection(pShaderProgram->pReflection);
+	SAFE_FREE(pShaderProgram);
+}
+
+void vk_removeDescriptorSet(Renderer* pRenderer, DescriptorSet* pDescriptorSet) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pDescriptorSet);
+
+	vkDestroyDescriptorPool(pRenderer->mVulkan.pVkDevice, pDescriptorSet->mVulkan.pDescriptorPool, &gVkAllocationCallbacks);
+	SAFE_FREE(pDescriptorSet);
+}
+
+void vk_removeRootSignature(Renderer* pRenderer, RootSignature* pRootSignature) 
+{
+	for (uint32_t i = 0; i < DESCRIPTOR_UPDATE_FREQ_COUNT; ++i)
+	{
+		if (pRootSignature->mVulkan.mVkDescriptorSetLayouts[i] != pRenderer->mVulkan.pEmptyDescriptorSetLayout)
+		{
+			vkDestroyDescriptorSetLayout(
+				pRenderer->mVulkan.pVkDevice, pRootSignature->mVulkan.mVkDescriptorSetLayouts[i], &gVkAllocationCallbacks);
+		}
+		if (VK_NULL_HANDLE != pRootSignature->mVulkan.pEmptyDescriptorPool[i])
+		{
+			vkDestroyDescriptorPool(
+				pRenderer->mVulkan.pVkDevice, pRootSignature->mVulkan.pEmptyDescriptorPool[i], &gVkAllocationCallbacks);
+		}
+	}
+
+	// Need delete since the destructor frees allocated memory
+	pRootSignature->pDescriptorNameToIndexMap->mMap.clear(true);
+
+	vkDestroyPipelineLayout(pRenderer->mVulkan.pVkDevice, pRootSignature->mVulkan.pPipelineLayout, &gVkAllocationCallbacks);
+
+	SAFE_FREE(pRootSignature);
+}
+
+void vk_removeTexture(Renderer* pRenderer, Texture* pTexture)
+{
+	ASSERT(pRenderer);
+	ASSERT(pTexture);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pTexture->mVulkan.pVkImage);
+
+	if (pTexture->mOwnsImage)
+	{
+		const TinyImageFormat fmt = (TinyImageFormat)pTexture->mFormat;
+		const bool            isSinglePlane = TinyImageFormat_IsSinglePlane(fmt);
+		if (isSinglePlane)
+		{
+			vmaDestroyImage(pRenderer->mVulkan.pVmaAllocator, pTexture->mVulkan.pVkImage, pTexture->mVulkan.pVkAllocation);
+		}
+		else
+		{
+			vkDestroyImage(pRenderer->mVulkan.pVkDevice, pTexture->mVulkan.pVkImage, &gVkAllocationCallbacks);
+			vkFreeMemory(pRenderer->mVulkan.pVkDevice, pTexture->mVulkan.pVkDeviceMemory, &gVkAllocationCallbacks);
+		}
+	}
+
+	if (VK_NULL_HANDLE != pTexture->mVulkan.pVkSRVDescriptor)
+		vkDestroyImageView(pRenderer->mVulkan.pVkDevice, pTexture->mVulkan.pVkSRVDescriptor, &gVkAllocationCallbacks);
+
+	if (VK_NULL_HANDLE != pTexture->mVulkan.pVkSRVStencilDescriptor)
+		vkDestroyImageView(pRenderer->mVulkan.pVkDevice, pTexture->mVulkan.pVkSRVStencilDescriptor, &gVkAllocationCallbacks);
+
+	if (pTexture->mVulkan.pVkUAVDescriptors)
+	{
+		for (uint32_t i = 0; i < pTexture->mMipLevels; ++i)
+		{
+			vkDestroyImageView(pRenderer->mVulkan.pVkDevice, pTexture->mVulkan.pVkUAVDescriptors[i], &gVkAllocationCallbacks);
+		}
+	}
+
+	if (pTexture->pSvt)
+	{
+		vk_removeVirtualTexture(pRenderer, pTexture->pSvt);
+	}
+
+	SAFE_FREE(pTexture);
+}
+
+void vk_removeVirtualTexture(Renderer* pRenderer, VirtualTexture* pSvt)
+{
+	for (int i = 0; i < (int)pSvt->mVirtualPageTotalCount; i++)
+	{
+		VirtualTexturePage& page = pSvt->pPages[i];
+		if (page.mVulkan.pAllocation)
+			vmaFreeMemory(pRenderer->mVulkan.pVmaAllocator, (VmaAllocation)page.mVulkan.pAllocation);
+	}
+	tf_free(pSvt->pPages);
+
+	for (int i = 0; i < (int)pSvt->mVulkan.mOpaqueMemoryBindsCount; i++)
+	{
+		vmaFreeMemory(pRenderer->mVulkan.pVmaAllocator, (VmaAllocation)pSvt->mVulkan.pOpaqueMemoryBindAllocations[i]);
+	}
+	tf_free(pSvt->mVulkan.pOpaqueMemoryBinds);
+	tf_free(pSvt->mVulkan.pOpaqueMemoryBindAllocations);
+	tf_free(pSvt->mVulkan.pSparseImageMemoryBinds);
+
+	for (uint32_t deletionIndex = 0; deletionIndex < pSvt->mPendingDeletionCount; deletionIndex++)
+	{
+		const VkVTPendingPageDeletion pendingDeletion = vtGetPendingPageDeletion(pSvt, deletionIndex);
+
+		for (uint32_t i = 0; i < *pendingDeletion.pAllocationsCount; i++)
+			vmaFreeMemory(pRenderer->mVulkan.pVmaAllocator, pendingDeletion.pAllocations[i]);
+		for (uint32_t i = 0; i < *pendingDeletion.pIntermediateBuffersCount; i++)
+			vk_removeBuffer(pRenderer, pendingDeletion.pIntermediateBuffers[i]);
+	}
+	tf_free(pSvt->mVulkan.pPendingDeletedAllocations);
+	tf_free(pSvt->pPendingDeletedAllocationsCount);
+	tf_free(pSvt->pPendingDeletedBuffers);
+	tf_free(pSvt->pPendingDeletedBuffersCount);
+
+	tf_free(pSvt->pVirtualImageData);
+
+	vmaDestroyPool(pRenderer->mVulkan.pVmaAllocator, (VmaPool)pSvt->mVulkan.pPool);
+}
+
+/************************************************************************/
+// Pipeline State Functions
+/************************************************************************/
+static void addGraphicsPipeline(Renderer* pRenderer, const PipelineDesc* pMainDesc, Pipeline** ppPipeline)
+{
+	ASSERT(pRenderer);
+	ASSERT(ppPipeline);
+	ASSERT(pMainDesc);
+
+	const GraphicsPipelineDesc* pDesc = &pMainDesc->mGraphicsDesc;
+	VkPipelineCache             psoCache = pMainDesc->pCache ? pMainDesc->pCache->mVulkan.pCache : VK_NULL_HANDLE;
+
+	ASSERT(pDesc->pShaderProgram);
+	ASSERT(pDesc->pRootSignature);
+
+	Pipeline* pPipeline = (Pipeline*)tf_calloc_memalign(1, alignof(Pipeline), sizeof(Pipeline));
+	ASSERT(pPipeline);
+
+	const Shader* pShaderProgram = pDesc->pShaderProgram;
+	const VertexLayout* pVertexLayout = pDesc->pVertexLayout;
+
+	pPipeline->mVulkan.mType = PIPELINE_TYPE_GRAPHICS;
+
+	// Create tempporary renderpass for pipeline creation
+	RenderPassDesc renderPassDesc = { 0 };
+	RenderPass* pRenderPass = NULL;
+	renderPassDesc.mRenderTargetCount = pDesc->mRenderTargetCount;
+	renderPassDesc.pColorFormats = pDesc->pColorFormats;
+	renderPassDesc.mSampleCount = pDesc->mSampleCount;
+	renderPassDesc.mDepthStencilFormat = pDesc->mDepthStencilFormat;
+	renderPassDesc.mVRMultiview = pDesc->pShaderProgram->mIsMultiviewVR;
+	renderPassDesc.mVRFoveatedRendering = pDesc->mVRFoveatedRendering;
+	renderPassDesc.pLoadActionsColor = gDefaultLoadActions;
+	renderPassDesc.mLoadActionDepth = gDefaultLoadActions[0];
+	renderPassDesc.mLoadActionStencil = gDefaultLoadActions[1];
+	renderPassDesc.pStoreActionsColor = gDefaultStoreActions;
+	renderPassDesc.mStoreActionDepth = gDefaultStoreActions[0];
+	renderPassDesc.mStoreActionStencil = gDefaultStoreActions[1];
+	add_render_pass(pRenderer, &renderPassDesc, &pRenderPass);
+
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	for (uint32_t i = 0; i < pShaderProgram->pReflection->mStageReflectionCount; ++i)
+		ASSERT(VK_NULL_HANDLE != pShaderProgram->mVulkan.pShaderModules[i]);
+
+	const VkSpecializationInfo* specializationInfo = pShaderProgram->mVulkan.pSpecializationInfo;
+
+	// Pipeline
+	{
+		uint32_t stage_count = 0;
+		DECLARE_ZERO(VkPipelineShaderStageCreateInfo, stages[5]);
+		for (uint32_t i = 0; i < 5; ++i)
+		{
+			ShaderStage stage_mask = (ShaderStage)(1 << i);
+			if (stage_mask == (pShaderProgram->mStages & stage_mask))
+			{
+				stages[stage_count].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+				stages[stage_count].pNext = NULL;
+				stages[stage_count].flags = 0;
+				stages[stage_count].pSpecializationInfo = specializationInfo;
+				switch (stage_mask)
+				{
+				case SHADER_STAGE_VERT:
+				{
+					stages[stage_count].pName =
+						pShaderProgram->pReflection->mStageReflections[pShaderProgram->pReflection->mVertexStageIndex].pEntryPoint;
+					stages[stage_count].stage = VK_SHADER_STAGE_VERTEX_BIT;
+					stages[stage_count].module = pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mVertexStageIndex];
+				}
+				break;
+				case SHADER_STAGE_TESC:
+				{
+					stages[stage_count].pName =
+						pShaderProgram->pReflection->mStageReflections[pShaderProgram->pReflection->mHullStageIndex].pEntryPoint;
+					stages[stage_count].stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+					stages[stage_count].module = pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mHullStageIndex];
+				}
+				break;
+				case SHADER_STAGE_TESE:
+				{
+					stages[stage_count].pName =
+						pShaderProgram->pReflection->mStageReflections[pShaderProgram->pReflection->mDomainStageIndex].pEntryPoint;
+					stages[stage_count].stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+					stages[stage_count].module = pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mDomainStageIndex];
+				}
+				break;
+				case SHADER_STAGE_GEOM:
+				{
+					stages[stage_count].pName =
+						pShaderProgram->pReflection->mStageReflections[pShaderProgram->pReflection->mGeometryStageIndex].pEntryPoint;
+					stages[stage_count].stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+					stages[stage_count].module =
+						pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mGeometryStageIndex];
+				}
+				break;
+				case SHADER_STAGE_FRAG:
+				{
+					stages[stage_count].pName =
+						pShaderProgram->pReflection->mStageReflections[pShaderProgram->pReflection->mPixelStageIndex].pEntryPoint;
+					stages[stage_count].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+					stages[stage_count].module = pShaderProgram->mVulkan.pShaderModules[pShaderProgram->pReflection->mPixelStageIndex];
+				}
+				break;
+				default: ASSERT(false && "Shader Stage not supported!"); break;
+				}
+				++stage_count;
+			}
+		}
+
+		// Make sure there's a shader
+		ASSERT(0 != stage_count);
+
+		uint32_t                          input_binding_count = 0;
+		VkVertexInputBindingDescription   input_bindings[MAX_VERTEX_BINDINGS] = { { 0 } };
+		uint32_t                          input_attribute_count = 0;
+		VkVertexInputAttributeDescription input_attributes[MAX_VERTEX_ATTRIBS] = { { 0 } };
+
+		// Make sure there's attributes
+		if (pVertexLayout != NULL)
+		{
+			// Ignore everything that's beyond max_vertex_attribs
+			uint32_t attrib_count = pVertexLayout->mAttribCount > MAX_VERTEX_ATTRIBS ? MAX_VERTEX_ATTRIBS : pVertexLayout->mAttribCount;
+			uint32_t binding_value = UINT32_MAX;
+
+			// Initial values
+			for (uint32_t i = 0; i < attrib_count; ++i)
+			{
+				const VertexAttrib* attrib = &(pVertexLayout->mAttribs[i]);
+
+				if (binding_value != attrib->mBinding)
+				{
+					binding_value = attrib->mBinding;
+					++input_binding_count;
+				}
+
+				input_bindings[input_binding_count - 1].binding = binding_value;
+				if (attrib->mRate == VERTEX_ATTRIB_RATE_INSTANCE)
+				{
+					input_bindings[input_binding_count - 1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+				}
+				else
+				{
+					input_bindings[input_binding_count - 1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+				}
+				input_bindings[input_binding_count - 1].stride += TinyImageFormat_BitSizeOfBlock(attrib->mFormat) / 8;
+
+				input_attributes[input_attribute_count].location = attrib->mLocation;
+				input_attributes[input_attribute_count].binding = attrib->mBinding;
+				input_attributes[input_attribute_count].format = (VkFormat)TinyImageFormat_ToVkFormat(attrib->mFormat);
+				input_attributes[input_attribute_count].offset = attrib->mOffset;
+				++input_attribute_count;
+			}
+		}
+
+		DECLARE_ZERO(VkPipelineVertexInputStateCreateInfo, vi);
+		vi.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		vi.pNext = NULL;
+		vi.flags = 0;
+		vi.vertexBindingDescriptionCount = input_binding_count;
+		vi.pVertexBindingDescriptions = input_bindings;
+		vi.vertexAttributeDescriptionCount = input_attribute_count;
+		vi.pVertexAttributeDescriptions = input_attributes;
+
+		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		switch (pDesc->mPrimitiveTopo)
+		{
+		case PRIMITIVE_TOPO_POINT_LIST: topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
+		case PRIMITIVE_TOPO_LINE_LIST: topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
+		case PRIMITIVE_TOPO_LINE_STRIP: topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+		case PRIMITIVE_TOPO_TRI_STRIP: topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
+		case PRIMITIVE_TOPO_PATCH_LIST: topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST; break;
+		case PRIMITIVE_TOPO_TRI_LIST: topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+		default: ASSERT(false && "Primitive Topo not supported!"); break;
+		}
+		DECLARE_ZERO(VkPipelineInputAssemblyStateCreateInfo, ia);
+		ia.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		ia.pNext = NULL;
+		ia.flags = 0;
+		ia.topology = topology;
+		ia.primitiveRestartEnable = VK_FALSE;
+
+		DECLARE_ZERO(VkPipelineTessellationStateCreateInfo, ts);
+		if ((pShaderProgram->mStages & SHADER_STAGE_TESC) && (pShaderProgram->mStages & SHADER_STAGE_TESE))
+		{
+			ts.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+			ts.pNext = NULL;
+			ts.flags = 0;
+			ts.patchControlPoints =
+				pShaderProgram->pReflection->mStageReflections[pShaderProgram->pReflection->mHullStageIndex].mNumControlPoint;
+		}
+
+		DECLARE_ZERO(VkPipelineViewportStateCreateInfo, vs);
+		vs.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		vs.pNext = NULL;
+		vs.flags = 0;
+		// we are using dynamic viewports but we must set the count to 1
+		vs.viewportCount = 1;
+		vs.pViewports = NULL;
+		vs.scissorCount = 1;
+		vs.pScissors = NULL;
+
+		DECLARE_ZERO(VkPipelineMultisampleStateCreateInfo, ms);
+		ms.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		ms.pNext = NULL;
+		ms.flags = 0;
+		ms.rasterizationSamples = util_to_vk_sample_count(pDesc->mSampleCount);
+		ms.sampleShadingEnable = VK_FALSE;
+		ms.minSampleShading = 0.0f;
+		ms.pSampleMask = 0;
+		ms.alphaToCoverageEnable = VK_FALSE;
+		ms.alphaToOneEnable = VK_FALSE;
+
+		DECLARE_ZERO(VkPipelineRasterizationStateCreateInfo, rs);
+		rs = pDesc->pRasterizerState ? util_to_rasterizer_desc(pDesc->pRasterizerState) : gDefaultRasterizerDesc;
+
+		/// TODO: Dont create depth state if no depth stencil bound
+		DECLARE_ZERO(VkPipelineDepthStencilStateCreateInfo, ds);
+		ds = pDesc->pDepthState ? util_to_depth_desc(pDesc->pDepthState) : gDefaultDepthDesc;
+
+		DECLARE_ZERO(VkPipelineColorBlendStateCreateInfo, cb);
+		DECLARE_ZERO(VkPipelineColorBlendAttachmentState, cbAtt[MAX_RENDER_TARGET_ATTACHMENTS]);
+		cb = pDesc->pBlendState ? util_to_blend_desc(pDesc->pBlendState, cbAtt) : gDefaultBlendDesc;
+		cb.attachmentCount = pDesc->mRenderTargetCount;
+
+		VkDynamicState dyn_states[] =
+		{
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_SCISSOR,
+			VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+			VK_DYNAMIC_STATE_DEPTH_BOUNDS,
+			VK_DYNAMIC_STATE_STENCIL_REFERENCE,
+		};
+		DECLARE_ZERO(VkPipelineDynamicStateCreateInfo, dy);
+		dy.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		dy.pNext = NULL;
+		dy.flags = 0;
+		dy.dynamicStateCount = sizeof(dyn_states) / sizeof(dyn_states[0]);
+		dy.pDynamicStates = dyn_states;
+
+		DECLARE_ZERO(VkGraphicsPipelineCreateInfo, add_info);
+		add_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		add_info.pNext = NULL;
+		add_info.flags = 0;
+		add_info.stageCount = stage_count;
+		add_info.pStages = stages;
+		add_info.pVertexInputState = &vi;
+		add_info.pInputAssemblyState = &ia;
+
+		if ((pShaderProgram->mStages & SHADER_STAGE_TESC) && (pShaderProgram->mStages & SHADER_STAGE_TESE))
+			add_info.pTessellationState = &ts;
+		else
+			add_info.pTessellationState = NULL;    // set tessellation state to null if we have no tessellation
+
+		add_info.pViewportState = &vs;
+		add_info.pRasterizationState = &rs;
+		add_info.pMultisampleState = &ms;
+		add_info.pDepthStencilState = &ds;
+		add_info.pColorBlendState = &cb;
+		add_info.pDynamicState = &dy;
+		add_info.layout = pDesc->pRootSignature->mVulkan.pPipelineLayout;
+		add_info.renderPass = pRenderPass->pRenderPass;
+		add_info.subpass = 0;
+		add_info.basePipelineHandle = VK_NULL_HANDLE;
+		add_info.basePipelineIndex = -1;
+		CHECK_VKRESULT(vkCreateGraphicsPipelines(
+			pRenderer->mVulkan.pVkDevice, psoCache, 1, &add_info, &gVkAllocationCallbacks, &(pPipeline->mVulkan.pVkPipeline)));
+
+		remove_render_pass(pRenderer, pRenderPass);
+	}
+
+	*ppPipeline = pPipeline;
+}
+
+static void addComputePipeline(Renderer* pRenderer, const PipelineDesc* pMainDesc, Pipeline** ppPipeline)
+{
+	ASSERT(pRenderer);
+	ASSERT(ppPipeline);
+	ASSERT(pMainDesc);
+
+	const ComputePipelineDesc* pDesc = &pMainDesc->mComputeDesc;
+	VkPipelineCache            psoCache = pMainDesc->pCache ? pMainDesc->pCache->mVulkan.pCache : VK_NULL_HANDLE;
+
+	ASSERT(pDesc->pShaderProgram);
+	ASSERT(pDesc->pRootSignature);
+	ASSERT(pRenderer->mVulkan.pVkDevice != VK_NULL_HANDLE);
+	ASSERT(pDesc->pShaderProgram->mVulkan.pShaderModules[0] != VK_NULL_HANDLE);
+
+	Pipeline* pPipeline = (Pipeline*)tf_calloc_memalign(1, alignof(Pipeline), sizeof(Pipeline));
+	ASSERT(pPipeline);
+	pPipeline->mVulkan.mType = PIPELINE_TYPE_COMPUTE;
+
+	// Pipeline
+	{
+		DECLARE_ZERO(VkPipelineShaderStageCreateInfo, stage);
+		stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		stage.pNext = NULL;
+		stage.flags = 0;
+		stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		stage.module = pDesc->pShaderProgram->mVulkan.pShaderModules[0];
+		stage.pName = pDesc->pShaderProgram->pReflection->mStageReflections[0].pEntryPoint;
+		stage.pSpecializationInfo = pDesc->pShaderProgram->mVulkan.pSpecializationInfo;
+
+		DECLARE_ZERO(VkComputePipelineCreateInfo, create_info);
+		create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		create_info.pNext = NULL;
+		create_info.flags = 0;
+		create_info.stage = stage;
+		create_info.layout = pDesc->pRootSignature->mVulkan.pPipelineLayout;
+		create_info.basePipelineHandle = 0;
+		create_info.basePipelineIndex = 0;
+		CHECK_VKRESULT(vkCreateComputePipelines(
+			pRenderer->mVulkan.pVkDevice, psoCache, 1, &create_info, &gVkAllocationCallbacks, &(pPipeline->mVulkan.pVkPipeline)));
+	}
+
+	*ppPipeline = pPipeline;
+}
+
+void vk_addPipeline(Renderer* pRenderer, const PipelineDesc* pDesc, Pipeline** ppPipeline) 
+{
+	switch (pDesc->mType)
+	{
+	case (PIPELINE_TYPE_COMPUTE):
+	{
+		addComputePipeline(pRenderer, pDesc, ppPipeline);
+		break;
+	}
+	case (PIPELINE_TYPE_GRAPHICS):
+	{
+		addGraphicsPipeline(pRenderer, pDesc, ppPipeline);
+		break;
+	}
+#ifdef VK_RAYTRACING_AVAILABLE
+	case (PIPELINE_TYPE_RAYTRACING):
+	{
+		vk_addRaytracingPipeline(pDesc, ppPipeline);
+		break;
+	}
+#endif
+	default:
+	{
+		ASSERT(false);
+		*ppPipeline = {};
+		break;
+	}
+	}
+
+	if (*ppPipeline && pDesc->pName)
+	{
+		vk_setPipelineName(pRenderer, *ppPipeline, pDesc->pName);
+	}
+}
+
+void vk_setPipelineName(Renderer* pRenderer, Pipeline* pPipeline, const char* pName) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pPipeline);
+	ASSERT(pName);
+
+	if (pRenderer->mVulkan.mDebugMarkerSupport)
+	{
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+		util_set_object_name(pRenderer->mVulkan.pVkDevice, (uint64_t)pPipeline->mVulkan.pVkPipeline, VK_OBJECT_TYPE_PIPELINE, pName);
+#else
+		util_set_object_name(
+			pRenderer->mVulkan.pVkDevice, (uint64_t)pPipeline->mVulkan.pVkPipeline, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT, pName);
+#endif
+	}
+}
+
+void vk_removePipeline(Renderer* pRenderer, Pipeline* pPipeline) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pPipeline);
+	ASSERT(VK_NULL_HANDLE != pRenderer->mVulkan.pVkDevice);
+	ASSERT(VK_NULL_HANDLE != pPipeline->mVulkan.pVkPipeline);
+
+#ifdef VK_RAYTRACING_AVAILABLE
+	SAFE_FREE(pPipeline->mVulkan.ppShaderStageNames);
+#endif
+
+	vkDestroyPipeline(pRenderer->mVulkan.pVkDevice, pPipeline->mVulkan.pVkPipeline, &gVkAllocationCallbacks);
+
+	SAFE_FREE(pPipeline);
+}
+
+void vk_removeQueryPool(Renderer* pRenderer, QueryPool* pQueryPool)
+{
+	ASSERT(pRenderer);
+	ASSERT(pQueryPool);
+	vkDestroyQueryPool(pRenderer->mVulkan.pVkDevice, pQueryPool->mVulkan.pVkQueryPool, &gVkAllocationCallbacks);
+
+	SAFE_FREE(pQueryPool);
+}
+
+/************************************************************************/
+// Query Heap Implementation
+/************************************************************************/
+VkQueryType util_to_vk_query_type(QueryType type)
+{
+	switch (type)
+	{
+	case QUERY_TYPE_TIMESTAMP: return VK_QUERY_TYPE_TIMESTAMP;
+	case QUERY_TYPE_PIPELINE_STATISTICS: return VK_QUERY_TYPE_PIPELINE_STATISTICS;
+	case QUERY_TYPE_OCCLUSION: return VK_QUERY_TYPE_OCCLUSION;
+	default: ASSERT(false && "Invalid query heap type"); return VK_QUERY_TYPE_MAX_ENUM;
+	}
+}
+
+void vk_getTimestampFrequency(Queue* pQueue, double* pFrequency)
+{
+	ASSERT(pQueue);
+	ASSERT(pFrequency);
+
+	// The framework is using ticks per sec as frequency. Vulkan is nano sec per tick.
+	// Handle the conversion logic here.
+	*pFrequency =
+		1.0f /
+		((double)pQueue->mVulkan.mTimestampPeriod /*ns/tick number of nanoseconds required for a timestamp query to be incremented by 1*/
+			* 1e-9);                                 // convert to ticks/sec (DX12 standard)
+}
+
+void vk_addQueryPool(Renderer* pRenderer, const QueryPoolDesc* pDesc, QueryPool** ppQueryPool) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pDesc);
+	ASSERT(ppQueryPool);
+
+	QueryPool* pQueryPool = (QueryPool*)tf_calloc(1, sizeof(QueryPool));
+	ASSERT(ppQueryPool);
+
+	pQueryPool->mVulkan.mType = util_to_vk_query_type(pDesc->mType);
+	pQueryPool->mCount = pDesc->mQueryCount;
+
+	VkQueryPoolCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	createInfo.pNext = NULL;
+	createInfo.queryCount = pDesc->mQueryCount;
+	createInfo.queryType = util_to_vk_query_type(pDesc->mType);
+	createInfo.flags = 0;
+	createInfo.pipelineStatistics = 0;
+	CHECK_VKRESULT(
+		vkCreateQueryPool(pRenderer->mVulkan.pVkDevice, &createInfo, &gVkAllocationCallbacks, &pQueryPool->mVulkan.pVkQueryPool));
+
+	*ppQueryPool = pQueryPool;
+}
+
+void vk_cmdBeginQuery(Cmd* pCmd, QueryPool* pQueryPool, QueryDesc* pQuery) 
+{
+	VkQueryType type = pQueryPool->mVulkan.mType;
+	switch (type)
+	{
+	case VK_QUERY_TYPE_TIMESTAMP:
+		vkCmdWriteTimestamp(
+			pCmd->mVulkan.pVkCmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, pQueryPool->mVulkan.pVkQueryPool, pQuery->mIndex);
+		break;
+	case VK_QUERY_TYPE_PIPELINE_STATISTICS: break;
+	case VK_QUERY_TYPE_OCCLUSION: break;
+	default: break;
+	}
+}
+
+void vk_cmdBeginDebugMarker(Cmd* pCmd, float r, float g, float b, const char* pName) 
+{
+	if (pCmd->pRenderer->mVulkan.mDebugMarkerSupport)
+	{
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+		VkDebugUtilsLabelEXT markerInfo = {};
+		markerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+		markerInfo.color[0] = r;
+		markerInfo.color[1] = g;
+		markerInfo.color[2] = b;
+		markerInfo.color[3] = 1.0f;
+		markerInfo.pLabelName = pName;
+		vkCmdBeginDebugUtilsLabelEXT(pCmd->mVulkan.pVkCmdBuf, &markerInfo);
+#elif !defined(NX64) || !defined(ENABLE_RENDER_DOC)
+		VkDebugMarkerMarkerInfoEXT markerInfo = {};
+		markerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT;
+		markerInfo.color[0] = r;
+		markerInfo.color[1] = g;
+		markerInfo.color[2] = b;
+		markerInfo.color[3] = 1.0f;
+		markerInfo.pMarkerName = pName;
+		vkCmdDebugMarkerBeginEXT(pCmd->mVulkan.pVkCmdBuf, &markerInfo);
+#endif
+	}
+}
+
+void vk_cmdEndQuery(Cmd* pCmd, QueryPool* pQueryPool, QueryDesc* pQuery) 
+{
+	VkQueryType type = pQueryPool->mVulkan.mType;
+	switch (type)
+	{
+	case VK_QUERY_TYPE_TIMESTAMP:
+		vkCmdWriteTimestamp(
+			pCmd->mVulkan.pVkCmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pQueryPool->mVulkan.pVkQueryPool, pQuery->mIndex);
+		break;
+	case VK_QUERY_TYPE_PIPELINE_STATISTICS: break;
+	case VK_QUERY_TYPE_OCCLUSION: break;
+	default: break;
+	}
+}
+
+void vk_cmdEndDebugMarker(Cmd* pCmd) 
+{
+	if (pCmd->pRenderer->mVulkan.mDebugMarkerSupport)
+	{
+#ifdef ENABLE_DEBUG_UTILS_EXTENSION
+		vkCmdEndDebugUtilsLabelEXT(pCmd->mVulkan.pVkCmdBuf);
+#elif !defined(NX64) || !defined(ENABLE_RENDER_DOC)
+		vkCmdDebugMarkerEndEXT(pCmd->mVulkan.pVkCmdBuf);
+#endif
+	}
+}
+
+void vk_cmdResetQueryPool(Cmd* pCmd, QueryPool* pQueryPool, uint32_t startQuery, uint32_t queryCount) 
+{
+	vkCmdResetQueryPool(pCmd->mVulkan.pVkCmdBuf, pQueryPool->mVulkan.pVkQueryPool, startQuery, queryCount);
+}
+
+void vk_cmdResolveQuery(Cmd* pCmd, QueryPool* pQueryPool, Buffer* pReadbackBuffer, uint32_t startQuery, uint32_t queryCount)
+{
+	VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT;
+	vkCmdCopyQueryPoolResults(
+		pCmd->mVulkan.pVkCmdBuf, pQueryPool->mVulkan.pVkQueryPool, startQuery, queryCount, pReadbackBuffer->mVulkan.pVkBuffer, 0,
+		sizeof(uint64_t), flags);
+}
+
+
 
 void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Renderer** ppRenderer)
 {

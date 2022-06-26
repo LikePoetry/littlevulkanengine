@@ -122,6 +122,7 @@
     <ClInclude Include="Math\MathTypes.h" />
     <ClInclude Include="Profiler\GpuProfiler.h" />
     <ClInclude Include="Profiler\ProfilerBase.h" />
+    <ClInclude Include="Profiler\ProfilerHTML.h" />
     <ClInclude Include="UI\imgui_user.h" />
   </ItemGroup>
   <ItemGroup>

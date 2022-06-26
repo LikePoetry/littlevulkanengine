@@ -173,8 +173,17 @@ int32_t                mHeight;
 _Impl_FontStash* impl;
 
 bool renderInitialized = false;
+bool renderLoaded = false;
 
+#ifdef ENABLE_FORGE_FONTS
+#if defined(TARGET_IOS) || defined(ANDROID)
+const int TextureAtlasDimension = 512;
+#elif defined(XBOX)
+const int TextureAtlasDimension = 1024;
+#else    // PC / LINUX / MAC
 const int TextureAtlasDimension = 2048;
+#endif
+#endif
 
 bool platformInitFontSystem()
 {
@@ -233,6 +242,47 @@ bool initFontSystem(FontSystemDesc* pDesc)
 #endif
 }
 
+/// Renders UI-style text to the screen using a loaded font w/ The Forge
+/// This function will assert if Font Rendering has not been initialized
+void cmdDrawTextWithFont(void* /* Cmd* */ pCmd, float2 screenCoordsInPx, const FontDrawDesc* pDesc)
+{
+#ifdef ENABLE_FORGE_FONTS
+	ASSERT(renderInitialized && "Font Rendering not initialized! Make sure to call initFontRendering!");
+	ASSERT(renderLoaded && "Font Rendering not loaded! Make sure to call addFontSystemPipelines!");
+
+	ASSERT(pDesc);
+	ASSERT(pDesc->pText);
+
+	const char* message = pDesc->pText;
+	float x = screenCoordsInPx.getX();
+	float y = screenCoordsInPx.getY();
+	int fontID = pDesc->mFontID;
+	unsigned color = pDesc->mFontColor;
+	float size = pDesc->mFontSize;
+	float spacing = pDesc->mFontSpacing;
+	float blur = pDesc->mFontBlur;
+
+	impl->mText3D = false;
+	impl->pCmd = (Cmd*)pCmd;
+	// clamp the font size to max size.
+	// Precomputed font texture puts limitation to the maximum size.
+	size = min(size, m_fFontMaxSize);
+
+	FONScontext* fs = impl->pContext;
+	fonsSetSize(fs, size * impl->mDpiScaleMin);
+	fonsSetFont(fs, fontID);
+	fonsSetColor(fs, color);
+	fonsSetSpacing(fs, spacing * impl->mDpiScaleMin);
+	fonsSetBlur(fs, blur);
+	fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+
+	// considering the retina scaling:
+	// the render target is already scaled up (w/ retina) and the (x,y) position given to this function
+	// is expected to be in the render target's area. Hence, we don't scale up the position again.
+	fonsDrawText(fs, x /** impl->mDpiScale.x*/, y /** impl->mDpiScale.y*/, message, NULL);
+#endif
+}
+
 void fntDefineFonts(const FontDesc* pDescs, uint32_t count, uint32_t* pOutIDs)
 {
 #ifdef ENABLE_FORGE_FONTS
@@ -276,6 +326,31 @@ void fntDefineFonts(const FontDesc* pDescs, uint32_t count, uint32_t* pOutIDs)
 #endif
 }
 
+float2 fntMeasureFontText(const char* pText, const FontDrawDesc* pDrawDesc) 
+{
+#ifdef ENABLE_FORGE_FONTS
+
+	float textBounds[4] = {};
+
+	const int    messageLength = (int)strlen(pText);
+	FONScontext* fs = impl->pContext;
+	fonsSetSize(fs, pDrawDesc->mFontSize * impl->mDpiScaleMin);
+	fonsSetFont(fs, pDrawDesc->mFontID);
+	fonsSetColor(fs, pDrawDesc->mFontColor);
+	fonsSetSpacing(fs, pDrawDesc->mFontSpacing * impl->mDpiScaleMin);
+	fonsSetBlur(fs, pDrawDesc->mFontBlur);
+	fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+
+	// considering the retina scaling:
+	// the render target is already scaled up (w/ retina) and the (x,y) position given to this function
+	// is expected to be in the render target's area. Hence, we don't scale up the position again.
+	fonsTextBounds(fs, 0.0f /** impl->mDpiScale.x*/, 0.0f /** impl->mDpiScale.y*/, pText, pText + messageLength, textBounds);
+
+	return float2(textBounds[2] - textBounds[0], textBounds[3] - textBounds[1]);
+#else
+	return float2(0, 0);
+#endif
+}
 
 // --  FONS renderer implementation --
 int _Impl_FontStash::fonsImplementationGenerateTexture(void* userPtr, int width, int height)

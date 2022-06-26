@@ -1,6 +1,40 @@
-#pragma once
+/*
+ * Copyright (c) 2017-2022 The Forge Interactive Inc.
+ *
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+*/
+
+#ifndef IUI_H
+#define IUI_H
 
 #include "../Core/Config.h"
+
+// SCRIPTED TESTING :
+// For now, if a script file with the name "Test.lua", exist in the script directory, will run once an execution.
+// Lua function name resolution:
+// - UI Widget "label"s will be included in the name
+//		- For Widget events: label name + "Event Name". e.g., Lua Function name for label - "Press", event - OnEdited : "PressOnEdited"
+//		- For Widget modifier ints/floats: "Set" and "Get" function set will be added as a prefix to label name.
+//											e.g., "X" variable will have "SetX" and "GetX" pair of functions
+// To add global Lua functions, independent of Unit Tests, add definition in UIApp::Init (Check LOGINFO there for example).
 
 #include "../../ThirdParty/OpenSource/EASTL/vector.h"
 
@@ -318,20 +352,20 @@ enum GuiComponentFlags
 	GUI_COMPONENT_FLAGS_START_COLLAPSED = 1 << 16
 };
 
-
 typedef struct UIComponentDesc
 {
-	vec2 mStartPosition = vec2{ 0.0f,150.0f };
-	vec2 mStartSize = vec2{ 600.0f,550.0f };
+	vec2 mStartPosition = vec2{ 0.0f, 150.0f };
+	vec2 mStartSize = vec2{ 600.0f, 550.0f };
 
 	uint32_t mFontID = 0;
-	float mFontSize = 16.0f;
+	float    mFontSize = 16.0f;
 } UIComponentDesc;
 
 typedef struct UIComponent
 {
-	eastl::vector<UIWidget*>		mWidgets;
-	eastl::vector<bool>				mWidgetsClone;
+	eastl::vector<UIWidget*>        mWidgets;
+	eastl::vector<bool>            mWidgetsClone;
+
 	// Contextual menus when right clicking the title bar
 	eastl::vector<char*>		   mContextualMenuLabels;
 	eastl::vector<WidgetCallback>  mContextualMenuCallbacks;
@@ -349,9 +383,16 @@ typedef struct UIComponent
 
 	// UI Component settings that can be modified at runtime by the client.
 	bool                           mHasCloseButton = false;
-
 } UIComponent;
 
+/****************************************************************************/
+// MARK: - Dynamic UI Widget Data Structures
+/****************************************************************************/
+
+typedef struct DynamicUIWidgets
+{
+	eastl::vector<UIWidget*> mDynamicProperties;
+} DynamicUIWidgets;
 
 /****************************************************************************/
 // MARK: - Forge User Interface Data Structures
@@ -374,21 +415,83 @@ struct UserInterfaceDesc
 /// To be called at application initialization time by the App Layer
 void initUserInterface(UserInterfaceDesc* pDesc);
 
+/// Frees Forge Rendering objects and memory associated with the User Interface
+/// To be called at application shutdown time by the App Layer
+void exitUserInterface();
+
+/// Creates graphics pipelines associated with the User Interface
+/// To be called at application load time by the App Layer
+bool addUserInterfacePipelines(void* /* RenderTarget* */ pRenderTarget);
+
+/// Destroys graphics pipelines associated with the User Interface
+/// To be called at application unload time by the App Layer
+void removeUserInterfacePipelines();
+
+/// Renders defined ImGUI components and widgets using The Forge's Renderer
+/// This function also handles rendering the Forge Profiler's UI Window
+void cmdDrawUserInterface(void* /* Cmd* */ pCmd);
+
 /****************************************************************************/
-// MARK: - UI Component Public Functions
+// MARK: - Collapsing Header Widget Public Functions
 /****************************************************************************/
 
 /// Add a subwidget beneath a Collapsing Header widget
 /// All subwidgets must be added before calling uiAddComponentWidget for the Collapsing Header
 UIWidget* uiCreateCollapsingHeaderSubWidget(CollapsingHeaderWidget* pWidget, const char* pLabel, const void* pSubWidget, WidgetType type);
 
+/// Remove a specified subwidget from a Collapsing Header widget
+/// Only necessary for replacement purposes. Subwidget memory will be freed internally on exit
+void uiDestroyCollapsingHeaderSubWidget(CollapsingHeaderWidget* pWidget, UIWidget* pSubWidget);
+
+/// Remove all existing subwidgets from a Collapsing Header widget
+/// Only necessary for replacement purposes. Subwidget memory will be freed internally on exit
+void uiDestroyAllCollapsingHeaderSubWidgets(CollapsingHeaderWidget* pWidget);
+
+/// Set whether or not a given Collapsing Header widget is currently collapsed
+void uiSetCollapsingHeaderWidgetCollapsed(CollapsingHeaderWidget* pWidget, bool collapsed);
+
+/****************************************************************************/
+// MARK: - Dynamic Widget Public Functions
+/****************************************************************************/
+
+/// Create an independent set of widgets which can be dynamically added to a UI Component
+UIWidget* uiCreateDynamicWidgets(DynamicUIWidgets* pDynamicUI, const char* pLabel, const void* pWidget, WidgetType type);
+
+/// Free memory associated with a set of dynamic UI widgets
+void uiDestroyDynamicWidgets(DynamicUIWidgets* pDynamicUI);
+
+/// Add an existing set of dynamic widgets to an existing UI Component
+void uiShowDynamicWidgets(const DynamicUIWidgets* pDynamicUI, UIComponent* pGui);
+
+/// Remove an existing set of dynamic widgets from an existing UI Component
+void uiHideDynamicWidgets(const DynamicUIWidgets* pDynamicUI, UIComponent* pGui);
+
+/****************************************************************************/
+// MARK: - UI Component Public Functions
+/****************************************************************************/
+
 /// Create a UI Component "window" to which Widgets can be added
 /// User is NOT responsible for freeing this memory at application exit
 void uiCreateComponent(const char* pTitle, const UIComponentDesc* pDesc, UIComponent** ppGuiComponent);
 
+/// Free memory associated with a UI Component "window"
+/// Only necessary for replacement purposes. UI Component memory will be freed internally on exit
+void uiDestroyComponent(UIComponent* pGui);
+
+/// Set whether or not a given UI Component is active and visible on the screen
+void uiSetComponentActive(UIComponent* pGuiComponent, bool active);
+
 /// Create a Widget to be assigned to a given UI Component
 /// User is NOT responsible for freeing this memory at application exit
 UIWidget* uiCreateComponentWidget(UIComponent* pGui, const char* pLabel, const void* pWidget, WidgetType type, bool clone = true); //-V1071
+
+/// Destroy and free memory associated with a Widget 
+/// Only necessary for replacement purposes. UI Widget memory will be freed internally on exit
+void uiDestroyComponentWidget(UIComponent* pGui, UIWidget* pWidget);
+
+/// Destroy and free memory associated with all Widgets in a given UI Component
+/// Only necessary for replacement purposes. UI Widget memory will be freed internally on exit
+void uiDestroyAllComponentWidgets(UIComponent* pGui);
 
 /****************************************************************************/
 // MARK: - Safe UI Component and Widget Setter Functions
@@ -427,3 +530,28 @@ void uiSetWidgetOnDeactivatedCallback(UIWidget* pWidget, WidgetCallback callback
 /// Assign Widget callback function (pointer to a function which takes and returns void)
 /// Will be called when Widget is made inactive from an active state and its underlying value has changed
 void uiSetWidgetOnDeactivatedAfterEditCallback(UIWidget* pWidget, WidgetCallback callback);
+
+/****************************************************************************/
+// MARK: - Other User Interface Functionality
+/****************************************************************************/
+
+/// Returns whether or not the UI is currently "focused" by the cursor
+bool uiIsFocused();
+
+/// Callback function to share button press data w/ ImGUI
+bool uiOnButton(uint32_t button, bool press, const float2* pVec);
+
+/// Callback function to share joystick data w/ ImGUI
+bool uiOnStick(uint32_t stick, const float2* pStick);
+
+/// Callback function to share any type of input data w/ ImGUI. Leverages uiOnButton and uiOnStick.
+bool uiOnInput(uint32_t binding, bool buttonPress, const float2* pMousePos, const float2* pStick);
+
+/// Callback function to share text entry data w/ ImGUI
+bool uiOnText(const wchar_t* pText);
+
+/// Returns value associated with UI preparedness to accept text entry data
+/// 0 -> Not pressed, 1 -> Digits Only keyboard, 2 -> Full Keyboard (Chars + Digits)
+uint8_t uiWantTextInput();
+
+#endif // IUI_H

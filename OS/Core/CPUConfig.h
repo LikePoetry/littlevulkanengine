@@ -22,3 +22,5 @@ typedef struct {
 } CpuInfo;
 
 bool initCpuInfo(CpuInfo* outCpuInfo);
+
+CpuInfo* getCpuInfo(void);

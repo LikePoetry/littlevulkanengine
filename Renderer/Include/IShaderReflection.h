@@ -120,7 +120,9 @@ struct PipelineReflection
 	uint32_t        mVariableCount;
 };
 
+void destroyShaderReflection(ShaderReflection* pReflection);
 void createPipelineReflection(ShaderReflection* pReflection, uint32_t stageCount, PipelineReflection* pOutReflection);
+void destroyPipelineReflection(PipelineReflection* pReflection);
 
 inline bool isDescriptorRootCbv(const char* resourceName)
 {

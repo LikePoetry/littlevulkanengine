@@ -1,4 +1,7 @@
 #pragma once
+#include "../Core/Config.h"
+#include "../Core/CPUConfig.h"
+
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <windows.h>

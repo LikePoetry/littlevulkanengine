@@ -76,6 +76,23 @@ typedef enum QueuePriority
 	MAX_QUEUE_PRIORITY
 } QueuePriority;
 
+typedef enum LoadActionType
+{
+	LOAD_ACTION_DONTCARE,
+	LOAD_ACTION_LOAD,
+	LOAD_ACTION_CLEAR,
+	MAX_LOAD_ACTION
+} LoadActionType;
+
+typedef enum StoreActionType
+{
+	// Store is the most common use case so keep that as default
+	STORE_ACTION_STORE,
+	STORE_ACTION_DONTCARE,
+	STORE_ACTION_NONE,
+	MAX_STORE_ACTION
+} StoreActionType;
+
 typedef void (*LogFn)(LogLevel, const char*, const char*);
 
 typedef enum ResourceState
@@ -158,7 +175,11 @@ typedef struct RenderTarget       RenderTarget;
 typedef struct Shader             Shader;
 typedef struct DescriptorSet      DescriptorSet;
 typedef struct DescriptorIndexMap DescriptorIndexMap;
+typedef struct PipelineCache      PipelineCache;
 
+// Raytracing
+typedef struct Raytracing            Raytracing;
+typedef struct RaytracingHitGroup    RaytracingHitGroup;
 typedef struct AccelerationStructure AccelerationStructure;
 
 
@@ -261,6 +282,17 @@ MAKE_ENUM_FLAG(uint32_t, ShaderStage)
 // This include is placed here because it uses data types defined previously in this file
 // and forward enums are not allowed for some compilers (Xcode).
 #include "IShaderReflection.h"
+
+typedef enum PrimitiveTopology
+{
+	PRIMITIVE_TOPO_POINT_LIST = 0,
+	PRIMITIVE_TOPO_LINE_LIST,
+	PRIMITIVE_TOPO_LINE_STRIP,
+	PRIMITIVE_TOPO_TRI_LIST,
+	PRIMITIVE_TOPO_TRI_STRIP,
+	PRIMITIVE_TOPO_PATCH_LIST,
+	PRIMITIVE_TOPO_COUNT,
+} PrimitiveTopology;
 
 typedef enum SampleCount
 {
@@ -561,6 +593,84 @@ typedef struct ReadRange
 	uint64_t mSize;
 } ReadRange;
 
+typedef enum QueryType
+{
+	QUERY_TYPE_TIMESTAMP = 0,
+	QUERY_TYPE_PIPELINE_STATISTICS,
+	QUERY_TYPE_OCCLUSION,
+	QUERY_TYPE_COUNT,
+} QueryType;
+
+typedef struct QueryPoolDesc
+{
+	QueryType mType;
+	uint32_t  mQueryCount;
+	uint32_t  mNodeIndex;
+} QueryPoolDesc;
+
+typedef struct QueryDesc
+{
+	uint32_t mIndex;
+} QueryDesc;
+
+typedef struct QueryPool
+{
+	union
+	{
+#if defined(DIRECT3D12)
+		struct
+		{
+			ID3D12QueryHeap* pDxQueryHeap;
+			D3D12_QUERY_TYPE mType;
+		} mD3D12;
+#endif
+#if defined(VULKAN)
+		struct
+		{
+			VkQueryPool pVkQueryPool;
+			VkQueryType mType;
+		} mVulkan;
+#endif
+#if defined(METAL)
+		struct
+		{
+			double mGpuTimestampStart;
+			double mGpuTimestampEnd;
+		};
+#endif
+#if defined(DIRECT3D11)
+		struct
+		{
+			ID3D11Query** ppDxQueries;
+			D3D11_QUERY   mType;
+		} mD3D11;
+#endif
+#if defined(GLES)
+		struct
+		{
+			uint32_t* pQueries;
+			uint32_t  mType;
+			int32_t   mDisjointOccurred;
+		} mGLES;
+#endif
+#if defined(ORBIS)
+		struct
+		{
+			OrbisQueryPool mStruct;
+			uint32_t       mType;
+		};
+#endif
+#if defined(PROSPERO)
+		struct
+		{
+			ProsperoQueryPool mStruct;
+			uint32_t          mType;
+		};
+#endif
+	};
+	uint32_t mCount;
+} QueryPool;
+
 /// Data structure holding necessary info to create a Texture
 typedef struct TextureDesc
 {
@@ -776,6 +886,16 @@ typedef struct DEFINE_ALIGNED(Sampler, 16)
 {
 	union
 	{
+#if defined(DIRECT3D12)
+		struct
+		{
+			/// Description for creating the Sampler descriptor for this sampler
+			D3D12_SAMPLER_DESC mDesc;
+			/// Descriptor handle of the Sampler in a CPU visible descriptor heap
+			DxDescriptorID     mDescriptor;
+		} mD3D12;
+#endif
+#if defined(VULKAN)
 		struct
 		{
 			/// Native handle of the underlying resource
@@ -783,9 +903,49 @@ typedef struct DEFINE_ALIGNED(Sampler, 16)
 			VkSamplerYcbcrConversion     pVkSamplerYcbcrConversion;
 			VkSamplerYcbcrConversionInfo mVkSamplerYcbcrConversionInfo;
 		} mVulkan;
+#endif
+#if defined(METAL)
+		struct
+		{
+			/// Native handle of the underlying resource
+			id<MTLSamplerState> mtlSamplerState;
+		};
+#endif
+#if defined(DIRECT3D11)
+		struct
+		{
+			/// Native handle of the underlying resource
+			ID3D11SamplerState* pSamplerState;
+		} mD3D11;
+#endif
+#if defined(GLES)
+		struct
+		{
+			GLenum mMinFilter;
+			GLenum mMagFilter;
+			GLenum mMipMapMode;
+			GLenum mAddressS;
+			GLenum mAddressT;
+			GLenum mCompareFunc;
+		} mGLES;
+#endif
+#if defined(ORBIS)
+		OrbisSampler mStruct;
+#endif
+#if defined(PROSPERO)
+		ProsperoSampler mStruct;
+#endif
 	};
 } Sampler;
-COMPILE_ASSERT(sizeof(Sampler) <= 8 * sizeof(uint64_t)); 
+#if defined(DIRECT3D12)
+COMPILE_ASSERT(sizeof(Sampler) == 8 * sizeof(uint64_t));
+#elif defined(VULKAN)
+COMPILE_ASSERT(sizeof(Sampler) <= 8 * sizeof(uint64_t));
+#elif defined(GLES)
+COMPILE_ASSERT(sizeof(Sampler) == 4 * sizeof(uint64_t));
+#else
+COMPILE_ASSERT(sizeof(Sampler) == 2 * sizeof(uint64_t));
+#endif
 
 typedef enum DescriptorUpdateFrequency
 {
@@ -1412,6 +1572,123 @@ typedef struct VertexLayout
 	uint32_t     mStrides[MAX_VERTEX_BINDINGS];
 } VertexLayout;
 
+typedef struct BlendStateDesc
+{
+	/// Source blend factor per render target.
+	BlendConstant mSrcFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Destination blend factor per render target.
+	BlendConstant mDstFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Source alpha blend factor per render target.
+	BlendConstant mSrcAlphaFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Destination alpha blend factor per render target.
+	BlendConstant mDstAlphaFactors[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Blend mode per render target.
+	BlendMode mBlendModes[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Alpha blend mode per render target.
+	BlendMode mBlendAlphaModes[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Write mask per render target.
+	int32_t mMasks[MAX_RENDER_TARGET_ATTACHMENTS];
+	/// Mask that identifies the render targets affected by the blend state.
+	BlendStateTargets mRenderTargetMask;
+	/// Set whether alpha to coverage should be enabled.
+	bool mAlphaToCoverage;
+	/// Set whether each render target has an unique blend function. When false the blend function in slot 0 will be used for all render targets.
+	bool mIndependentBlend;
+} BlendStateDesc;
+
+typedef struct DepthStateDesc
+{
+	bool        mDepthTest;
+	bool        mDepthWrite;
+	CompareMode mDepthFunc;
+	bool        mStencilTest;
+	uint8_t     mStencilReadMask;
+	uint8_t     mStencilWriteMask;
+	CompareMode mStencilFrontFunc;
+	StencilOp   mStencilFrontFail;
+	StencilOp   mDepthFrontFail;
+	StencilOp   mStencilFrontPass;
+	CompareMode mStencilBackFunc;
+	StencilOp   mStencilBackFail;
+	StencilOp   mDepthBackFail;
+	StencilOp   mStencilBackPass;
+} DepthStateDesc;
+
+typedef struct RasterizerStateDesc
+{
+	CullMode  mCullMode;
+	int32_t   mDepthBias;
+	float     mSlopeScaledDepthBias;
+	FillMode  mFillMode;
+	FrontFace mFrontFace;
+	bool      mMultiSample;
+	bool      mScissor;
+	bool      mDepthClampEnable;
+} RasterizerStateDesc;
+
+typedef struct GraphicsPipelineDesc
+{
+	Shader* pShaderProgram;
+	RootSignature* pRootSignature;
+	VertexLayout* pVertexLayout;
+	BlendStateDesc* pBlendState;
+	DepthStateDesc* pDepthState;
+	RasterizerStateDesc* pRasterizerState;
+	TinyImageFormat* pColorFormats;
+	uint32_t             mRenderTargetCount;
+	SampleCount          mSampleCount;
+	uint32_t             mSampleQuality;
+	TinyImageFormat      mDepthStencilFormat;
+	PrimitiveTopology    mPrimitiveTopo;
+	bool                 mSupportIndirectCommandBuffer;
+	bool                 mVRFoveatedRendering;
+} GraphicsPipelineDesc;
+
+typedef struct RaytracingPipelineDesc
+{
+	Raytracing* pRaytracing;
+	RootSignature* pGlobalRootSignature;
+	Shader* pRayGenShader;
+	RootSignature* pRayGenRootSignature;
+	Shader** ppMissShaders;
+	RootSignature** ppMissRootSignatures;
+	RaytracingHitGroup* pHitGroups;
+	RootSignature* pEmptyRootSignature;
+	unsigned            mMissShaderCount;
+	unsigned            mHitGroupCount;
+	// #TODO : Remove this after adding shader reflection for raytracing shaders
+	unsigned mPayloadSize;
+	// #TODO : Remove this after adding shader reflection for raytracing shaders
+	unsigned mAttributeSize;
+	unsigned mMaxTraceRecursionDepth;
+	unsigned mMaxRaysCount;
+} RaytracingPipelineDesc;
+
+
+
+typedef struct ComputePipelineDesc
+{
+	Shader* pShaderProgram;
+	RootSignature* pRootSignature;
+} ComputePipelineDesc;
+
+typedef struct PipelineDesc
+{
+	union
+	{
+		ComputePipelineDesc    mComputeDesc;
+		GraphicsPipelineDesc   mGraphicsDesc;
+		RaytracingPipelineDesc mRaytracingDesc;
+	};
+	PipelineCache* pCache;
+	void* pPipelineExtensions;
+	const char* pName;
+	PipelineType   mType;
+	uint32_t       mExtensionCount;
+} PipelineDesc;
+
+
+
 typedef struct GPUVendorPreset
 {
 	char           mVendorId[MAX_GPU_VENDOR_STRING_LENGTH];
@@ -1777,61 +2054,15 @@ typedef struct Shader
 
 } Shader;
 
-typedef struct BlendStateDesc
-{
-	/// Source blend factor per render target.
-	BlendConstant mSrcFactors[MAX_RENDER_TARGET_ATTACHMENTS];
-	/// Destination blend factor per render target.
-	BlendConstant mDstFactors[MAX_RENDER_TARGET_ATTACHMENTS];
-	/// Source alpha blend factor per render target.
-	BlendConstant mSrcAlphaFactors[MAX_RENDER_TARGET_ATTACHMENTS];
-	/// Destination alpha blend factor per render target.
-	BlendConstant mDstAlphaFactors[MAX_RENDER_TARGET_ATTACHMENTS];
-	/// Blend mode per render target.
-	BlendMode mBlendModes[MAX_RENDER_TARGET_ATTACHMENTS];
-	/// Alpha blend mode per render target.
-	BlendMode mBlendAlphaModes[MAX_RENDER_TARGET_ATTACHMENTS];
-	/// Write mask per render target.
-	int32_t mMasks[MAX_RENDER_TARGET_ATTACHMENTS];
-	/// Mask that identifies the render targets affected by the blend state.
-	BlendStateTargets mRenderTargetMask;
-	/// Set whether alpha to coverage should be enabled.
-	bool mAlphaToCoverage;
-	/// Set whether each render target has an unique blend function. When false the blend function in slot 0 will be used for all render targets.
-	bool mIndependentBlend;
-} BlendStateDesc;
 
 
 
-typedef struct DepthStateDesc
-{
-	bool        mDepthTest;
-	bool        mDepthWrite;
-	CompareMode mDepthFunc;
-	bool        mStencilTest;
-	uint8_t     mStencilReadMask;
-	uint8_t     mStencilWriteMask;
-	CompareMode mStencilFrontFunc;
-	StencilOp   mStencilFrontFail;
-	StencilOp   mDepthFrontFail;
-	StencilOp   mStencilFrontPass;
-	CompareMode mStencilBackFunc;
-	StencilOp   mStencilBackFail;
-	StencilOp   mDepthBackFail;
-	StencilOp   mStencilBackPass;
-} DepthStateDesc;
 
-typedef struct RasterizerStateDesc
-{
-	CullMode  mCullMode;
-	int32_t   mDepthBias;
-	float     mSlopeScaledDepthBias;
-	FillMode  mFillMode;
-	FrontFace mFrontFace;
-	bool      mMultiSample;
-	bool      mScissor;
-	bool      mDepthClampEnable;
-} RasterizerStateDesc;
+
+
+
+
+
 
 typedef struct DEFINE_ALIGNED(Pipeline, 64)
 {
@@ -1951,7 +2182,16 @@ void vk_cmdBindDescriptorSet(Cmd* pCmd, uint32_t index, DescriptorSet* pDescript
 void vk_cmdBindPushConstants(Cmd* pCmd, RootSignature* pRootSignature, uint32_t paramIndex, const void* pConstants);
 void vk_cmdBindVertexBuffer(Cmd* pCmd, uint32_t bufferCount, Buffer** ppBuffers, const uint32_t* pStrides, const uint64_t* pOffsets);
 
+void vk_cmdSetViewport(Cmd* pCmd, float x, float y, float width, float height, float minDepth, float maxDepth);
+
+void vk_cmdSetScissor(Cmd* pCmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+
+void vk_cmdBindIndexBuffer(Cmd* pCmd, Buffer* pBuffer, uint32_t indexType, uint64_t offset);
+
 void vk_cmdDraw(Cmd* pCmd, uint32_t vertex_count, uint32_t first_vertex);
+
+void vk_cmdDrawIndexed(Cmd* pCmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
+
 
 void vk_addCmdPool(Renderer* pRenderer, const CmdPoolDesc* pDesc, CmdPool** ppCmdPool);
 void vk_endCmd(Cmd* pCmd);
@@ -1990,8 +2230,39 @@ void vk_addRootSignature(Renderer* pRenderer, const RootSignatureDesc* pRootSign
 
 void vk_addDescriptorSet(Renderer* pRenderer, const DescriptorSetDesc* pDesc, DescriptorSet** ppDescriptorSet);
 
+void vk_removeSampler(Renderer* pRenderer, Sampler* pSampler);
+
+void vk_removeShader(Renderer* pRenderer, Shader* pShaderProgram);
+
+void vk_removeDescriptorSet(Renderer* pRenderer, DescriptorSet* pDescriptorSet);
+
+void vk_removeRootSignature(Renderer* pRenderer, RootSignature* pRootSignature);
+
+void vk_removeTexture(Renderer* pRenderer, Texture* pTexture);
+
+void vk_removeVirtualTexture(Renderer* pRenderer, VirtualTexture* pSvt);
+
+void vk_addPipeline(Renderer* pRenderer, const PipelineDesc* pDesc, Pipeline** ppPipeline);
+void vk_setPipelineName(Renderer* pRenderer, Pipeline* pPipeline, const char* pName);
+
+void vk_getTimestampFrequency(Queue* pQueue, double* pFrequency);
+void vk_removePipeline(Renderer* pRenderer, Pipeline* pPipeline);
+
+void vk_removeQueryPool(Renderer* pRenderer, QueryPool* pQueryPool);
+
+void vk_addQueryPool(Renderer* pRenderer, const QueryPoolDesc* pDesc, QueryPool** ppQueryPool);
 
 
+void vk_cmdBeginQuery(Cmd* pCmd, QueryPool* pQueryPool, QueryDesc* pQuery);
+
+void vk_cmdBeginDebugMarker(Cmd* pCmd, float r, float g, float b, const char* pName);
+
+void vk_cmdEndQuery(Cmd* pCmd, QueryPool* pQueryPool, QueryDesc* pQuery);
+
+void vk_cmdEndDebugMarker(Cmd* pCmd);
+void vk_cmdResetQueryPool(Cmd* pCmd, QueryPool* pQueryPool, uint32_t startQuery, uint32_t queryCount);
+
+void vk_cmdResolveQuery(Cmd* pCmd, QueryPool* pQueryPool, Buffer* pReadbackBuffer, uint32_t startQuery, uint32_t queryCount);
 /************************************************************************/
 /************************************************************************/
 uint32_t getDescriptorIndexFromName(const RootSignature* pRootSignature, const char* pName);

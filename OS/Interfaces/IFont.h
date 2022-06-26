@@ -26,6 +26,21 @@ typedef struct FontDesc
 
 } FontDesc;
 
+/// Aggregation of information necessary for drawing text with The Forge
+typedef struct FontDrawDesc
+{
+
+	const char* pText = NULL;
+
+	uint32_t      mFontID = 0;
+	// Provided color should be A8B8G8R8_SRGB
+	uint32_t      mFontColor = 0xffffffff;
+	float         mFontSize = 16.0f;
+	float         mFontSpacing = 0.0f;
+	float         mFontBlur = 0.0f;
+
+} FontDrawDesc;
+
 
 /****************************************************************************/
 // MARK: - Application Life Cycle 
@@ -35,8 +50,15 @@ typedef struct FontDesc
 /// To be called at application initialization time by the App Layer
 bool initFontSystem(FontSystemDesc* pDesc);
 
+/// Renders UI-style text to the screen using a loaded font w/ The Forge
+/// This function will assert if Font Rendering has not been initialized
+void cmdDrawTextWithFont(void* /* Cmd* */ pCmd, float2 screenCoordsInPx, const FontDrawDesc* pDrawDesc);
+
 /****************************************************************************/
 // MARK: - Other Font System Functionality
 /****************************************************************************/
 /// Loads an array of fonts from files and returns an array of their ID handles
 void fntDefineFonts(const FontDesc* pDescs, uint32_t count, uint32_t* pOutIDs);
+
+/// Returns the bounds of text that would be drawn to supplied specification
+float2 fntMeasureFontText(const char* pText, const FontDrawDesc* pDrawDesc);

@@ -57,6 +57,10 @@ void setCustomMessageProcessor(CustomMessageProcessor proc)
 	sCustomProc = proc;
 }
 
+CpuInfo* getCpuInfo() {
+	return &gCpu;
+}
+
 //------------------------------------------------------------------------
 // PLATFORM LAYER CORE SUBSYSTEMS
 //------------------------------------------------------------------------

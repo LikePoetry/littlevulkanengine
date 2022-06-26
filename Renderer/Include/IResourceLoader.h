@@ -284,6 +284,10 @@ void beginUpdateResource(TextureUpdateDesc* pTextureDesc);
 void endUpdateResource(BufferUpdateDesc* pBuffer, SyncToken* token);
 void endUpdateResource(TextureUpdateDesc* pTexture, SyncToken* token);
 
+void removeResource(Buffer* pBuffer);
+void removeResource(Texture* pTexture);
+void removeResource(Geometry* pGeom);
+
 SyncToken getLastTokenCompleted();
 bool      isTokenCompleted(const SyncToken* token);
 void      waitForToken(const SyncToken* token);

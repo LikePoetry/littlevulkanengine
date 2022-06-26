@@ -2224,6 +2224,26 @@ void endUpdateResource(TextureUpdateDesc* pTextureUpdate, SyncToken* token)
 	}
 }
 
+void removeResource(Buffer* pBuffer)
+{
+	vk_removeBuffer(pResourceLoader->ppRenderers[pBuffer->mNodeIndex], pBuffer);
+}
+
+void removeResource(Texture* pTexture)
+{
+	vk_removeTexture(pResourceLoader->ppRenderers[pTexture->mNodeIndex], pTexture);
+}
+
+void removeResource(Geometry* pGeom)
+{
+	removeResource(pGeom->pIndexBuffer);
+
+	for (uint32_t i = 0; i < pGeom->mVertexBufferCount; ++i)
+		removeResource(pGeom->pVertexBuffers[i]);
+
+	tf_free(pGeom);
+}
+
 SyncToken getLastTokenCompleted()
 {
 	return tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted);
