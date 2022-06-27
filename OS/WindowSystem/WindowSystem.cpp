@@ -237,6 +237,19 @@ static void HideCursor()
 	wndHideCursor();
 }
 
+void platformInitWindowSystem(WindowDesc* pData)
+{
+	ASSERT(pWindowRef == NULL);
+
+	RectDesc currentRes = pData->fullScreen ? pData->fullscreenRect : pData->clientRect;
+	pData->mWndX = currentRes.left;
+	pData->mWndY = currentRes.top;
+	pData->mWndW = currentRes.right - currentRes.left;
+	pData->mWndH = currentRes.bottom - currentRes.top;
+
+	initTimer(&gHideTimer);
+	pWindowRef = pData;
+}
 
 
 void platformSetupWindowSystemUI(IApp* pApp)

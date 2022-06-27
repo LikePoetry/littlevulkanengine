@@ -10,7 +10,11 @@
 
 #define CPUNAMELENGTH 49
 
+#if defined(ANDROID)
+bool initCpuInfo(CpuInfo* outCpuInfo, JNIEnv* pJavaEnv)
+#else
 bool initCpuInfo(CpuInfo* outCpuInfo)
+#endif
 {
 	bool result = false;
 
@@ -20,11 +24,10 @@ bool initCpuInfo(CpuInfo* outCpuInfo)
 #if defined(ARCH_X86_FAMILY)
 	X86Info info;
 
-	//all X86 platforms are supported by cpu_features
+	//all X86 platfomrs are supported by cpu_features
 	result = GetX86Info(&info);
 
-	if (result)
-	{
+	if (result) {
 		outCpuInfo->features = info.features;
 		outCpuInfo->architecture = GetX86Microarchitecture(&info);
 
@@ -32,23 +35,27 @@ bool initCpuInfo(CpuInfo* outCpuInfo)
 		FillX86BrandString(name);
 
 		//trim string
-		//trim end
+		///trim end
 		char* trimmedName = name + (CPUNAMELENGTH - 1);
-		while (*trimmedName == ' ' || *trimmedName == '\0')
-		{
+		while (*trimmedName == ' ' || *trimmedName == '\0') {
 			*trimmedName = '\0';
 			trimmedName--;
 		}
-
-		///trim start
+		///trim  start
 		trimmedName = name;
-		while (*trimmedName==' ')
-		{
+		while (*trimmedName == ' ') {
 			trimmedName++;
 		}
 
 		const char* brandName = trimmedName;
 		const char* simdName = "";
+
+		//orbis and prospero do not provide cpu names
+#if defined(ORBIS)
+		brandName = "Orbis";
+#elif defined(PROSPERO)
+		brandName = "Prospero";
+#endif
 
 		if (outCpuInfo->features.avx2) {
 			outCpuInfo->simdFeature = SIMD_AVX2;
@@ -77,6 +84,7 @@ bool initCpuInfo(CpuInfo* outCpuInfo)
 		outCpuInfo->features.sse3 = -1;
 		outCpuInfo->simdFeature = SIMD_SSE3;
 	}
+
 #elif defined(ARCH_ARM64)
 	Aarch64Info info;
 
@@ -124,6 +132,6 @@ bool initCpuInfo(CpuInfo* outCpuInfo)
 		snprintf(outCpuInfo->name, sizeof(outCpuInfo->name), "%s%s", outCpuInfo->name, "\t\t\t\t\t SIMD: NEON ");
 	}
 #endif
-	return result;
 
+	return result;
 }

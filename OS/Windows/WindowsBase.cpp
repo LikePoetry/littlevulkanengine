@@ -68,6 +68,12 @@ bool initBaseSubsystems()
 {
 	// Not exposed in the interface files / app layer
 	extern bool platformInitFontSystem();
+	extern bool platformInitUserInterface();
+	extern void platformInitLuaScriptingSystem();
+	extern void platformInitWindowSystem(WindowDesc*);
+
+	platformInitWindowSystem(gWindowDesc);
+	pApp->pWindow = gWindowDesc;
 
 #ifdef ENABLE_FORGE_FONTS
 	extern bool platformInitFontSystem();
@@ -79,10 +85,10 @@ bool initBaseSubsystems()
 	if (!platformInitUserInterface())
 		return false;
 #endif
-//#ifdef ENABLE_FORGE_SCRIPTING
-//	extern void platformInitLuaScriptingSystem();
-//	platformInitLuaScriptingSystem();
-//#endif
+#ifdef ENABLE_FORGE_SCRIPTING
+	extern void platformInitLuaScriptingSystem();
+	platformInitLuaScriptingSystem();
+#endif
 	return true;
 }
 
@@ -161,7 +167,16 @@ int WindowsMain(int argc, char** argv, IApp* app)
 
 	fsSetPathForResourceDir(pSystemFileIO, RM_DEBUG, RD_LOG, "");
 
+#ifdef ENABLE_MTUNER
+	rmemInit(0);
+#endif
+
 	initLog(app->GetName(), DEFAULT_LOG_LEVEL);
+
+#ifdef ENABLE_FORGE_STACKTRACE_DUMP
+	if (!WindowsStackTrace::Init())
+		return EXIT_FAILURE;
+#endif
 
 	pApp = app;
 	pWindowAppRef = app;

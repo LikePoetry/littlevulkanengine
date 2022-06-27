@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -15,20 +15,21 @@
     <IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>OS</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <LatestTargetPlatformVersion>$([Microsoft.Build.Utilities.ToolLocationHelper]::GetLatestSDKTargetPlatformVersion('Windows', '10.0'))</LatestTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -104,6 +105,7 @@
     <ClInclude Include="Core\GPUConfig.h" />
     <ClInclude Include="Core\RingBuffer.h" />
     <ClInclude Include="Core\TextureContainers.h" />
+    <ClInclude Include="Core\ThreadSystem.h" />
     <ClInclude Include="Interfaces\IApp.h" />
     <ClInclude Include="Interfaces\ICameraController.h" />
     <ClInclude Include="Interfaces\IFileSystem.h" />
@@ -123,6 +125,9 @@
     <ClInclude Include="Profiler\GpuProfiler.h" />
     <ClInclude Include="Profiler\ProfilerBase.h" />
     <ClInclude Include="Profiler\ProfilerHTML.h" />
+    <ClInclude Include="Scripting\LuaManager.h" />
+    <ClInclude Include="Scripting\LuaManagerCommon.h" />
+    <ClInclude Include="Scripting\LuaManagerImpl.h" />
     <ClInclude Include="UI\imgui_user.h" />
   </ItemGroup>
   <ItemGroup>
@@ -143,9 +148,43 @@
     <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lapi.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lauxlib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lbaselib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lbitlib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lcode.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lcorolib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lctype.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldblib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldebug.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldo.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldump.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lfunc.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lgc.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\linit.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\liolib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\llex.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lmathlib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lmem.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\loadlib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lobject.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lopcodes.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\loslib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lparser.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lstate.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lstring.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lstrlib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ltable.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ltablib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ltm.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lundump.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lutf8lib.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lvm.c" />
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lzio.c" />
     <ClCompile Include="Camera\CameraController.cpp" />
     <ClCompile Include="Core\CPUConfig.cpp" />
     <ClCompile Include="Core\Screenshot.cpp" />
+    <ClCompile Include="Core\ThreadSystem.cpp" />
     <ClCompile Include="Core\Timer.c" />
     <ClCompile Include="FileSystem\FileSystem.cpp" />
     <ClCompile Include="FileSystem\SystemRun.cpp" />
@@ -156,6 +195,8 @@
     <ClCompile Include="MemoryTracking\MemoryTracking.c" />
     <ClCompile Include="Profiler\GpuProfiler.cpp" />
     <ClCompile Include="Profiler\ProfilerBase.cpp" />
+    <ClCompile Include="Scripting\LuaManager.cpp" />
+    <ClCompile Include="Scripting\LuaManagerImpl.cpp" />
     <ClCompile Include="Scripting\LuaSystem.cpp" />
     <ClCompile Include="UI\UI.cpp" />
     <ClCompile Include="UI\imgui_user.cpp" />

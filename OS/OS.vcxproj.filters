@@ -28,6 +28,9 @@
     <Filter Include="MemoryTracking">
       <UniqueIdentifier>{31B3166C-1D81-0A72-0615-7B98F281E6D6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Profiler">
+      <UniqueIdentifier>{28AC12A2-1479-6DAD-3D92-5B5529BEA23B}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Scripting">
       <UniqueIdentifier>{985A7358-04C5-27CF-4D03-D974B9AC0524}</UniqueIdentifier>
     </Filter>
@@ -57,6 +60,12 @@
     </Filter>
     <Filter Include="ThirdParty\OpenSource\imgui">
       <UniqueIdentifier>{CC94FF32-38A2-2D19-C188-29042D95F9CF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\lua-5.3.5">
+      <UniqueIdentifier>{59593565-C53C-44A5-CE3F-72E13AA20AF6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\OpenSource\lua-5.3.5\src">
+      <UniqueIdentifier>{F01BA048-5CD5-0AF3-E534-25CD51EDC062}</UniqueIdentifier>
     </Filter>
     <Filter Include="UI">
       <UniqueIdentifier>{83755900-6F01-880B-D8AF-880BC45A880B}</UniqueIdentifier>
@@ -120,6 +129,9 @@
     <ClInclude Include="Interfaces\IOperatingSystem.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
+    <ClInclude Include="Interfaces\IProfiler.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
     <ClInclude Include="Interfaces\IScreenshot.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
@@ -141,13 +153,28 @@
     <ClInclude Include="Math\MathTypes.h">
       <Filter>Math</Filter>
     </ClInclude>
+    <ClInclude Include="Profiler\GpuProfiler.h">
+      <Filter>Profiler</Filter>
+    </ClInclude>
+    <ClInclude Include="Profiler\ProfilerBase.h">
+      <Filter>Profiler</Filter>
+    </ClInclude>
+    <ClInclude Include="Profiler\ProfilerHTML.h">
+      <Filter>Profiler</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripting\LuaManager.h">
+      <Filter>Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripting\LuaManagerCommon.h">
+      <Filter>Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripting\LuaManagerImpl.h">
+      <Filter>Scripting</Filter>
+    </ClInclude>
     <ClInclude Include="UI\imgui_user.h">
       <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="Interfaces\IProfiler.h" />
-    <ClInclude Include="Profiler\ProfilerBase.h" />
-    <ClInclude Include="Profiler\GpuProfiler.h" />
-    <ClInclude Include="Profiler\ProfilerHTML.h" />
+    <ClInclude Include="Core\ThreadSystem.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">
@@ -201,6 +228,105 @@
     <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp">
       <Filter>ThirdParty\OpenSource\imgui</Filter>
     </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lapi.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lauxlib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lbaselib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lbitlib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lcode.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lcorolib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lctype.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldblib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldebug.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldo.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ldump.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lfunc.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lgc.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\linit.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\liolib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\llex.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lmathlib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lmem.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\loadlib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lobject.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lopcodes.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\loslib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lparser.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lstate.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lstring.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lstrlib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ltable.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ltablib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\ltm.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lundump.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lutf8lib.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lvm.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lzio.c">
+      <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
+    </ClCompile>
     <ClCompile Include="Camera\CameraController.cpp">
       <Filter>Camera</Filter>
     </ClCompile>
@@ -234,6 +360,18 @@
     <ClCompile Include="MemoryTracking\MemoryTracking.c">
       <Filter>MemoryTracking</Filter>
     </ClCompile>
+    <ClCompile Include="Profiler\GpuProfiler.cpp">
+      <Filter>Profiler</Filter>
+    </ClCompile>
+    <ClCompile Include="Profiler\ProfilerBase.cpp">
+      <Filter>Profiler</Filter>
+    </ClCompile>
+    <ClCompile Include="Scripting\LuaManager.cpp">
+      <Filter>Scripting</Filter>
+    </ClCompile>
+    <ClCompile Include="Scripting\LuaManagerImpl.cpp">
+      <Filter>Scripting</Filter>
+    </ClCompile>
     <ClCompile Include="Scripting\LuaSystem.cpp">
       <Filter>Scripting</Filter>
     </ClCompile>
@@ -264,8 +402,7 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
-    <ClCompile Include="Profiler\ProfilerBase.cpp" />
-    <ClCompile Include="Profiler\GpuProfiler.cpp" />
+    <ClCompile Include="Core\ThreadSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="..\ThirdParty\OpenSource\EASTL\EASTL.natvis" />

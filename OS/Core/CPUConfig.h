@@ -2,6 +2,7 @@
 #include <stdbool.h>
 
 #include"../Core/Config.h"
+
 #include "../../ThirdParty/OpenSource/cpu_features/src/cpu_features_types.h"
 
 typedef enum {
@@ -21,6 +22,11 @@ typedef struct {
 #endif
 } CpuInfo;
 
+#if defined(ANDROID)
+#include <jni.h>
+bool initCpuInfo(CpuInfo* outCpuInfo, JNIEnv* pJavaEnv);
+#else
 bool initCpuInfo(CpuInfo* outCpuInfo);
+#endif
 
 CpuInfo* getCpuInfo(void);
