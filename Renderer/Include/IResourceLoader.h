@@ -1,9 +1,34 @@
+/*
+ * Copyright (c) 2017-2022 The Forge Interactive Inc.
+ *
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+*/
+
 #pragma once
-#include "../Include/RendererConfig.h"
+
+#include "RendererConfig.h"
 
 #include "../OS/Math/MathTypes.h"
 #include "../OS/Core/Atomics.h"
-#include "../Include/IRenderer.h"
+#include "IRenderer.h"
 
 typedef struct MappedMemoryRange
 {
@@ -151,7 +176,13 @@ typedef struct GeometryLoadDesc
 	VertexLayout* pVertexLayout;
 } GeometryLoadDesc;
 
-typedef uint64_t SyncToken;
+typedef struct VirtualTexturePageInfo
+{
+	uint pageAlive;
+	uint TexID;
+	uint mipLevel;
+	uint padding1;
+} VirtualTexturePageInfo;
 
 typedef struct BufferUpdateDesc
 {
@@ -160,13 +191,13 @@ typedef struct BufferUpdateDesc
 	uint64_t mSize;
 
 	/// To be filled by the caller
-/// Example:
-/// BufferUpdateDesc update = { pBuffer, bufferDstOffset };
-/// beginUpdateResource(&update);
-/// ParticleVertex* vertices = (ParticleVertex*)update.pMappedData;
-///   for (uint32_t i = 0; i < particleCount; ++i)
-///	    vertices[i] = { rand() };
-/// endUpdateResource(&update, &token);
+	/// Example:
+	/// BufferUpdateDesc update = { pBuffer, bufferDstOffset };
+	/// beginUpdateResource(&update);
+	/// ParticleVertex* vertices = (ParticleVertex*)update.pMappedData;
+	///   for (uint32_t i = 0; i < particleCount; ++i)
+	///	    vertices[i] = { rand() };
+	/// endUpdateResource(&update, &token);
 	void* pMappedData;
 
 	/// Internal
@@ -182,6 +213,7 @@ typedef struct TextureUpdateDesc
 	Texture* pTexture;
 	uint32_t mMipLevel;
 	uint32_t mArrayLayer;
+
 	/// To be filled by the caller
 	/// Example:
 	/// BufferUpdateDesc update = { pTexture, 2, 1 };
@@ -216,7 +248,6 @@ typedef struct TextureUpdateDesc
 	{
 		MappedMemoryRange mMappedRange;
 	} mInternal;
-
 } TextureUpdateDesc;
 
 typedef struct TextureCopyDesc
@@ -261,6 +292,21 @@ typedef struct ShaderLoadDesc
 	uint32_t              mConstantCount;
 } ShaderLoadDesc;
 
+typedef struct PipelineCacheLoadDesc
+{
+	const char* pFileName;
+	const char* pFilePassword;
+	PipelineCacheFlags mFlags;
+} PipelineCacheLoadDesc;
+
+typedef struct PipelineCacheSaveDesc
+{
+	const char* pFileName;
+	const char* pFilePassword;
+} PipelineCacheSaveDesc;
+
+typedef uint64_t SyncToken;
+
 typedef struct ResourceLoaderDesc
 {
 	uint64_t mBufferSize;
@@ -273,24 +319,76 @@ extern ResourceLoaderDesc gDefaultResourceLoaderDesc;
 // MARK: - Resource Loader Functions
 
 void initResourceLoaderInterface(Renderer* pRenderer, ResourceLoaderDesc* pDesc = nullptr);
+void exitResourceLoaderInterface(Renderer* pRenderer);
+
+/// Multiple Renderer (unlinked GPU) variants. The Resource Loader must be shared between Renderers.
+void initResourceLoaderInterface(Renderer** ppRenderers, uint32_t rendererCount, ResourceLoaderDesc* pDesc = nullptr);
+void exitResourceLoaderInterface(Renderer** ppRenderers, uint32_t rendererCount);
+
+// MARK: addResource and updateResource
+
+/// Adding and updating resources can be done using a addResource or
+/// beginUpdateResource/endUpdateResource pair.
+/// if addResource(BufferLoadDesc) is called with a data size larger than the ResourceLoader's staging buffer, the ResourceLoader
+/// will perform multiple copies/flushes rather than failing the copy.
 
 /// If token is NULL, the resource will be available when allResourceLoadsCompleted() returns true.
 /// If token is non NULL, the resource will be available after isTokenCompleted(token) returns true.
 void addResource(BufferLoadDesc* pBufferDesc, SyncToken* token);
 void addResource(TextureLoadDesc* pTextureDesc, SyncToken* token);
+void addResource(GeometryLoadDesc* pGeomDesc, SyncToken* token);
 
 void beginUpdateResource(BufferUpdateDesc* pBufferDesc);
 void beginUpdateResource(TextureUpdateDesc* pTextureDesc);
 void endUpdateResource(BufferUpdateDesc* pBuffer, SyncToken* token);
 void endUpdateResource(TextureUpdateDesc* pTexture, SyncToken* token);
 
+/// Copies data from GPU to the CPU, typically for transferring it to another GPU in unlinked mode.
+/// For optimal use, the amount of data to transfer should be minimized as much as possible and applications should
+/// provide additional graphics/compute work that the GPU can execute alongside the copy.
+void copyResource(TextureCopyDesc* pTextureDesc, SyncToken* token);
+
+// MARK: removeResource
+
 void removeResource(Buffer* pBuffer);
 void removeResource(Texture* pTexture);
 void removeResource(Geometry* pGeom);
 
+// MARK: Waiting for Loads
+
+/// Returns whether all submitted resource loads and updates have been completed.
+bool allResourceLoadsCompleted();
+
+/// Blocks the calling thread until allResourceLoadsCompleted() returns true.
+/// Note that if more resource loads or updates are submitted from a different thread while
+/// while the calling thread is blocked, those loads or updates are not guaranteed to have
+/// completed when this function returns.
+void waitForAllResourceLoads();
+
+/// Returns wheter the resourceloader is single threaded or not
+bool isResourceLoaderSingleThreaded();
+
+/// A SyncToken is an array of monotonically increasing integers.
+/// getLastTokenCompleted() returns the last value for which
+/// isTokenCompleted(token) is guaranteed to return true.
 SyncToken getLastTokenCompleted();
 bool      isTokenCompleted(const SyncToken* token);
 void      waitForToken(const SyncToken* token);
 
+/// Allows clients to synchronize with the submission of copy commands (as opposed to their completion).
+/// This can reduce the wait time for clients but requires using the Semaphore from getLastSemaphoreCompleted() in a wait
+/// operation in a submit that uses the textures just updated.
+SyncToken getLastTokenSubmitted();
+bool      isTokenSubmitted(const SyncToken* token);
+void      waitForTokenSubmitted(const SyncToken* token);
+
+/// Return the semaphore for the last copy operation of a specific GPU.
+/// Could be NULL if no operations have been executed.
+Semaphore* getLastSemaphoreCompleted(uint32_t nodeIndex);
+
 /// Either loads the cached shader bytecode or compiles the shader to create new bytecode depending on whether source is newer than binary
 void addShader(Renderer* pRenderer, const ShaderLoadDesc* pDesc, Shader** pShader);
+
+/// Save/Load pipeline cache from disk
+void loadPipelineCache(Renderer* pRenderer, const PipelineCacheLoadDesc* pDesc, PipelineCache** ppPipelineCache);
+void savePipelineCache(Renderer* pRenderer, PipelineCache* pPipelineCache, PipelineCacheSaveDesc* pDesc);

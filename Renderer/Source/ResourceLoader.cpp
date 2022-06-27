@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2017-2022 The Forge Interactive Inc.
+ *
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+*/
+
 #include "../Include/RendererConfig.h"
 
 #include "../ThirdParty/OpenSource/EASTL/string.h"
@@ -15,17 +39,31 @@
 #define TINYKTX_IMPLEMENTATION
 #include "../ThirdParty/OpenSource/tinyktx/tinyktx.h"
 
+#include "../ThirdParty/OpenSource/basis_universal/transcoder/basisu_transcoder.h"
+
 #define CGLTF_IMPLEMENTATION
 #include "../ThirdParty/OpenSource/cgltf/cgltf.h"
 
 #include "../Include/IRenderer.h"
 #include "../Include/IResourceLoader.h"
-
-
 #include "../OS/Interfaces/ILog.h"
 #include "../OS/Interfaces/IThread.h"
 
+#if defined(__ANDROID__) && defined(VULKAN)
+#include <shaderc/shaderc.h>
+#endif
+
+#if defined(GLES)
+#include "OpenGLES/GLESContextCreator.h"
+#endif
+
 #include "../OS/Core/TextureContainers.h"
+
+#include "../OS/Interfaces/IMemory.h"
+
+#ifdef NX64
+#include "../ThirdParty/OpenSource/murmurhash3/MurmurHash3_32.h"
+#endif
 
 #define MIP_REDUCE(s, mip) (max(1u, (uint32_t)((s) >> (mip))))
 
@@ -35,25 +73,74 @@ enum
 	MAPPED_RANGE_FLAG_TEMP_BUFFER = (1 << 1),
 };
 
-
 extern RendererApi gSelectedRendererApi;
 
+/************************************************************************/
+/************************************************************************/
+
+// Xbox, Orbis, Prospero, iOS have unified memory
+// so we dont need a command buffer to upload linear data
+// A simple memcpy suffices since the GPU memory is marked as CPU write combine
+#if defined(XBOX) || defined(ORBIS) || defined(PROSPERO) || defined(TARGET_APPLE_ARM64) || defined(NX64)
+static FORGE_CONSTEXPR const bool gUma = true;
+#elif defined(ANDROID)
+#if defined(USE_MULTIPLE_RENDER_APIS)
+// Cant determine at compile time since we can be running GLES or VK. Not using UMA path for non VK
+static bool gUma = false;
+#elif defined(VULKAN)
+static FORGE_CONSTEXPR const bool gUma = true;
+#else
 static FORGE_CONSTEXPR const bool gUma = false;
+#endif
+#else
+static FORGE_CONSTEXPR const bool gUma = false;
+#endif
 
 #define MAX_FRAMES 3U
 
 ResourceLoaderDesc gDefaultResourceLoaderDesc = { 8ull << 20, 2 };
-
 /************************************************************************/
 // Surface Utils
 /************************************************************************/
-
+#if defined(VULKAN)
 static inline ResourceState util_determine_resource_start_state(bool uav)
 {
 	if (uav)
 		return RESOURCE_STATE_UNORDERED_ACCESS;
 	else
 		return RESOURCE_STATE_SHADER_RESOURCE;
+}
+#endif
+
+static inline ResourceState util_determine_resource_start_state(const BufferDesc* pDesc)
+{
+	// Host visible (Upload Heap)
+	if (pDesc->mMemoryUsage == RESOURCE_MEMORY_USAGE_CPU_ONLY || pDesc->mMemoryUsage == RESOURCE_MEMORY_USAGE_CPU_TO_GPU)
+	{
+		return RESOURCE_STATE_GENERIC_READ;
+	}
+	// Device Local (Default Heap)
+	else if (pDesc->mMemoryUsage == RESOURCE_MEMORY_USAGE_GPU_ONLY)
+	{
+		DescriptorType usage = (DescriptorType)pDesc->mDescriptors;
+
+		// Try to limit number of states used overall to avoid sync complexities
+		if (usage & DESCRIPTOR_TYPE_RW_BUFFER)
+			return RESOURCE_STATE_UNORDERED_ACCESS;
+		if ((usage & DESCRIPTOR_TYPE_VERTEX_BUFFER) || (usage & DESCRIPTOR_TYPE_UNIFORM_BUFFER))
+			return RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		if (usage & DESCRIPTOR_TYPE_INDEX_BUFFER)
+			return RESOURCE_STATE_INDEX_BUFFER;
+		if ((usage & DESCRIPTOR_TYPE_BUFFER))
+			return RESOURCE_STATE_SHADER_RESOURCE;
+
+		return RESOURCE_STATE_COMMON;
+	}
+	// Host Cached (Readback Heap)
+	else
+	{
+		return RESOURCE_STATE_COPY_DEST;
+	}
 }
 
 static inline constexpr ShaderSemantic util_cgltf_attrib_type_to_semantic(cgltf_attribute_type type, uint32_t index)
@@ -224,7 +311,6 @@ static inline void util_pack_float3_direction_to_half2(uint32_t count, uint32_t 
 		}
 	}
 }
-
 /************************************************************************/
 // Internal Structures
 /************************************************************************/
@@ -252,7 +338,7 @@ typedef struct CopyResourceSet
 	uint64_t mAllocatedSpace;
 
 	/// Buffers created in case we ran out of space in the original staging buffer
-/// Will be cleaned up after the fence for this set is complete
+	/// Will be cleaned up after the fence for this set is complete
 	eastl::vector<Buffer*> mTempBuffers;
 
 	Semaphore* pCopyCompletedSemaphore;
@@ -272,7 +358,8 @@ typedef struct CopyEngine
 
 	/// For reading back GPU generated textures, we need to ensure writes have completed before performing the copy.
 	eastl::vector<Semaphore*> mWaitSemaphores;
-}CopyEngine;
+
+} CopyEngine;
 
 typedef enum UpdateRequestType
 {
@@ -349,27 +436,6 @@ struct ResourceLoader
 
 static ResourceLoader* pResourceLoader = NULL;
 
-/************************************************************************/
-// Internal Functions
-/************************************************************************/
-/// Return a new staging buffer
-static MappedMemoryRange allocateUploadMemory(Renderer* pRenderer, uint64_t memoryRequirement, uint32_t alignment)
-{
-	Buffer* buffer;
-	{
-		//LOGF(LogLevel::eINFO, "Allocating temporary staging buffer. Required allocation size of %llu is larger than the staging buffer capacity of %llu", memoryRequirement, size);
-		buffer = {};
-		BufferDesc bufferDesc = {};
-		bufferDesc.mSize = memoryRequirement;
-		bufferDesc.mAlignment = alignment;
-		bufferDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_ONLY;
-		bufferDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
-		bufferDesc.mNodeIndex = pRenderer->mUnlinkedRendererIndex;
-		vk_addBuffer(pRenderer, &bufferDesc, &buffer);
-	}
-	return { (uint8_t*)buffer->pCpuMappedAddress, buffer, 0, memoryRequirement };
-}
-
 static uint32_t util_get_texture_row_alignment(Renderer* pRenderer)
 {
 	return max(1u, pRenderer->pActiveGpuSettings->mUploadBufferTextureRowAlignment);
@@ -380,6 +446,50 @@ static uint32_t util_get_texture_subresource_alignment(Renderer* pRenderer, Tiny
 	uint32_t blockSize = max(1u, TinyImageFormat_BitSizeOfBlock(fmt) >> 3);
 	uint32_t alignment = round_up(pRenderer->pActiveGpuSettings->mUploadBufferTextureAlignment, blockSize);
 	return round_up(alignment, util_get_texture_row_alignment(pRenderer));
+}
+/************************************************************************/
+// Internal Functions
+/************************************************************************/
+/// Return a new staging buffer
+static MappedMemoryRange allocateUploadMemory(Renderer* pRenderer, uint64_t memoryRequirement, uint32_t alignment)
+{
+	Buffer* buffer;
+#if defined(DIRECT3D11)
+	if (gSelectedRendererApi == RENDERER_API_D3D11)
+	{
+		// There is no such thing as staging buffer in D3D11
+		// To keep code paths unified in update functions, we allocate space for a dummy buffer and the system memory for pCpuMappedAddress
+		buffer = (Buffer*)tf_memalign(alignof(Buffer), sizeof(Buffer) + (size_t)memoryRequirement);
+		*buffer = {};
+		buffer->pCpuMappedAddress = buffer + 1;
+		buffer->mSize = memoryRequirement;
+	}
+	else
+#endif
+#if defined(GLES)
+		if (gSelectedRendererApi == RENDERER_API_GLES)
+		{
+			// There is no such thing as staging buffer in D3D11
+			// To keep code paths unified in update functions, we allocate space for a dummy buffer and the system memory for pCpuMappedAddress
+			buffer = (Buffer*)tf_memalign(alignof(Buffer), sizeof(Buffer) + (size_t)memoryRequirement);
+			*buffer = {};
+			buffer->pCpuMappedAddress = buffer + 1;
+			buffer->mSize = memoryRequirement;
+		}
+		else
+#endif
+		{
+			//LOGF(LogLevel::eINFO, "Allocating temporary staging buffer. Required allocation size of %llu is larger than the staging buffer capacity of %llu", memoryRequirement, size);
+			buffer = {};
+			BufferDesc bufferDesc = {};
+			bufferDesc.mSize = memoryRequirement;
+			bufferDesc.mAlignment = alignment;
+			bufferDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_ONLY;
+			bufferDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
+			bufferDesc.mNodeIndex = pRenderer->mUnlinkedRendererIndex;
+			vk_addBuffer(pRenderer, &bufferDesc, &buffer);
+		}
+	return { (uint8_t*)buffer->pCpuMappedAddress, buffer, 0, memoryRequirement };
 }
 
 static void setupCopyEngine(Renderer* pRenderer, CopyEngine* pCopyEngine, uint32_t nodeIndex, uint64_t size, uint32_t bufferCount)
@@ -432,7 +542,10 @@ static void cleanupCopyEngine(Renderer* pRenderer, CopyEngine* pCopyEngine)
 
 		vk_removeCmd(pRenderer, resourceSet.pCmd);
 		vk_removeCmdPool(pRenderer, resourceSet.pCmdPool);
-		vk_removeFence(pRenderer, resourceSet.pFence);
+#if defined(DIRECT3D11)
+		if (gSelectedRendererApi != RENDERER_API_D3D11)
+#endif
+			vk_removeFence(pRenderer, resourceSet.pFence);
 
 		if (!resourceSet.mTempBuffers.empty())
 			LOGF(eINFO, "Was not cleaned up %d", i);
@@ -526,6 +639,7 @@ static void streamerFlush(CopyEngine* pCopyEngine, size_t activeSet)
 	}
 }
 
+/// Return memory from pre-allocated staging buffer or create a temporary buffer if the streamer ran out of memory
 static MappedMemoryRange allocateStagingMemory(uint64_t memoryRequirement, uint32_t alignment, uint32_t nodeIndex)
 {
 	CopyEngine* pCopyEngine = &pResourceLoader->pCopyEngines[nodeIndex];
@@ -578,7 +692,8 @@ static void freeAllUploadMemory()
 	}
 }
 
-static UploadFunctionResult updateTexture(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, const TextureUpdateDescInternal& texUpdateDesc)
+static UploadFunctionResult
+updateTexture(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, const TextureUpdateDescInternal& texUpdateDesc)
 {
 	// When this call comes from updateResource, staging buffer data is already filled
 	// All that is left to do is record and execute the Copy commands
@@ -930,7 +1045,8 @@ static UploadFunctionResult loadTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 	return UPLOAD_FUNCTION_RESULT_INVALID_REQUEST;
 }
 
-static UploadFunctionResult updateBuffer(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, const BufferUpdateDesc& bufUpdateDesc)
+static UploadFunctionResult
+updateBuffer(Renderer* pRenderer, CopyEngine* pCopyEngine, size_t activeSet, const BufferUpdateDesc& bufUpdateDesc)
 {
 	ASSERT(pCopyEngine->pQueue->mNodeIndex == bufUpdateDesc.pBuffer->mNodeIndex);
 	Buffer* pBuffer = bufUpdateDesc.pBuffer;
@@ -1601,6 +1717,8 @@ static UploadFunctionResult copyTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 
 	if (pTextureCopy.pWaitSemaphore)
 		pCopyEngine->mWaitSemaphores.push_back(pTextureCopy.pWaitSemaphore);
+
+#if defined(VULKAN)
 	if (gSelectedRendererApi == RENDERER_API_VULKAN)
 	{
 		TextureBarrier barrier = { texture, pTextureCopy.mTextureState, RESOURCE_STATE_COPY_SOURCE };
@@ -1608,6 +1726,17 @@ static UploadFunctionResult copyTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 		barrier.mQueueType = pTextureCopy.mQueueType;
 		vk_cmdResourceBarrier(cmd, 0, NULL, 1, &barrier, 0, NULL);
 	}
+#endif
+#if defined(DIRECT3D12)
+	if (gSelectedRendererApi == RENDERER_API_D3D12)
+	{
+		TextureBarrier barrier = { texture, pTextureCopy.mTextureState, RESOURCE_STATE_COPY_SOURCE };
+		barrier.mAcquire = 1;
+		barrier.mQueueType = pTextureCopy.mQueueType;
+		cmdResourceBarrier(cmd, 0, NULL, 1, &barrier, 0, NULL);
+	}
+#endif
+
 	uint32_t numBytes = 0;
 	uint32_t rowBytes = 0;
 	uint32_t numRows = 0;
@@ -1622,50 +1751,41 @@ static UploadFunctionResult copyTexture(Renderer* pRenderer, CopyEngine* pCopyEn
 	subresourceDesc.mArrayLayer = pTextureCopy.mTextureArrayLayer;
 	subresourceDesc.mMipLevel = pTextureCopy.mTextureMipLevel;
 	subresourceDesc.mSrcOffset = pTextureCopy.mBufferOffset;
+#if defined(DIRECT3D11) || defined(METAL) || defined(VULKAN)
 	const uint32_t sliceAlignment = util_get_texture_subresource_alignment(pRenderer, fmt);
 	const uint32_t rowAlignment = util_get_texture_row_alignment(pRenderer);
 	uint32_t subRowPitch = round_up(rowBytes, rowAlignment);
 	uint32_t subSlicePitch = round_up(subRowPitch * numRows, sliceAlignment);
 	subresourceDesc.mRowPitch = subRowPitch;
 	subresourceDesc.mSlicePitch = subSlicePitch;
+#endif
 	vk_cmdCopySubresource(cmd, pTextureCopy.pBuffer, pTextureCopy.pTexture, &subresourceDesc);
-
+#if defined(DIRECT3D12)
+	if (gSelectedRendererApi == RENDERER_API_D3D12)
+	{
+		TextureBarrier barrier = { texture, RESOURCE_STATE_COPY_SOURCE, pTextureCopy.mTextureState };
+		barrier.mRelease = 1;
+		barrier.mQueueType = pTextureCopy.mQueueType;
+		cmdResourceBarrier(cmd, 0, NULL, 1, &barrier, 0, NULL);
+	}
+#endif
 
 	return UPLOAD_FUNCTION_RESULT_COMPLETED;
 
 }
-
-static void queueTextureUpdate(ResourceLoader* pLoader, TextureUpdateDescInternal* pTextureUpdate, SyncToken* token)
-{
-	ASSERT(pTextureUpdate->mRange.pBuffer);
-
-	uint32_t nodeIndex = pTextureUpdate->pTexture->mNodeIndex;
-	acquireMutex(&pLoader->mQueueMutex);
-
-	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
-
-	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pTextureUpdate));
-	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
-	pLoader->mRequestQueue[nodeIndex].back().pUploadBuffer =
-		(pTextureUpdate->mRange.mFlags & MAPPED_RANGE_FLAG_TEMP_BUFFER) ? pTextureUpdate->mRange.pBuffer : NULL;
-	releaseMutex(&pLoader->mQueueMutex);
-	wakeOneConditionVariable(&pLoader->mQueueCond);
-	if (token)
-		*token = max(t, *token);
-}
-
 /************************************************************************/
 // Internal Resource Loader Implementation
 /************************************************************************/
 static bool areTasksAvailable(ResourceLoader* pLoader)
 {
-	for (size_t i = 0; i < MAX_MULTIPLE_GPUS; i++)
+	for (size_t i = 0; i < MAX_MULTIPLE_GPUS; ++i)
 	{
 		if (!pLoader->mRequestQueue[i].empty())
 		{
 			return true;
 		}
 	}
+
 	return false;
 }
 
@@ -1922,6 +2042,29 @@ static void addResourceLoader(Renderer** ppRenderers, uint32_t rendererCount, Re
 	*ppLoader = pLoader;
 }
 
+static void removeResourceLoader(ResourceLoader* pLoader)
+{
+	pLoader->mRun = false;    //-V601
+
+	if (pLoader->mDesc.mSingleThreaded)
+	{
+		streamerThreadFunc(pLoader);
+	}
+	else
+	{
+		wakeOneConditionVariable(&pLoader->mQueueCond);
+		joinThread(pLoader->mThread);
+	}
+
+	destroyConditionVariable(&pLoader->mQueueCond);
+	destroyConditionVariable(&pLoader->mTokenCond);
+	destroyMutex(&pLoader->mQueueMutex);
+	destroyMutex(&pLoader->mTokenMutex);
+	destroyMutex(&pLoader->mSemaphoreMutex);
+
+	tf_delete(pLoader);
+}
+
 static void queueBufferUpdate(ResourceLoader* pLoader, BufferUpdateDesc* pBufferUpdate, SyncToken* token)
 {
 	uint32_t nodeIndex = pBufferUpdate->pBuffer->mNodeIndex;
@@ -1955,6 +2098,41 @@ static void queueTextureLoad(ResourceLoader* pLoader, TextureLoadDesc* pTextureU
 		*token = max(t, *token);
 }
 
+static void queueGeometryLoad(ResourceLoader* pLoader, GeometryLoadDesc* pGeometryLoad, SyncToken* token)
+{
+	uint32_t nodeIndex = pGeometryLoad->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pGeometryLoad));
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
+
+static void queueTextureUpdate(ResourceLoader* pLoader, TextureUpdateDescInternal* pTextureUpdate, SyncToken* token)
+{
+	ASSERT(pTextureUpdate->mRange.pBuffer);
+
+	uint32_t nodeIndex = pTextureUpdate->pTexture->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pTextureUpdate));
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	pLoader->mRequestQueue[nodeIndex].back().pUploadBuffer =
+		(pTextureUpdate->mRange.mFlags & MAPPED_RANGE_FLAG_TEMP_BUFFER) ? pTextureUpdate->mRange.pBuffer : NULL;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
+
+#if defined(VULKAN)
 static void queueBufferBarrier(ResourceLoader* pLoader, Buffer* pBuffer, ResourceState state, SyncToken* token)
 {
 	uint32_t nodeIndex = pBuffer->mNodeIndex;
@@ -1984,6 +2162,23 @@ static void queueTextureBarrier(ResourceLoader* pLoader, Texture* pTexture, Reso
 	if (token)
 		*token = max(t, *token);
 }
+#endif
+
+static void queueTextureCopy(ResourceLoader* pLoader, TextureCopyDesc* pTextureCopy, SyncToken* token)
+{
+	ASSERT(pTextureCopy->pTexture->mNodeIndex == pTextureCopy->pBuffer->mNodeIndex);
+	uint32_t nodeIndex = pTextureCopy->pTexture->mNodeIndex;
+	acquireMutex(&pLoader->mQueueMutex);
+
+	SyncToken t = tfrg_atomic64_add_relaxed(&pLoader->mTokenCounter, 1) + 1;
+
+	pLoader->mRequestQueue[nodeIndex].emplace_back(UpdateRequest(*pTextureCopy));
+	pLoader->mRequestQueue[nodeIndex].back().mWaitIndex = t;
+	releaseMutex(&pLoader->mQueueMutex);
+	wakeOneConditionVariable(&pLoader->mQueueCond);
+	if (token)
+		*token = max(t, *token);
+}
 
 static void waitForToken(ResourceLoader* pLoader, const SyncToken* token)
 {
@@ -1999,15 +2194,40 @@ static void waitForToken(ResourceLoader* pLoader, const SyncToken* token)
 	releaseMutex(&pLoader->mTokenMutex);
 }
 
+static void waitForTokenSubmitted(ResourceLoader* pLoader, const SyncToken* token)
+{
+	if (pLoader->mDesc.mSingleThreaded)
+	{
+		return;
+	}
+	acquireMutex(&pLoader->mTokenMutex);
+	while (!isTokenSubmitted(token))
+	{
+		waitConditionVariable(&pLoader->mTokenCond, &pLoader->mTokenMutex, TIMEOUT_INFINITE);
+	}
+	releaseMutex(&pLoader->mTokenMutex);
+}
 /************************************************************************/
 // Resource Loader Interface Implementation
 /************************************************************************/
-void initResourceLoaderInterface(Renderer* pRenderer, ResourceLoaderDesc* pDesc)
+void initResourceLoaderInterface(Renderer* pRenderer, ResourceLoaderDesc* pDesc) { addResourceLoader(&pRenderer, 1, pDesc, &pResourceLoader); }
+
+void exitResourceLoaderInterface(Renderer* pRenderer)
 {
-	addResourceLoader(&pRenderer, 1, pDesc, &pResourceLoader);
+	removeResourceLoader(pResourceLoader);
 }
 
-void addResource(BufferLoadDesc* pBufferDesc, SyncToken* token) 
+void initResourceLoaderInterface(Renderer** ppRenderers, uint32_t rendererCount, ResourceLoaderDesc* pDesc)
+{
+	addResourceLoader(ppRenderers, rendererCount, pDesc, &pResourceLoader);
+}
+
+void exitResourceLoaderInterface(Renderer** pRenderers, uint32_t rendererCount)
+{
+	removeResourceLoader(pResourceLoader);
+}
+
+void addResource(BufferLoadDesc* pBufferDesc, SyncToken* token)
 {
 	uint64_t stagingBufferSize = pResourceLoader->pCopyEngines[0].bufferSize;
 	bool     update = pBufferDesc->pData || pBufferDesc->mForceReset;
@@ -2098,17 +2318,18 @@ void addResource(TextureLoadDesc* pTextureDesc, SyncToken* token)
 		vk_addTexture(pResourceLoader->ppRenderers[pTextureDesc->mNodeIndex], pTextureDesc->pDesc, pTextureDesc->ppTexture);
 
 		// Transition texture to desired state for Vulkan since all Vulkan resources are created in undefined state
+#if defined(VULKAN)
 		if (gSelectedRendererApi == RENDERER_API_VULKAN)
 		{
 			ResourceState startState = pTextureDesc->pDesc->mStartState;
 			// Check whether this is required (user specified a state other than undefined / common)
-			if (startState == RESOURCE_STATE_UNDEFINED || startState == RESOURCE_STATE_COMMON)	//-V560
+			if (startState == RESOURCE_STATE_UNDEFINED || startState == RESOURCE_STATE_COMMON)    //-V560
 			{
 				startState = util_determine_resource_start_state(pTextureDesc->pDesc->mDescriptors & DESCRIPTOR_TYPE_RW_TEXTURE);
-
 			}
 			queueTextureBarrier(pResourceLoader, *pTextureDesc->ppTexture, startState, token);
 		}
+#endif
 	}
 	else
 	{
@@ -2119,6 +2340,41 @@ void addResource(TextureLoadDesc* pTextureDesc, SyncToken* token)
 			streamerThreadFunc(pResourceLoader);
 		}
 	}
+}
+
+void addResource(GeometryLoadDesc* pDesc, SyncToken* token)
+{
+	ASSERT(pDesc->ppGeometry);
+
+	GeometryLoadDesc updateDesc = *pDesc;
+	updateDesc.pFileName = pDesc->pFileName;
+	updateDesc.pVertexLayout = (VertexLayout*)tf_calloc(1, sizeof(VertexLayout));
+	memcpy(updateDesc.pVertexLayout, pDesc->pVertexLayout, sizeof(VertexLayout));
+	queueGeometryLoad(pResourceLoader, &updateDesc, token);
+	if (pResourceLoader->mDesc.mSingleThreaded)
+	{
+		streamerThreadFunc(pResourceLoader);
+	}
+}
+
+void removeResource(Buffer* pBuffer)
+{
+	vk_removeBuffer(pResourceLoader->ppRenderers[pBuffer->mNodeIndex], pBuffer);
+}
+
+void removeResource(Texture* pTexture)
+{
+	vk_removeTexture(pResourceLoader->ppRenderers[pTexture->mNodeIndex], pTexture);
+}
+
+void removeResource(Geometry* pGeom)
+{
+	removeResource(pGeom->pIndexBuffer);
+
+	for (uint32_t i = 0; i < pGeom->mVertexBufferCount; ++i)
+		removeResource(pGeom->pVertexBuffers[i]);
+
+	tf_free(pGeom);
 }
 
 void beginUpdateResource(BufferUpdateDesc* pBufferUpdate)
@@ -2153,35 +2409,6 @@ void beginUpdateResource(BufferUpdateDesc* pBufferUpdate)
 	}
 }
 
-void beginUpdateResource(TextureUpdateDesc* pTextureUpdate)
-{
-	const Texture* texture = pTextureUpdate->pTexture;
-	const TinyImageFormat	fmt = (TinyImageFormat)texture->mFormat;
-	Renderer* pRenderer = pResourceLoader->ppRenderers[texture->mNodeIndex];
-	const uint32_t			alignment = util_get_texture_subresource_alignment(pRenderer, fmt);
-
-	bool success = util_get_surface_info(MIP_REDUCE(texture->mWidth,
-		pTextureUpdate->mMipLevel),
-		MIP_REDUCE(texture->mHeight, pTextureUpdate->mMipLevel),
-		fmt,
-		&pTextureUpdate->mSrcSliceStride,
-		&pTextureUpdate->mSrcRowStride,
-		&pTextureUpdate->mRowCount);
-	ASSERT(success);
-	UNREF_PARAM(success);
-
-	pTextureUpdate->mDstRowStride = round_up(pTextureUpdate->mSrcRowStride, util_get_texture_row_alignment(pRenderer));
-	pTextureUpdate->mDstSliceStride = round_up(pTextureUpdate->mDstRowStride * pTextureUpdate->mRowCount, alignment);
-
-	const ssize_t requiredSize = round_up(
-		MIP_REDUCE(texture->mDepth, pTextureUpdate->mMipLevel) * pTextureUpdate->mDstSliceStride, alignment);
-
-	// We need to use a staging buffer.
-	pTextureUpdate->mInternal.mMappedRange = allocateUploadMemory(pRenderer, requiredSize, alignment);
-	pTextureUpdate->mInternal.mMappedRange.mFlags = MAPPED_RANGE_FLAG_TEMP_BUFFER;
-	pTextureUpdate->pMappedData = pTextureUpdate->mInternal.mMappedRange.pData;
-}
-
 void endUpdateResource(BufferUpdateDesc* pBufferUpdate, SyncToken* token)
 {
 	if (pBufferUpdate->mInternal.mMappedRange.mFlags & MAPPED_RANGE_FLAG_UNMAP_BUFFER)
@@ -2204,6 +2431,31 @@ void endUpdateResource(BufferUpdateDesc* pBufferUpdate, SyncToken* token)
 	}
 }
 
+void beginUpdateResource(TextureUpdateDesc* pTextureUpdate)
+{
+	const Texture* texture = pTextureUpdate->pTexture;
+	const TinyImageFormat fmt = (TinyImageFormat)texture->mFormat;
+	Renderer* pRenderer = pResourceLoader->ppRenderers[texture->mNodeIndex];
+	const uint32_t        alignment = util_get_texture_subresource_alignment(pRenderer, fmt);
+
+	bool success = util_get_surface_info(
+		MIP_REDUCE(texture->mWidth, pTextureUpdate->mMipLevel), MIP_REDUCE(texture->mHeight, pTextureUpdate->mMipLevel), fmt,
+		&pTextureUpdate->mSrcSliceStride, &pTextureUpdate->mSrcRowStride, &pTextureUpdate->mRowCount);
+	ASSERT(success);
+	UNREF_PARAM(success);
+
+	pTextureUpdate->mDstRowStride = round_up(pTextureUpdate->mSrcRowStride, util_get_texture_row_alignment(pRenderer));
+	pTextureUpdate->mDstSliceStride = round_up(pTextureUpdate->mDstRowStride * pTextureUpdate->mRowCount, alignment);
+
+	const ssize_t requiredSize = round_up(
+		MIP_REDUCE(texture->mDepth, pTextureUpdate->mMipLevel) * pTextureUpdate->mDstSliceStride, alignment);
+
+	// We need to use a staging buffer.
+	pTextureUpdate->mInternal.mMappedRange = allocateUploadMemory(pRenderer, requiredSize, alignment);
+	pTextureUpdate->mInternal.mMappedRange.mFlags = MAPPED_RANGE_FLAG_TEMP_BUFFER;
+	pTextureUpdate->pMappedData = pTextureUpdate->mInternal.mMappedRange.pData;
+}
+
 void endUpdateResource(TextureUpdateDesc* pTextureUpdate, SyncToken* token)
 {
 	TextureUpdateDescInternal desc = {};
@@ -2224,37 +2476,362 @@ void endUpdateResource(TextureUpdateDesc* pTextureUpdate, SyncToken* token)
 	}
 }
 
-void removeResource(Buffer* pBuffer)
+void copyResource(TextureCopyDesc* pTextureDesc, SyncToken* token)
 {
-	vk_removeBuffer(pResourceLoader->ppRenderers[pBuffer->mNodeIndex], pBuffer);
+	queueTextureCopy(pResourceLoader, pTextureDesc, token);
+	if (pResourceLoader->mDesc.mSingleThreaded)
+	{
+		streamerThreadFunc(pResourceLoader);
+	}
 }
 
-void removeResource(Texture* pTexture)
-{
-	vk_removeTexture(pResourceLoader->ppRenderers[pTexture->mNodeIndex], pTexture);
-}
+SyncToken getLastTokenCompleted() { return tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted); }
 
-void removeResource(Geometry* pGeom)
-{
-	removeResource(pGeom->pIndexBuffer);
-
-	for (uint32_t i = 0; i < pGeom->mVertexBufferCount; ++i)
-		removeResource(pGeom->pVertexBuffers[i]);
-
-	tf_free(pGeom);
-}
-
-SyncToken getLastTokenCompleted()
-{
-	return tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted);
-}
-
-bool      isTokenCompleted(const SyncToken* token)
-{
-	return *token <= tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted);
-}
+bool isTokenCompleted(const SyncToken* token) { return *token <= tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted); }
 
 void waitForToken(const SyncToken* token) { waitForToken(pResourceLoader, token); }
+
+SyncToken getLastTokenSubmitted() { return tfrg_atomic64_load_acquire(&pResourceLoader->mTokenSubmitted); }
+
+bool isTokenSubmitted(const SyncToken* token) { return *token <= tfrg_atomic64_load_acquire(&pResourceLoader->mTokenSubmitted); }
+
+void waitForTokenSubmitted(const SyncToken* token) { waitForTokenSubmitted(pResourceLoader, token); }
+
+bool allResourceLoadsCompleted()
+{
+	SyncToken token = tfrg_atomic64_load_relaxed(&pResourceLoader->mTokenCounter);
+	return token <= tfrg_atomic64_load_acquire(&pResourceLoader->mTokenCompleted);
+}
+
+void waitForAllResourceLoads()
+{
+	SyncToken token = tfrg_atomic64_load_relaxed(&pResourceLoader->mTokenCounter);
+	waitForToken(pResourceLoader, &token);
+}
+
+bool isResourceLoaderSingleThreaded()
+{
+	ASSERT(pResourceLoader);
+	return pResourceLoader->mDesc.mSingleThreaded;
+}
+
+Semaphore* getLastSemaphoreCompleted(uint32_t nodeIndex)
+{
+	acquireMutex(&pResourceLoader->mSemaphoreMutex);
+	Semaphore* sem = pResourceLoader->pCopyEngines[nodeIndex].pLastCompletedSemaphore;
+	releaseMutex(&pResourceLoader->mSemaphoreMutex);
+	return sem;
+}
+
+/************************************************************************/
+// Shader loading
+/************************************************************************/
+#if defined(__ANDROID__) && defined(VULKAN)
+// Translate Vulkan Shader Type to shaderc shader type
+shaderc_shader_kind getShadercShaderType(ShaderStage type)
+{
+	switch (type)
+	{
+	case ShaderStage::SHADER_STAGE_VERT: return shaderc_glsl_vertex_shader;
+	case ShaderStage::SHADER_STAGE_FRAG: return shaderc_glsl_fragment_shader;
+	case ShaderStage::SHADER_STAGE_TESC: return shaderc_glsl_tess_control_shader;
+	case ShaderStage::SHADER_STAGE_TESE: return shaderc_glsl_tess_evaluation_shader;
+	case ShaderStage::SHADER_STAGE_GEOM: return shaderc_glsl_geometry_shader;
+	case ShaderStage::SHADER_STAGE_COMP: return shaderc_glsl_compute_shader;
+	default: break;
+	}
+
+	ASSERT(false);
+	return static_cast<shaderc_shader_kind>(-1);
+}
+#endif
+
+#if defined(VULKAN)
+#if defined(__ANDROID__)
+// Android:
+// Use shaderc to compile glsl to spirV
+void vk_compileShader(
+	Renderer* pRenderer, ShaderStage stage, uint32_t codeSize, const char* code, const char* outFile, uint32_t macroCount,
+	ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint)
+{
+	VkPhysicalDeviceProperties properties = {};
+	vkGetPhysicalDeviceProperties(pRenderer->mVulkan.pVkActiveGPU, &properties);
+	uint32_t version = properties.apiVersion < TARGET_VULKAN_API_VERSION ? properties.apiVersion : TARGET_VULKAN_API_VERSION;
+	switch (version) {
+	case VK_API_VERSION_1_0:
+		version = shaderc_env_version_vulkan_1_0;
+		break;
+	case VK_API_VERSION_1_1:
+		version = shaderc_env_version_vulkan_1_1;
+		break;
+	default:
+		LOGF(eERROR, "Unknown Vulkan version %u", version);
+		ASSERT(false);
+		version = shaderc_env_version_vulkan_1_0;
+		break;
+	}
+
+	// compile into spir-V shader
+	shaderc_compiler_t        compiler = shaderc_compiler_initialize();
+	shaderc_compile_options_t options = shaderc_compile_options_initialize();
+	for (uint32_t i = 0; i < macroCount; ++i)
+	{
+		shaderc_compile_options_add_macro_definition(
+			options, pMacros[i].definition, strlen(pMacros[i].definition), pMacros[i].value, strlen(pMacros[i].value));
+	}
+
+	const char* android_definition = "TARGET_ANDROID";
+	shaderc_compile_options_add_macro_definition(options, android_definition, strlen(android_definition), "1", 1);
+
+#if defined(QUEST_VR)
+	const char* quest_definition = "TARGET_QUEST";
+	shaderc_compile_options_add_macro_definition(options, quest_definition, strlen(quest_definition), "1", 1);
+#endif
+
+	shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, version);
+
+	shaderc_compilation_result_t spvShader = shaderc_compile_into_spv(
+		compiler, code, codeSize, getShadercShaderType(stage), "shaderc_error", pEntryPoint ? pEntryPoint : "main", options);
+	shaderc_compilation_status spvStatus = shaderc_result_get_compilation_status(spvShader);
+	if (spvStatus != shaderc_compilation_status_success)
+	{
+		const char* errorMessage = shaderc_result_get_error_message(spvShader);
+		LOGF(LogLevel::eERROR, "Shader compiling failed! with status %s", errorMessage);
+		abort();
+	}
+
+	// Resize the byteCode block based on the compiled shader size
+	pOut->mByteCodeSize = shaderc_result_get_length(spvShader);
+	pOut->pByteCode = tf_malloc(pOut->mByteCodeSize);
+	memcpy(pOut->pByteCode, shaderc_result_get_bytes(spvShader), pOut->mByteCodeSize);
+
+	// Release resources
+	shaderc_result_release(spvShader);
+	shaderc_compiler_release(compiler);
+}
+#else
+// PC:
+// Vulkan has no builtin functions to compile source to spirv
+// So we call the glslangValidator tool located inside VulkanSDK on user machine to compile the glsl code to spirv
+// This code is not added to Vulkan.cpp since it calls no Vulkan specific functions
+void vk_compileShader(
+	Renderer* pRenderer, ShaderTarget target, ShaderStage stage, const char* fileName, const char* outFile, uint32_t macroCount,
+	ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint)
+{
+	eastl::string commandLine;
+	char          filePath[FS_MAX_PATH] = { 0 };
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_SOURCES), fileName, filePath);
+	char outFilePath[FS_MAX_PATH] = { 0 };
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_BINARIES), outFile, outFilePath);
+
+	commandLine.append_sprintf("-V \"%s\" -o \"%s\"", filePath, outFilePath);
+
+	if (target >= shader_target_6_0)
+		commandLine += " --target-env vulkan1.1 ";
+
+	if (target >= shader_target_6_3)
+		commandLine += " --target-env spirv1.4";
+	//commandLine += " \"-D" + eastl::string("VULKAN") + "=" + "1" + "\"";
+
+	if (pEntryPoint != NULL)
+		commandLine.append_sprintf(" -e %s", pEntryPoint);
+
+	// Add platform macro
+#ifdef _WINDOWS
+	commandLine += " \"-D WINDOWS\"";
+#elif defined(__ANDROID__)
+	commandLine += " \"-D ANDROID\"";
+#elif defined(__linux__)
+	commandLine += " \"-D LINUX\"";
+#endif
+
+	// Add user defined macros to the command line
+	for (uint32_t i = 0; i < macroCount; ++i)
+	{
+		commandLine += " \"-D" + eastl::string(pMacros[i].definition) + "=" + pMacros[i].value + "\"";
+	}
+
+	const char* vulkanSdkStr = getenv("VULKAN_SDK");
+	char* glslangValidator = nullptr;
+
+	if (vulkanSdkStr)
+	{
+		glslangValidator = (char*)tf_calloc(strlen(vulkanSdkStr) + 64, sizeof(char));
+		strcpy(glslangValidator, vulkanSdkStr);
+		strcat(glslangValidator, "/bin/glslangValidator");
+	}
+	else
+	{
+		glslangValidator = (char*)tf_calloc(64, sizeof(char));
+		strcpy(glslangValidator, "/usr/bin/glslangValidator");
+	}
+
+	const char* args[1] = { commandLine.c_str() };
+
+	char logFileName[FS_MAX_PATH] = { 0 };
+	fsGetPathFileName(outFile, logFileName);
+	strcat(logFileName, "_compile.log");
+	char logFilePath[FS_MAX_PATH] = { 0 };
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_BINARIES), logFileName, logFilePath);
+
+	if (systemRun(glslangValidator, args, 1, logFilePath) == 0)
+	{
+		FileStream fh = {};
+		bool       success = fsOpenStreamFromPath(RD_SHADER_BINARIES, outFile, FM_READ_BINARY, NULL, &fh);
+		//Check if the File Handle exists
+		ASSERT(success);
+		pOut->mByteCodeSize = (uint32_t)fsGetStreamFileSize(&fh);
+		pOut->pByteCode = tf_malloc(pOut->mByteCodeSize);
+		fsReadFromStream(&fh, pOut->pByteCode, pOut->mByteCodeSize);
+		fsCloseStream(&fh);
+	}
+	else
+	{
+		FileStream fh = {};
+		// If for some reason the error file could not be created just log error msg
+		if (!fsOpenStreamFromPath(RD_SHADER_BINARIES, logFileName, FM_READ_BINARY, NULL, &fh))
+		{
+			LOGF(LogLevel::eERROR, "Failed to compile shader %s", filePath);
+		}
+		else
+		{
+			size_t size = fsGetStreamFileSize(&fh);
+			if (size)
+			{
+				char* errorLog = (char*)tf_malloc(size + 1);
+				errorLog[size] = 0;
+				fsReadFromStream(&fh, errorLog, size);
+				LOGF(LogLevel::eERROR, "Failed to compile shader %s with error\n%s", filePath, errorLog);
+			}
+			fsCloseStream(&fh);
+		}
+	}
+
+	tf_free(glslangValidator);
+}
+#endif
+#elif defined(METAL)
+// On Metal, on the other hand, we can compile from code into a MTLLibrary, but cannot save this
+// object's bytecode to disk. We instead use the xcbuild bash tool to compile the shaders.
+void mtl_compileShader(
+	Renderer* pRenderer, const char* fileName, const char* outFile, uint32_t macroCount, ShaderMacro* pMacros, BinaryShaderStageDesc* pOut,
+	const char* /*pEntryPoint*/)
+{
+	char filePath[FS_MAX_PATH] = {};
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_SOURCES), fileName, filePath);
+	char outFilePath[FS_MAX_PATH] = {};
+	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_BINARIES), outFile, outFilePath);
+	char intermediateFilePath[FS_MAX_PATH] = {};
+	fsAppendPathExtension(outFilePath, "air", intermediateFilePath);
+
+	const char* xcrun = "/usr/bin/xcrun";
+	eastl::vector<eastl::string> args;
+	char tmpArgs[FS_MAX_PATH + 10]{};
+
+	// Compile the source into a temporary .air file.
+	args.push_back("-sdk");
+	args.push_back("macosx");
+	args.push_back("metal");
+	args.push_back("-c");
+	args.push_back(filePath);
+	args.push_back("-o");
+	args.push_back(intermediateFilePath);
+
+	//enable the 2 below for shader debugging on xcode
+	//args.push_back("-MO");
+	//args.push_back("-gline-tables-only");
+	args.push_back("-D");
+	args.push_back("MTL_SHADER=1");    // Add MTL_SHADER macro to differentiate structs in headers shared by app/shader code.
+
+	// Add user defined macros to the command line
+	for (uint32_t i = 0; i < macroCount; ++i)
+	{
+		args.push_back("-D");
+		args.push_back(eastl::string(pMacros[i].definition) + "=" + pMacros[i].value);
+	}
+
+	eastl::vector<const char*> cArgs;
+	for (eastl::string& arg : args)
+	{
+		cArgs.push_back(arg.c_str());
+	}
+
+	if (systemRun(xcrun, &cArgs[0], cArgs.size(), NULL) == 0)
+	{
+		// Create a .metallib file from the .air file.
+		args.clear();
+		sprintf(tmpArgs, "");
+		args.push_back("-sdk");
+		args.push_back("macosx");
+		args.push_back("metallib");
+		args.push_back(intermediateFilePath);
+		args.push_back("-o");
+		sprintf(
+			tmpArgs,
+			""
+			"%s"
+			"",
+			outFilePath);
+		args.push_back(tmpArgs);
+
+		cArgs.clear();
+		for (eastl::string& arg : args)
+		{
+			cArgs.push_back(arg.c_str());
+		}
+
+		if (systemRun(xcrun, &cArgs[0], cArgs.size(), NULL) == 0)
+		{
+			// Remove the temp .air file.
+			const char* nativePath = intermediateFilePath;
+			systemRun("rm", &nativePath, 1, NULL);
+
+			// Store the compiled bytecode.
+			FileStream fHandle = {};
+			if (fsOpenStreamFromPath(RD_SHADER_BINARIES, outFile, FM_READ_BINARY, NULL, &fHandle))
+			{
+				pOut->mByteCodeSize = (uint32_t)fsGetStreamFileSize(&fHandle);
+				pOut->pByteCode = tf_malloc(pOut->mByteCodeSize);
+				fsReadFromStream(&fHandle, pOut->pByteCode, pOut->mByteCodeSize);
+				fsCloseStream(&fHandle);
+			}
+		}
+		else
+		{
+			LOGF(eERROR, "Failed to assemble shader's %s .metallib file", outFile);
+		}
+	}
+	else
+	{
+		LOGF(eERROR, "Failed to compile shader %s", filePath);
+	}
+}
+#endif
+#if defined(DIRECT3D12)
+extern void d3d12_compileShader(
+	Renderer* pRenderer, ShaderTarget target, ShaderStage stage, const char* fileName, uint32_t codeSize, const char* code,
+	bool enablePrimitiveId, uint32_t macroCount, ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint);
+#endif
+#if defined(DIRECT3D11)
+extern void d3d11_compileShader(
+	Renderer* pRenderer, ShaderTarget target, ShaderStage stage, const char* fileName, uint32_t codeSize, const char* code,
+	bool enablePrimitiveId, uint32_t macroCount, ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint);
+#endif
+#if defined(ORBIS)
+extern bool orbis_compileShader(
+	Renderer* pRenderer, ShaderStage stage, ShaderStage allStages, const char* srcFileName, const char* outFileName, uint32_t macroCount,
+	ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint);
+#endif
+#if defined(PROSPERO)
+extern bool prospero_compileShader(
+	Renderer* pRenderer, ShaderStage stage, ShaderStage allStages, const char* srcFileName, const char* outFileName, uint32_t macroCount,
+	ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint);
+#endif
+#if defined(GLES)
+extern void gl_compileShader(
+	Renderer* pRenderer, ShaderTarget target, ShaderStage stage, const char* fileName, uint32_t codeSize, const char* code,
+	bool enablePrimitiveId, uint32_t macroCount, ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint);
+#endif
 
 #ifndef NX64
 static eastl::string fsReadFromStreamSTLLine(FileStream* stream)
@@ -2289,41 +2866,6 @@ static eastl::string fsReadFromStreamSTLLine(FileStream* stream)
 	return result;
 }
 #endif
-
-bool check_for_byte_code(Renderer* pRenderer, const char* binaryShaderPath, time_t sourceTimeStamp, BinaryShaderStageDesc* pOut)
-{
-	// If source code is loaded from a package, its timestamp will be zero. Else check that binary is not older
-	// than source
-	time_t dstTimeStamp = fsGetLastModifiedTime(RD_SHADER_BINARIES, binaryShaderPath);
-	if (!sourceTimeStamp || (dstTimeStamp < sourceTimeStamp))
-		return false;
-
-	FileStream fh = {};
-	if (!fsOpenStreamFromPath(RD_SHADER_BINARIES, binaryShaderPath, FM_READ_BINARY, NULL, &fh))
-	{
-		LOGF(LogLevel::eERROR, "'%s' is not a valid shader bytecode file", binaryShaderPath);
-		return false;
-	}
-
-	if (!fsGetStreamFileSize(&fh))
-	{
-		fsCloseStream(&fh);
-		return false;
-	}
-
-#if defined(PROSPERO)
-	extern void prospero_loadByteCode(Renderer*, FileStream*, BinaryShaderStageDesc*);
-	prospero_loadByteCode(pRenderer, &fh, pOut);
-#else
-	ssize_t size = fsGetStreamFileSize(&fh);
-	pOut->mByteCodeSize = (uint32_t)size;
-	pOut->pByteCode = tf_memalign(256, size);
-	fsReadFromStream(&fh, (void*)pOut->pByteCode, size);
-#endif
-	fsCloseStream(&fh);
-
-	return true;
-}
 
 // Function to generate the timestamp of this shader source file considering all include file timestamp
 #if !defined(NX64)
@@ -2436,103 +2978,57 @@ static bool process_source_file(
 }
 #endif
 
-// PC:
-// Vulkan has no builtin functions to compile source to spirv
-// So we call the glslangValidator tool located inside VulkanSDK on user machine to compile the glsl code to spirv
-// This code is not added to Vulkan.cpp since it calls no Vulkan specific functions
-void vk_compileShader(Renderer* pRenderer, ShaderTarget target, ShaderStage stage, const char* fileName, const char* outFile, uint32_t macroCount,
-	ShaderMacro* pMacros, BinaryShaderStageDesc* pOut, const char* pEntryPoint)
+// Loads the bytecode from file if the binary shader file is newer than the source
+bool check_for_byte_code(Renderer* pRenderer, const char* binaryShaderPath, time_t sourceTimeStamp, BinaryShaderStageDesc* pOut)
 {
-	eastl::string commandLine;
-	char          filePath[FS_MAX_PATH] = { 0 };
-	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_SOURCES), fileName, filePath);
-	char outFilePath[FS_MAX_PATH] = { 0 };
-	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_BINARIES), outFile, outFilePath);
+	// If source code is loaded from a package, its timestamp will be zero. Else check that binary is not older
+	// than source
+	time_t dstTimeStamp = fsGetLastModifiedTime(RD_SHADER_BINARIES, binaryShaderPath);
+	if (!sourceTimeStamp || (dstTimeStamp < sourceTimeStamp))
+		return false;
 
-	commandLine.append_sprintf("-V \"%s\" -o \"%s\"", filePath, outFilePath);
-
-	if (target >= shader_target_6_0)
-		commandLine += " --target-env vulkan1.1 ";
-
-	if (target >= shader_target_6_3)
-		commandLine += " --target-env spirv1.4";
-	//commandLine += " \"-D" + eastl::string("VULKAN") + "=" + "1" + "\"";
-
-	if (pEntryPoint != NULL)
-		commandLine.append_sprintf(" -e %s", pEntryPoint);
-
-	// Add platform macro
-#ifdef _WINDOWS
-	commandLine += " \"-D WINDOWS\"";
-#elif defined(__ANDROID__)
-	commandLine += " \"-D ANDROID\"";
-#elif defined(__linux__)
-	commandLine += " \"-D LINUX\"";
-#endif
-
-	// Add user defined macros to the command line
-	for (uint32_t i = 0; i < macroCount; ++i)
+	FileStream fh = {};
+	if (!fsOpenStreamFromPath(RD_SHADER_BINARIES, binaryShaderPath, FM_READ_BINARY, NULL, &fh))
 	{
-		commandLine += " \"-D" + eastl::string(pMacros[i].definition) + "=" + pMacros[i].value + "\"";
+		LOGF(LogLevel::eERROR, "'%s' is not a valid shader bytecode file", binaryShaderPath);
+		return false;
 	}
 
-	const char* vulkanSdkStr = getenv("VULKAN_SDK");
-	char* glslangValidator = nullptr;
-
-	if (vulkanSdkStr)
+	if (!fsGetStreamFileSize(&fh))
 	{
-		glslangValidator = (char*)tf_calloc(strlen(vulkanSdkStr) + 64, sizeof(char));
-		strcpy(glslangValidator, vulkanSdkStr);
-		strcat(glslangValidator, "/bin/glslangValidator");
-	}
-	else
-	{
-		glslangValidator = (char*)tf_calloc(64, sizeof(char));
-		strcpy(glslangValidator, "/usr/bin/glslangValidator");
-	}
-
-	const char* args[1] = { commandLine.c_str() };
-
-	char logFileName[FS_MAX_PATH] = { 0 };
-	fsGetPathFileName(outFile, logFileName);
-	strcat(logFileName, "_compile.log");
-	char logFilePath[FS_MAX_PATH] = { 0 };
-	fsAppendPathComponent(fsGetResourceDirectory(RD_SHADER_BINARIES), logFileName, logFilePath);
-
-	if (systemRun(glslangValidator, args, 1, logFilePath) == 0)
-	{
-		FileStream fh = {};
-		bool       success = fsOpenStreamFromPath(RD_SHADER_BINARIES, outFile, FM_READ_BINARY, NULL, &fh);
-		//Check if the File Handle exists
-		ASSERT(success);
-		pOut->mByteCodeSize = (uint32_t)fsGetStreamFileSize(&fh);
-		pOut->pByteCode = tf_malloc(pOut->mByteCodeSize);
-		fsReadFromStream(&fh, pOut->pByteCode, pOut->mByteCodeSize);
 		fsCloseStream(&fh);
-	}
-	else
-	{
-		FileStream fh = {};
-		// If for some reason the error file could not be created just log error msg
-		if (!fsOpenStreamFromPath(RD_SHADER_BINARIES, logFileName, FM_READ_BINARY, NULL, &fh))
-		{
-			LOGF(LogLevel::eERROR, "Failed to compile shader %s", filePath);
-		}
-		else
-		{
-			size_t size = fsGetStreamFileSize(&fh);
-			if (size)
-			{
-				char* errorLog = (char*)tf_malloc(size + 1);
-				errorLog[size] = 0;
-				fsReadFromStream(&fh, errorLog, size);
-				LOGF(LogLevel::eERROR, "Failed to compile shader %s with error\n%s", filePath, errorLog);
-			}
-			fsCloseStream(&fh);
-		}
+		return false;
 	}
 
-	tf_free(glslangValidator);
+#if defined(PROSPERO)
+	extern void prospero_loadByteCode(Renderer*, FileStream*, BinaryShaderStageDesc*);
+	prospero_loadByteCode(pRenderer, &fh, pOut);
+#else
+	ssize_t size = fsGetStreamFileSize(&fh);
+	pOut->mByteCodeSize = (uint32_t)size;
+	pOut->pByteCode = tf_memalign(256, size);
+	fsReadFromStream(&fh, (void*)pOut->pByteCode, size);
+#endif
+	fsCloseStream(&fh);
+
+	return true;
+}
+
+// Saves bytecode to a file
+bool save_byte_code(const char* binaryShaderPath, char* byteCode, uint32_t byteCodeSize)
+{
+	if (!byteCodeSize)
+		return false;
+
+	FileStream fh = {};
+
+	if (!fsOpenStreamFromPath(RD_SHADER_BINARIES, binaryShaderPath, FM_WRITE_BINARY, NULL, &fh))
+		return false;
+
+	fsWriteToStream(&fh, byteCode, byteCodeSize);
+	fsCloseStream(&fh);
+
+	return true;
 }
 
 bool load_shader_stage_byte_code(
@@ -2755,7 +3251,41 @@ bool load_shader_stage_byte_code(
 	fsCloseStream(&sourceFileStream);
 	return true;
 }
+#ifdef TARGET_IOS
+bool find_shader_stage(const char* fileName, ShaderDesc* pDesc, ShaderStageDesc** pOutStage, ShaderStage* pStage)
+{
+	char extension[FS_MAX_PATH] = { 0 };
+	fsGetPathExtension(fileName, extension);
+	if (stricmp(extension, "vert") == 0)
+	{
+		*pOutStage = &pDesc->mVert;
+		*pStage = SHADER_STAGE_VERT;
+	}
+	else if (stricmp(extension, "frag") == 0)
+	{
+		*pOutStage = &pDesc->mFrag;
+		*pStage = SHADER_STAGE_FRAG;
+	}
+	else if (stricmp(extension, "comp") == 0)
+	{
+		*pOutStage = &pDesc->mComp;
+		*pStage = SHADER_STAGE_COMP;
+	}
+	else if (
+		(stricmp(extension, "rgen") == 0) || (stricmp(extension, "rmiss") == 0) || (stricmp(extension, "rchit") == 0) ||
+		(stricmp(extension, "rint") == 0) || (stricmp(extension, "rahit") == 0) || (stricmp(extension, "rcall") == 0))
+	{
+		*pOutStage = &pDesc->mComp;
+		*pStage = SHADER_STAGE_COMP;
+	}
+	else
+	{
+		return false;
+	}
 
+	return true;
+}
+#else
 bool find_shader_stage(const char* extension, BinaryShaderDesc* pBinaryDesc, BinaryShaderStageDesc** pOutStage, ShaderStage* pStage)
 {
 	if (stricmp(extension, "vert") == 0)
@@ -2808,7 +3338,7 @@ bool find_shader_stage(const char* extension, BinaryShaderDesc* pBinaryDesc, Bin
 
 	return true;
 }
-
+#endif
 void addShader(Renderer* pRenderer, const ShaderLoadDesc* pDesc, Shader** ppShader)
 {
 #ifndef DIRECT3D11
@@ -2998,3 +3528,95 @@ void addShader(Renderer* pRenderer, const ShaderLoadDesc* pDesc, Shader** ppShad
 	addIosShader(pRenderer, &desc, ppShader);
 #endif
 }
+/************************************************************************/
+// Pipeline cache save, load
+/************************************************************************/
+void loadPipelineCache(Renderer* pRenderer, const PipelineCacheLoadDesc* pDesc, PipelineCache** ppPipelineCache)
+{
+#if defined(DIRECT3D12) || defined(VULKAN)
+
+	char rendererApi[FS_MAX_PATH] = {};
+#if defined(USE_MULTIPLE_RENDER_APIS)
+	switch (gSelectedRendererApi)
+	{
+#if defined(DIRECT3D12)
+	case RENDERER_API_D3D12: strcat(rendererApi, "DIRECT3D12/"); break;
+#endif
+#if defined(VULKAN)
+	case RENDERER_API_VULKAN: strcat(rendererApi, "VULKAN/"); break;
+#endif
+	default: break;
+	}
+#endif
+
+	strncat(rendererApi, pDesc->pFileName, strlen(pDesc->pFileName));
+
+	FileStream stream = {};
+	bool       success = fsOpenStreamFromPath(RD_PIPELINE_CACHE, rendererApi, FM_READ_BINARY, pDesc->pFilePassword, &stream);
+	ssize_t    dataSize = 0;
+	void* data = NULL;
+	if (success)
+	{
+		dataSize = fsGetStreamFileSize(&stream);
+		data = NULL;
+		if (dataSize)
+		{
+			data = tf_malloc(dataSize);
+			fsReadFromStream(&stream, data, dataSize);
+		}
+
+		fsCloseStream(&stream);
+	}
+
+	PipelineCacheDesc desc = {};
+	desc.mFlags = pDesc->mFlags;
+	desc.pData = data;
+	desc.mSize = dataSize;
+	vk_addPipelineCache(pRenderer, &desc, ppPipelineCache);
+
+	if (data)
+	{
+		tf_free(data);
+	}
+#endif
+}
+
+void savePipelineCache(Renderer* pRenderer, PipelineCache* pPipelineCache, PipelineCacheSaveDesc* pDesc)
+{
+#if defined(DIRECT3D12) || defined(VULKAN)
+
+	char rendererApi[FS_MAX_PATH] = {};
+#if defined(USE_MULTIPLE_RENDER_APIS)
+	switch (gSelectedRendererApi)
+	{
+#if defined(DIRECT3D12)
+	case RENDERER_API_D3D12: strcat(rendererApi, "DIRECT3D12/"); break;
+#endif
+#if defined(VULKAN)
+	case RENDERER_API_VULKAN: strcat(rendererApi, "VULKAN/"); break;
+#endif
+	default: break;
+	}
+#endif
+
+	strncat(rendererApi, pDesc->pFileName, strlen(pDesc->pFileName));
+
+	FileStream stream = {};
+	if (fsOpenStreamFromPath(RD_PIPELINE_CACHE, rendererApi, FM_WRITE_BINARY, pDesc->pFilePassword, &stream))
+	{
+		size_t dataSize = 0;
+		vk_getPipelineCacheData(pRenderer, pPipelineCache, &dataSize, NULL);
+		if (dataSize)
+		{
+			void* data = tf_malloc(dataSize);
+			vk_getPipelineCacheData(pRenderer, pPipelineCache, &dataSize, data);
+			fsWriteToStream(&stream, data, dataSize);
+			tf_free(data);
+		}
+
+		fsCloseStream(&stream);
+	}
+#endif
+}
+/************************************************************************/
+/************************************************************************/

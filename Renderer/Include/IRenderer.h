@@ -870,6 +870,7 @@ typedef struct SamplerDesc
 	float       mMaxAnisotropy;
 	CompareMode mCompareFunc;
 
+#if defined(VULKAN)
 	struct
 	{
 		TinyImageFormat        mFormat;
@@ -880,6 +881,7 @@ typedef struct SamplerDesc
 		FilterType             mChromaFilter;
 		bool                   mForceExplicitReconstruction;
 	} mSamplerConversionDesc;
+#endif
 } SamplerDesc;
 
 typedef struct DEFINE_ALIGNED(Sampler, 16)
@@ -2089,15 +2091,37 @@ typedef enum PipelineCacheFlags
 } PipelineCacheFlags;
 MAKE_ENUM_FLAG(uint32_t, PipelineCacheFlags);
 
+typedef struct PipelineCacheDesc
+{
+	/// Initial pipeline cache data (can be NULL which means empty pipeline cache)
+	void* pData;
+	/// Initial pipeline cache size
+	size_t             mSize;
+	PipelineCacheFlags mFlags;
+} PipelineCacheDesc;
+
 typedef struct PipelineCache
 {
-	union 
+#if defined(USE_MULTIPLE_RENDER_APIS)
+	union
 	{
-		struct 
+#endif
+#if defined(DIRECT3D12)
+		struct
+		{
+			ID3D12PipelineLibrary* pLibrary;
+			void* pData;
+		} mD3D12;
+#endif
+#if defined(VULKAN)
+		struct
 		{
 			VkPipelineCache pCache;
 		} mVulkan;
+#endif
+#if defined(USE_MULTIPLE_RENDER_APIS)
 	};
+#endif
 } PipelineCache;
 
 //#ifdef __INTELLISENSE__
@@ -2131,14 +2155,16 @@ typedef struct QueueSubmitDesc
 	bool        mSubmitDone;
 } QueueSubmitDesc;
 
-typedef struct SubresourceDataDesc
+struct SubresourceDataDesc
 {
 	uint64_t mSrcOffset;
 	uint32_t mMipLevel;
 	uint32_t mArrayLayer;
+#if defined(DIRECT3D11) || defined(METAL) || defined(VULKAN)
 	uint32_t mRowPitch;
 	uint32_t mSlicePitch;
-} SubresourceDataDesc;
+#endif
+};
 
 struct VkVTPendingPageDeletion
 {
@@ -2263,6 +2289,9 @@ void vk_cmdEndDebugMarker(Cmd* pCmd);
 void vk_cmdResetQueryPool(Cmd* pCmd, QueryPool* pQueryPool, uint32_t startQuery, uint32_t queryCount);
 
 void vk_cmdResolveQuery(Cmd* pCmd, QueryPool* pQueryPool, Buffer* pReadbackBuffer, uint32_t startQuery, uint32_t queryCount);
+
+void vk_getPipelineCacheData(Renderer* pRenderer, PipelineCache* pPipelineCache, size_t* pSize, void* pData);
+void vk_addPipelineCache(Renderer* pRenderer, const PipelineCacheDesc* pDesc, PipelineCache** ppPipelineCache);
 /************************************************************************/
 /************************************************************************/
 uint32_t getDescriptorIndexFromName(const RootSignature* pRootSignature, const char* pName);

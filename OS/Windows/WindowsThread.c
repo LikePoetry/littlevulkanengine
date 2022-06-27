@@ -30,6 +30,8 @@ bool initConditionVariable(ConditionVariable* cv)
 	return true;
 }
 
+void destroyConditionVariable(ConditionVariable* cv) { tf_free(cv->pHandle); }
+
 void waitConditionVariable(ConditionVariable* cv, const Mutex* pMutex, uint32_t ms)
 {
 	SleepConditionVariableCS((PCONDITION_VARIABLE)cv->pHandle, (PCRITICAL_SECTION)&pMutex->mHandle, ms);
@@ -101,5 +103,12 @@ void initThread(ThreadDesc* pDesc, ThreadHandle* pHandle)
 	*pHandle = handle;
 }
 
+void joinThread(ThreadHandle handle)
+{
+	ASSERT(handle != NULL);
+	WaitForSingleObject((HANDLE)handle, INFINITE);
+	CloseHandle((HANDLE)handle);
+	handle = NULL;
+}
 
 void setCurrentThreadName(const char* name) { strcpy_s(thread_name(), MAX_THREAD_NAME_LENGTH + 1, name); }

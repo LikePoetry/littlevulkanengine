@@ -37,6 +37,7 @@ extern "C"
 	} ConditionVariable;
 
 	bool initConditionVariable(ConditionVariable* cv);
+	void destroyConditionVariable(ConditionVariable* cv);
 
 	void waitConditionVariable(ConditionVariable* cv, const Mutex* pMutex, uint32_t timeout);
 	void wakeOneConditionVariable(ConditionVariable* cv);
@@ -65,6 +66,7 @@ extern "C"
 	typedef void* ThreadHandle;
 
 	void         initThread(ThreadDesc* pItem, ThreadHandle* pHandle);
+	void         joinThread(ThreadHandle handle);
 #ifdef __cplusplus
 }    // extern "C"
 

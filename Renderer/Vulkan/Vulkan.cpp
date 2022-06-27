@@ -6880,7 +6880,49 @@ void vk_cmdResolveQuery(Cmd* pCmd, QueryPool* pQueryPool, Buffer* pReadbackBuffe
 		sizeof(uint64_t), flags);
 }
 
+void vk_getPipelineCacheData(Renderer* pRenderer, PipelineCache* pPipelineCache, size_t* pSize, void* pData) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pPipelineCache);
+	ASSERT(pSize);
 
+	if (pPipelineCache->mVulkan.pCache)
+	{
+		CHECK_VKRESULT(vkGetPipelineCacheData(pRenderer->mVulkan.pVkDevice, pPipelineCache->mVulkan.pCache, pSize, pData));
+	}
+}
+
+static VkPipelineCacheCreateFlags util_to_pipeline_cache_flags(PipelineCacheFlags flags)
+{
+	VkPipelineCacheCreateFlags ret = 0;
+#if VK_EXT_pipeline_creation_cache_control
+	if (flags & PIPELINE_CACHE_FLAG_EXTERNALLY_SYNCHRONIZED)
+	{
+		ret |= VK_PIPELINE_CACHE_CREATE_EXTERNALLY_SYNCHRONIZED_BIT_EXT;
+	}
+#endif
+
+	return ret;
+}
+
+void vk_addPipelineCache(Renderer* pRenderer, const PipelineCacheDesc* pDesc, PipelineCache** ppPipelineCache) 
+{
+	ASSERT(pRenderer);
+	ASSERT(pDesc);
+	ASSERT(ppPipelineCache);
+
+	PipelineCache* pPipelineCache = (PipelineCache*)tf_calloc(1, sizeof(PipelineCache));
+	ASSERT(pPipelineCache);
+
+	VkPipelineCacheCreateInfo psoCacheCreateInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
+	psoCacheCreateInfo.initialDataSize = pDesc->mSize;
+	psoCacheCreateInfo.pInitialData = pDesc->pData;
+	psoCacheCreateInfo.flags = util_to_pipeline_cache_flags(pDesc->mFlags);
+	CHECK_VKRESULT(
+		vkCreatePipelineCache(pRenderer->mVulkan.pVkDevice, &psoCacheCreateInfo, &gVkAllocationCallbacks, &pPipelineCache->mVulkan.pCache));
+
+	*ppPipelineCache = pPipelineCache;
+}
 
 void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Renderer** ppRenderer)
 {
