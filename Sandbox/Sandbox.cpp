@@ -1,25 +1,29 @@
 #define MAX_PLANETS 20 
 
+#include "../OS/Interfaces/ICameraController.h"
 #include "../OS/Interfaces/IApp.h"
 #include "../OS/Interfaces/ILog.h"
-#include "../OS/Interfaces/IFont.h"
-#include "../OS/Interfaces/IScreenshot.h"
-#include "../OS/Interfaces/IUI.h"
-#include "../OS/Interfaces/ICameraController.h"
-#include "../OS/Interfaces/IProfiler.h"
-#include "../OS/Interfaces/IOperatingSystem.h"
-#include "../OS/Interfaces/IScripting.h"
 #include "../OS/Interfaces/IInput.h"
+#include "../OS/Interfaces/IFileSystem.h"
+#include "../OS/Interfaces/ITime.h"
+#include "../OS/Interfaces/IProfiler.h"
+#include "../OS/Interfaces/IScreenshot.h"
+#include "../OS/Interfaces/IScripting.h"
+
+#include "../OS/Interfaces/IFont.h"
+#include "../OS/Interfaces/IUI.h"
 
 
 
 
 
 #include "../Renderer/Include/IRenderer.h"
+#include "../Renderer/Include/IResourceLoader.h"
+
 
 #include "../OS/Math/MathTypes.h"
 
-#include "../Renderer/Include/IResourceLoader.h"
+#include "../OS/Interfaces/IMemory.h"
 
 /// Demo structures
 struct PlanetInfoStruct

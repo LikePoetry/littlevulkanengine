@@ -97,6 +97,9 @@
     <ClCompile Include="Sandbox.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\gainputstatic\gainputstatic.vcxproj">
+      <Project>{4507963e-b1c7-1175-7a02-5bf2e6815651}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\OS\OS.vcxproj">
       <Project>{C7745900-B300-880B-1CAF-880B085A880B}</Project>
     </ProjectReference>
@@ -105,9 +108,6 @@
     </ProjectReference>
     <ProjectReference Include="..\SpirvTools\SpirvTools.vcxproj">
       <Project>{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\gainputstatic\gainputstatic.vcxproj">
-      <Project>{4507963E-B1C7-1175-7A02-5BF2E6815651}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
