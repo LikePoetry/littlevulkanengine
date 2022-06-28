@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{89AF369E-F58E-B539-FEA6-40106A051C9B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\gainput">
+      <UniqueIdentifier>{105FC11E-7CEA-2EE3-85FB-B1D7F1058BE3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\gainput\dev">
+      <UniqueIdentifier>{BEE3954F-2A45-735D-B3B2-B90F1F13AA1C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\gainput\gestures">
+      <UniqueIdentifier>{71242B59-5D49-7AD9-8694-5F69721879F7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\gainput\recorder">
+      <UniqueIdentifier>{D564505A-C189-9FDA-EAD4-846AD6589EF8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\gainput\touch">
+      <UniqueIdentifier>{02D8C48D-6E44-8088-3738-18E6A363A2F0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source">
+      <UniqueIdentifier>{76FF3A1C-62A1-65F2-4B5C-7946379DEC42}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput">
+      <UniqueIdentifier>{FD4BD99E-E919-CDA4-D2AD-3DCBBE1AA909}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\builtin">
+      <UniqueIdentifier>{032366EC-EF1C-8F3E-D889-254FC422F5AA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\dev">
+      <UniqueIdentifier>{2B7F84C2-1763-4518-80C3-3F6B6CC62F9A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\gestures">
+      <UniqueIdentifier>{FEEBB45E-6A23-FDF5-732D-6119DFE323EF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\hid">
+      <UniqueIdentifier>{A19084C2-8D74-4518-F6D4-3F6BE2D72F9A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\hid\hidparsers">
+      <UniqueIdentifier>{E5B6B81E-51CF-9F48-1A7C-2FE2865334E2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\keyboard">
+      <UniqueIdentifier>{3DE9711C-A920-BAB3-B22A-1ED71EE1E0AC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\mouse">
+      <UniqueIdentifier>{35594976-21E8-D23F-CA06-E73AB674E3E5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\pad">
+      <UniqueIdentifier>{A1B184C2-8D95-4518-F6F5-3F6BE2F82F9A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\recorder">
+      <UniqueIdentifier>{622CDA5F-CE63-22F7-D76D-861A432449F0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\gainput\touch">
+      <UniqueIdentifier>{AF02C876-9B91-5140-44B0-653B301E62E6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hidapi">
+      <UniqueIdentifier>{D4758C6C-4036-08A3-0971-512075F04C7F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hidapi\windows">
+      <UniqueIdentifier>{2E4C94B4-9AB8-4FAF-63AC-E70CCFD77117}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputAllocator.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputContainers.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputDebugRenderer.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputHelpers.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputDeltaState.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputDevice.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputDeviceBuiltIn.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputDeviceKeyboard.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputDeviceMouse.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputDevicePad.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputDeviceTouch.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputListener.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputManager.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputMap.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputInputState.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputIos.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputLog.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputMapFilters.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\GainputWindows.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\dev\GainputStream.h">
+      <Filter>include\gainput\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gainput.h">
+      <Filter>include\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputButtonStickGesture.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputDoubleClickGesture.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputGestures.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputHoldGesture.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputPinchGesture.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputRotateGesture.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputSimultaneouslyDownGesture.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\gestures\GainputTapGesture.h">
+      <Filter>include\gainput\gestures</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\recorder\GainputInputPlayer.h">
+      <Filter>include\gainput\recorder</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\recorder\GainputInputRecorder.h">
+      <Filter>include\gainput\recorder</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\recorder\GainputInputRecording.h">
+      <Filter>include\gainput\recorder</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\include\gainput\touch\GainputTouchInfo.h">
+      <Filter>include\gainput\touch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputHelpersEvdev.h">
+      <Filter>source\gainput</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\builtin\GainputInputDeviceBuiltInAndroid.h">
+      <Filter>source\gainput\builtin</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\builtin\GainputInputDeviceBuiltInImpl.h">
+      <Filter>source\gainput\builtin</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\builtin\GainputInputDeviceBuiltInIos.h">
+      <Filter>source\gainput\builtin</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\builtin\GainputInputDeviceBuiltInNull.h">
+      <Filter>source\gainput\builtin</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\dev\GainputDev.h">
+      <Filter>source\gainput\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\dev\GainputDevProtocol.h">
+      <Filter>source\gainput\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\dev\GainputMemoryStream.h">
+      <Filter>source\gainput\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\GainputHID.h">
+      <Filter>source\gainput\hid</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\GainputHIDTypes.h">
+      <Filter>source\gainput\hid</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\GainputHIDWhitelist.h">
+      <Filter>source\gainput\hid</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\hidparsers\HIDParserPS4Controller.h">
+      <Filter>source\gainput\hid\hidparsers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\hidparsers\HIDParserPS5Controller.h">
+      <Filter>source\gainput\hid\hidparsers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboardAndroid.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboardEvdev.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboardImpl.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboardLinux.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboardNull.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboardWin.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboardWinRaw.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputKeyboardKeyNames.h">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouseEvdev.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouseImpl.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouseLinux.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouseMac.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouseNull.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouseWin.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouseWinRaw.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputMouseInfo.h">
+      <Filter>source\gainput\mouse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePadAndroid.h">
+      <Filter>source\gainput\pad</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePadImpl.h">
+      <Filter>source\gainput\pad</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePadIos.h">
+      <Filter>source\gainput\pad</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePadLinux.h">
+      <Filter>source\gainput\pad</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePadMac.h">
+      <Filter>source\gainput\pad</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePadNull.h">
+      <Filter>source\gainput\pad</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePadWin.h">
+      <Filter>source\gainput\pad</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\touch\GainputInputDeviceTouchAndroid.h">
+      <Filter>source\gainput\touch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\touch\GainputInputDeviceTouchImpl.h">
+      <Filter>source\gainput\touch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\touch\GainputInputDeviceTouchIos.h">
+      <Filter>source\gainput\touch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\touch\GainputInputDeviceTouchNull.h">
+      <Filter>source\gainput\touch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\OpenSource\gainput\lib\source\hidapi\hidapi.h">
+      <Filter>source\hidapi</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputAllocator.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputInputDeltaState.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputInputDevice.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputInputManager.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputInputMap.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputInputState.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\GainputMapFilters.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\builtin\GainputInputDeviceBuiltIn.cpp">
+      <Filter>source\gainput\builtin</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\dev\GainputDev.cpp">
+      <Filter>source\gainput\dev</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\dev\GainputMemoryStream.cpp">
+      <Filter>source\gainput\dev</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gainput.cpp">
+      <Filter>source\gainput</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gestures\GainputButtonStickGesture.cpp">
+      <Filter>source\gainput\gestures</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gestures\GainputDoubleClickGesture.cpp">
+      <Filter>source\gainput\gestures</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gestures\GainputHoldGesture.cpp">
+      <Filter>source\gainput\gestures</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gestures\GainputPinchGesture.cpp">
+      <Filter>source\gainput\gestures</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gestures\GainputRotateGesture.cpp">
+      <Filter>source\gainput\gestures</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gestures\GainputSimultaneouslyDownGesture.cpp">
+      <Filter>source\gainput\gestures</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\gestures\GainputTapGesture.cpp">
+      <Filter>source\gainput\gestures</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\GainputHID.cpp">
+      <Filter>source\gainput\hid</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\GainputHIDWhitelist.cpp">
+      <Filter>source\gainput\hid</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\hidparsers\HIDParserPS4Controller.cpp">
+      <Filter>source\gainput\hid\hidparsers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\hid\hidparsers\HIDParserPS5Controller.cpp">
+      <Filter>source\gainput\hid\hidparsers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\keyboard\GainputInputDeviceKeyboard.cpp">
+      <Filter>source\gainput\keyboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\mouse\GainputInputDeviceMouse.cpp">
+      <Filter>source\gainput\mouse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\pad\GainputInputDevicePad.cpp">
+      <Filter>source\gainput\pad</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\recorder\GainputInputPlayer.cpp">
+      <Filter>source\gainput\recorder</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\recorder\GainputInputRecorder.cpp">
+      <Filter>source\gainput\recorder</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\recorder\GainputInputRecording.cpp">
+      <Filter>source\gainput\recorder</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\gainput\touch\GainputInputDeviceTouch.cpp">
+      <Filter>source\gainput\touch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ThirdParty\OpenSource\gainput\lib\source\hidapi\windows\hid.c">
+      <Filter>source\hidapi\windows</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

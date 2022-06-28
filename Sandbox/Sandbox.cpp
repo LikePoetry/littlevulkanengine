@@ -8,6 +8,10 @@
 #include "../OS/Interfaces/ICameraController.h"
 #include "../OS/Interfaces/IProfiler.h"
 #include "../OS/Interfaces/IOperatingSystem.h"
+#include "../OS/Interfaces/IScripting.h"
+#include "../OS/Interfaces/IInput.h"
+
+
 
 
 
@@ -16,6 +20,19 @@
 #include "../OS/Math/MathTypes.h"
 
 #include "../Renderer/Include/IResourceLoader.h"
+
+/// Demo structures
+struct PlanetInfoStruct
+{
+	mat4  mTranslationMat;
+	mat4  mScaleMat;
+	mat4  mSharedMat;    // Matrix to pass down to children
+	vec4  mColor;
+	uint  mParentIndex;
+	float mYOrbitSpeed;    // Rotation speed around parent
+	float mZOrbitSpeed;
+	float mRotationSpeed;    // Rotation speed around self
+};
 
 struct UniformBlock
 {
@@ -31,6 +48,7 @@ struct UniformBlock
 const uint32_t gImageCount = 3;
 const int      gSphereResolution = 30;    // Increase for higher resolution spheres
 const float    gSphereDiameter = 0.5f;
+const uint     gNumPlanets = 11;
 
 Renderer* pRenderer = NULL;
 
@@ -65,6 +83,12 @@ Shader* pCrashShader = NULL;
 
 int              gNumberOfSpherePoints;
 
+PlanetInfoStruct gPlanetInfoData[gNumPlanets];
+
+ICameraController* pCameraController = NULL;
+
+UIComponent* pGuiWindow = NULL;
+
 uint32_t gFontID = 0;
 
 /// Breadcrumb
@@ -75,6 +99,8 @@ uint32_t gFontID = 0;
  * Due to the infinite loop in the shader, the second marker won't be written, and we can reason that the draw command has caused the GPU hang.
  * We log the markers information to verify this. */
 const uint32_t gMarkerCount = 2;
+
+bool bSimulateCrash = false;
 
 Buffer* pMarkerBuffer[gImageCount] = { NULL };
 
@@ -108,6 +134,22 @@ const float gSkyBoxPoints[] = {
 	10.0f,  -10.0f, 10.0f,  4.0f,    //-y
 	10.0f,  -10.0f, -10.0f, 4.0f,   -10.0f, -10.0f, -10.0f, 4.0f,   -10.0f, -10.0f,
 	-10.0f, 4.0f,   -10.0f, -10.0f, 10.0f,  4.0f,   10.0f,  -10.0f, 10.0f,  4.0f,
+};
+
+bool gTakeScreenshot = false;
+void takeScreenshot()
+{
+	if (!gTakeScreenshot)
+		gTakeScreenshot = true;
+}
+
+const char* gWindowTestScripts[] =
+{
+	"TestFullScreen.lua",
+	"TestCenteredWindow.lua",
+	"TestNonCenteredWindow.lua",
+	"TestBorderless.lua",
+	"TestHideWindow.lua"
 };
 
 class App :public IApp
@@ -289,6 +331,150 @@ public:
 
 		// Gpu profiler can only be added after initProfile
 		gGpuProfileToken = addGpuProfiler(pRenderer, pGraphicsQueue, "Graphics");
+
+		/************************************************************************/
+		// GUI
+		/************************************************************************/
+		UIComponentDesc guiDesc = {};
+		guiDesc.mStartPosition = vec2(mSettings.mWidth * 0.01f, mSettings.mHeight * 0.2f);
+		uiCreateComponent(GetName(), &guiDesc, &pGuiWindow);
+
+		// Take a screenshot with a button.
+		ButtonWidget screenshot;
+		UIWidget* pScreenshot = uiCreateComponentWidget(pGuiWindow, "Screenshot", &screenshot, WIDGET_TYPE_BUTTON);
+		uiSetWidgetOnEditedCallback(pScreenshot, takeScreenshot);
+		luaRegisterWidget(pScreenshot);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			ButtonWidget crashButton;
+			UIWidget* pCrashButton = uiCreateComponentWidget(pGuiWindow, "Simulate crash", &crashButton, WIDGET_TYPE_BUTTON);
+			WidgetCallback crashCallback = []() { bSimulateCrash = true; };
+			uiSetWidgetOnEditedCallback(pCrashButton, crashCallback);
+			luaRegisterWidget(pCrashButton);
+		}
+
+		const uint32_t numScripts = sizeof(gWindowTestScripts) / sizeof(gWindowTestScripts[0]);
+		LuaScriptDesc scriptDescs[numScripts] = {};
+		for (uint32_t i = 0; i < numScripts; ++i)
+			scriptDescs[i].pScriptFileName = gWindowTestScripts[i];
+		luaDefineScripts(scriptDescs, numScripts);
+
+		waitForAllResourceLoads();
+
+		// Setup planets (Rotation speeds are relative to Earth's, some values randomly given)
+		// Sun
+		gPlanetInfoData[0].mParentIndex = 0;
+		gPlanetInfoData[0].mYOrbitSpeed = 0;    // Earth years for one orbit
+		gPlanetInfoData[0].mZOrbitSpeed = 0;
+		gPlanetInfoData[0].mRotationSpeed = 24.0f;    // Earth days for one rotation
+		gPlanetInfoData[0].mTranslationMat = mat4::identity();
+		gPlanetInfoData[0].mScaleMat = mat4::scale(vec3(10.0f));
+		gPlanetInfoData[0].mColor = vec4(0.97f, 0.38f, 0.09f, 0.0f);
+
+		// Mercury
+		gPlanetInfoData[1].mParentIndex = 0;
+		gPlanetInfoData[1].mYOrbitSpeed = 0.5f;
+		gPlanetInfoData[1].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[1].mRotationSpeed = 58.7f;
+		gPlanetInfoData[1].mTranslationMat = mat4::translation(vec3(10.0f, 0, 0));
+		gPlanetInfoData[1].mScaleMat = mat4::scale(vec3(1.0f));
+		gPlanetInfoData[1].mColor = vec4(0.45f, 0.07f, 0.006f, 1.0f);
+
+		// Venus
+		gPlanetInfoData[2].mParentIndex = 0;
+		gPlanetInfoData[2].mYOrbitSpeed = 0.8f;
+		gPlanetInfoData[2].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[2].mRotationSpeed = 243.0f;
+		gPlanetInfoData[2].mTranslationMat = mat4::translation(vec3(20.0f, 0, 5));
+		gPlanetInfoData[2].mScaleMat = mat4::scale(vec3(2));
+		gPlanetInfoData[2].mColor = vec4(0.6f, 0.32f, 0.006f, 1.0f);
+
+		// Earth
+		gPlanetInfoData[3].mParentIndex = 0;
+		gPlanetInfoData[3].mYOrbitSpeed = 1.0f;
+		gPlanetInfoData[3].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[3].mRotationSpeed = 1.0f;
+		gPlanetInfoData[3].mTranslationMat = mat4::translation(vec3(30.0f, 0, 0));
+		gPlanetInfoData[3].mScaleMat = mat4::scale(vec3(4));
+		gPlanetInfoData[3].mColor = vec4(0.07f, 0.028f, 0.61f, 1.0f);
+
+		// Mars
+		gPlanetInfoData[4].mParentIndex = 0;
+		gPlanetInfoData[4].mYOrbitSpeed = 2.0f;
+		gPlanetInfoData[4].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[4].mRotationSpeed = 1.1f;
+		gPlanetInfoData[4].mTranslationMat = mat4::translation(vec3(40.0f, 0, 0));
+		gPlanetInfoData[4].mScaleMat = mat4::scale(vec3(3));
+		gPlanetInfoData[4].mColor = vec4(0.79f, 0.07f, 0.006f, 1.0f);
+
+		// Jupiter
+		gPlanetInfoData[5].mParentIndex = 0;
+		gPlanetInfoData[5].mYOrbitSpeed = 11.0f;
+		gPlanetInfoData[5].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[5].mRotationSpeed = 0.4f;
+		gPlanetInfoData[5].mTranslationMat = mat4::translation(vec3(50.0f, 0, 0));
+		gPlanetInfoData[5].mScaleMat = mat4::scale(vec3(8));
+		gPlanetInfoData[5].mColor = vec4(0.32f, 0.13f, 0.13f, 1);
+
+		// Saturn
+		gPlanetInfoData[6].mParentIndex = 0;
+		gPlanetInfoData[6].mYOrbitSpeed = 29.4f;
+		gPlanetInfoData[6].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[6].mRotationSpeed = 0.5f;
+		gPlanetInfoData[6].mTranslationMat = mat4::translation(vec3(60.0f, 0, 0));
+		gPlanetInfoData[6].mScaleMat = mat4::scale(vec3(6));
+		gPlanetInfoData[6].mColor = vec4(0.45f, 0.45f, 0.21f, 1.0f);
+
+		// Uranus
+		gPlanetInfoData[7].mParentIndex = 0;
+		gPlanetInfoData[7].mYOrbitSpeed = 84.07f;
+		gPlanetInfoData[7].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[7].mRotationSpeed = 0.8f;
+		gPlanetInfoData[7].mTranslationMat = mat4::translation(vec3(70.0f, 0, 0));
+		gPlanetInfoData[7].mScaleMat = mat4::scale(vec3(7));
+		gPlanetInfoData[7].mColor = vec4(0.13f, 0.13f, 0.32f, 1.0f);
+
+		// Neptune
+		gPlanetInfoData[8].mParentIndex = 0;
+		gPlanetInfoData[8].mYOrbitSpeed = 164.81f;
+		gPlanetInfoData[8].mZOrbitSpeed = 0.0f;
+		gPlanetInfoData[8].mRotationSpeed = 0.9f;
+		gPlanetInfoData[8].mTranslationMat = mat4::translation(vec3(80.0f, 0, 0));
+		gPlanetInfoData[8].mScaleMat = mat4::scale(vec3(8));
+		gPlanetInfoData[8].mColor = vec4(0.21f, 0.028f, 0.79f, 1.0f);
+
+		// Pluto - Not a planet XDD
+		gPlanetInfoData[9].mParentIndex = 0;
+		gPlanetInfoData[9].mYOrbitSpeed = 247.7f;
+		gPlanetInfoData[9].mZOrbitSpeed = 1.0f;
+		gPlanetInfoData[9].mRotationSpeed = 7.0f;
+		gPlanetInfoData[9].mTranslationMat = mat4::translation(vec3(90.0f, 0, 0));
+		gPlanetInfoData[9].mScaleMat = mat4::scale(vec3(1.0f));
+		gPlanetInfoData[9].mColor = vec4(0.45f, 0.21f, 0.21f, 1.0f);
+
+		// Moon
+		gPlanetInfoData[10].mParentIndex = 3;
+		gPlanetInfoData[10].mYOrbitSpeed = 1.0f;
+		gPlanetInfoData[10].mZOrbitSpeed = 200.0f;
+		gPlanetInfoData[10].mRotationSpeed = 27.0f;
+		gPlanetInfoData[10].mTranslationMat = mat4::translation(vec3(5.0f, 0, 0));
+		gPlanetInfoData[10].mScaleMat = mat4::scale(vec3(1));
+		gPlanetInfoData[10].mColor = vec4(0.07f, 0.07f, 0.13f, 1.0f);
+
+		CameraMotionParameters cmp{ 160.0f, 600.0f, 200.0f };
+		vec3                   camPos{ 48.0f, 48.0f, 20.0f };
+		vec3                   lookAt{ vec3(0) };
+
+		pCameraController = initFpsCameraController(camPos, lookAt);
+
+		pCameraController->setMotionParameters(cmp);
+
+		InputSystemDesc inputDesc = {};
+		inputDesc.pRenderer = pRenderer;
+		inputDesc.pWindow = pWindow;
+		if (!initInputSystem(&inputDesc))
+			return false;
 
 
 		LOGF(LogLevel::eERROR, "error ocure");

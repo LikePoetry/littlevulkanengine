@@ -1,8 +1,36 @@
+/*
+ * Copyright (c) 2017-2022 The Forge Interactive Inc.
+ *
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+*/
+
 #pragma once
+
 #include "../Core/Config.h"
 #include "IOperatingSystem.h"
 #include "../Math/MathTypes.h"
 
+const uint32_t MAX_INPUT_GAMEPADS = 4;
+const uint32_t MAX_INPUT_MULTI_TOUCHES = 4;
+const uint32_t MAX_INPUT_ACTIONS = 128;
 
 typedef struct InputBindings
 {
@@ -261,4 +289,105 @@ typedef struct InputBindings
 		float mMinimumPressDuration;
 	} GestureDesc;
 } InputBindings;
+
+typedef struct InputAction InputAction;
+
+typedef enum InputDeviceType
+{
+	INPUT_DEVICE_INVALID = 0,
+	INPUT_DEVICE_GAMEPAD,
+	INPUT_DEVICE_TOUCH,
+	INPUT_DEVICE_KEYBOARD,
+	INPUT_DEVICE_MOUSE,
+} InputDeviceType;
+
+typedef enum InputActionPhase
+{
+	/// Action is initiated
+	INPUT_ACTION_PHASE_STARTED = 0,
+	/// Example: mouse delta changed, key pressed, ...
+	INPUT_ACTION_PHASE_UPDATED,
+	/// Example: mouse delta changed, key pressed, ...
+	INPUT_ACTION_PHASE_ENDED,
+	/// Example: left mouse button was pressed and now released, gesture was started but got canceled
+	INPUT_ACTION_PHASE_CANCELED,
+} InputActionPhase;
+
+typedef struct InputActionContext
+{
+	void* pUserData;
+	/// Indicer of fingers for detected gesture
+	int32_t		mFingerIndices[MAX_INPUT_MULTI_TOUCHES];
+	union
+	{
+		/// Gesture input
+		float4 mFloat4;
+		/// 3D input (gyroscope, ...)
+		float3 mFloat3;
+		/// 2D input (mouse position, delta, composite input (wasd), gamepad stick, joystick, ...)
+		float2 mFloat2;
+		/// 1D input (composite input (ws), gamepad left trigger, ...)
+		float mFloat;
+		/// Button input (mouse left button, keyboard keys, ...)
+		bool mBool;
+		/// Text input
+		wchar_t* pText;
+	};
+
+	float2* pPosition;
+	const bool* pCaptured;
+	float       mScrollValue;
+	uint32_t    mBinding;
+	/// What phase is the action currently in
+	uint8_t mPhase;
+	uint8_t mDeviceType;
+} InputActionContext;
+
+typedef bool (*InputActionCallback)(InputActionContext* pContext);
+
+typedef struct InputActionDesc
+{
+	/// Value from InputBindings::Binding enum
+	uint32_t mBinding;
+	/// Callback when an action is initiated, performed or canceled
+	InputActionCallback pFunction;
+	/// User data which will be assigned to InputActionContext::pUserData when calling pFunction
+	void* pUserData;
+	/// Virtual joystick
+	float mDeadzone;
+	float mOutsideRadius;
+	float mScale;
+	/// User management (which user does this action apply to)
+	uint8_t mUserId;
+	/// Gesture desc
+	InputBindings::GestureDesc* pGesture;
+} InputActionDesc;
+
+typedef struct InputSystemDesc
+{
+
+	void* pRenderer = NULL; // Renderer*
+	WindowDesc* pWindow = NULL;
+
+	bool           mDisableVirtualJoystick = false;
+
+} InputSystemDesc;
+
+bool         initInputSystem(InputSystemDesc* pDesc);
+void         exitInputSystem();
+void         updateInputSystem(uint32_t width, uint32_t height);
+
+InputAction* addInputAction(const InputActionDesc* pDesc);
+void         removeInputAction(InputAction* pAction);
 bool         setEnableCaptureInput(bool enable);
+
+/// Used to enable/disable text input for non-keyboard setups (virtual keyboards for console/mobile, ...)
+void setVirtualKeyboard(uint32_t type);
+
+void setDeadZone(unsigned int controllerIndex, float deadZoneSize);
+void setLEDColor(int gamePadIndex, uint8_t r, uint8_t g, uint8_t b);
+bool setRumbleEffect(int gamePadIndex, float left_motor, float right_motor, uint32_t duration_ms);
+
+const char* getGamePadName(int gamePadIndex);
+bool 		gamePadConnected(int gamePadIndex);
+void 		setOnDeviceChangeCallBack(void (*onDeviceChnageCallBack)(const char* name, bool added), unsigned int gamePadIndex);

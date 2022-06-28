@@ -223,6 +223,153 @@ project "SpirvTools"
 			defines ""
 			runtime "Release"
 			optimize "on"
+
+project "gainputstatic"
+		location "gainputstatic"
+		kind "StaticLib"
+		language "C++"
+		cppdialect "C++17"
+		staticruntime "on"
+	
+		targetdir("bin/" ..outputdir.. "/%{prj.name}")
+		objdir("bin-int/" ..outputdir.. "/%{prj.name}")
+	
+		files
+		{
+			"ThirdParty/OpenSource/gainput/lib/source/hidapi/windows/hid.c",
+			"ThirdParty/OpenSource/gainput/lib/source/hidapi/hidapi.h",
+
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/hidparsers/HIDParserPS4Controller.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/hidparsers/HIDParserPS4Controller.cpp",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/hidparsers/HIDParserPS5Controller.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/hidparsers/HIDParserPS5Controller.cpp",
+
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/GainputHID.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/GainputHID.cpp",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/GainputHIDTypes.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/GainputHIDWhitelist.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/hid/GainputHIDWhitelist.cpp",
+
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gainput.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gainput.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputAllocator.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputAllocator.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputButtonStickGesture.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gestures/GainputButtonStickGesture.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputContainers.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputDebugRenderer.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/dev/GainputDev.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/dev/GainputDev.cpp",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/dev/GainputDevProtocol.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputDoubleClickGesture.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gestures/GainputDoubleClickGesture.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputGestures.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputHelpers.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputHelpersEvdev.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputHoldGesture.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gestures/GainputHoldGesture.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputDeltaState.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputInputDeltaState.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputDevice.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputInputDevice.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputDeviceBuiltIn.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/builtin/GainputInputDeviceBuiltIn.cpp",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/builtin/GainputInputDeviceBuiltInAndroid.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/builtin/GainputInputDeviceBuiltInImpl.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/builtin/GainputInputDeviceBuiltInIos.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/builtin/GainputInputDeviceBuiltInNull.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboard.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputDeviceKeyboard.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboardAndroid.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboardEvdev.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboardImpl.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboardLinux.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboardNull.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboardWin.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputInputDeviceKeyboardWinRaw.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouse.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputDeviceMouse.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouseEvdev.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouseImpl.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouseLinux.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouseMac.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouseNull.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouseWin.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputInputDeviceMouseWinRaw.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePad.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputDevicePad.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePadAndroid.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePadImpl.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePadIos.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePadLinux.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePadMac.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePadNull.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/pad/GainputInputDevicePadWin.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/touch/GainputInputDeviceTouch.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputDeviceTouch.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/touch/GainputInputDeviceTouchAndroid.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/touch/GainputInputDeviceTouchImpl.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/touch/GainputInputDeviceTouchIos.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/touch/GainputInputDeviceTouchNull.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputListener.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputInputManager.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputManager.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputInputMap.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputMap.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/recorder/GainputInputPlayer.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/recorder/GainputInputPlayer.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/recorder/GainputInputRecorder.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/recorder/GainputInputRecorder.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/recorder/GainputInputRecording.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/recorder/GainputInputRecording.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputInputState.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputInputState.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputIos.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/keyboard/GainputKeyboardKeyNames.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputLog.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputMapFilters.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/GainputMapFilters.cpp",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/dev/GainputMemoryStream.cpp",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/dev/GainputMemoryStream.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/mouse/GainputMouseInfo.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputPinchGesture.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gestures/GainputPinchGesture.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputRotateGesture.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gestures/GainputRotateGesture.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputSimultaneouslyDownGesture.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gestures/GainputSimultaneouslyDownGesture.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/dev/GainputStream.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/gestures/GainputTapGesture.h",
+			"ThirdParty/OpenSource/gainput/lib/source/gainput/gestures/GainputTapGesture.cpp",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/touch/GainputTouchInfo.h",
+			"ThirdParty/OpenSource/gainput/lib/include/gainput/GainputWindows.h",
+		}
+		
+		defines
+		{
+			"_CRT_SECURE_NO_WARNINGS",
+			"_WINDOWS"
+		}
+	
+		includedirs
+		{
+			"OS",
+			"ThirdParty/OpenSource/gainput/lib/include"
+		}
+	
+		filter "system:windows"
+			systemversion "latest"
+	
+		filter "configurations:Debug"
+			defines ""
+			runtime "Debug"
+			symbols "on"
+	
+		filter "configurations:Release"
+			defines ""
+			runtime "Release"
+			optimize "on"			
+
 group	""
 		project "Sandbox"
 
@@ -254,6 +401,7 @@ group	""
 			"OS",
 			"Renderer",
 			"SpirvTools",
+			"gainputstatic",
 			"$(VULKAN_SDK)/Include"
 		}
 	
@@ -266,7 +414,8 @@ group	""
 		{
 			"OS",
 			"Renderer",
-			"SpirvTools"
+			"SpirvTools",
+			"gainputstatic"
 		}
 	
 		filter "system:windows"
