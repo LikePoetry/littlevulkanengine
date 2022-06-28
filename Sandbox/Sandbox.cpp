@@ -7,6 +7,8 @@
 #include "../OS/Interfaces/IUI.h"
 #include "../OS/Interfaces/ICameraController.h"
 #include "../OS/Interfaces/IProfiler.h"
+#include "../OS/Interfaces/IOperatingSystem.h"
+
 
 
 #include "../Renderer/Include/IRenderer.h"

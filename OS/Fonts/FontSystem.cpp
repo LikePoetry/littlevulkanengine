@@ -1,8 +1,33 @@
-#include "../Core/Config.h"
+/*
+ * Copyright (c) 2017-2022 The Forge Interactive Inc.
+ *
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+*/
 
-#include "../Interfaces/IFileSystem.h"
+#include "../../Renderer/Include/RendererConfig.h"
 #include "../Interfaces/IFont.h"
+#include "../Interfaces/ILog.h"
+#include "../Interfaces/IFileSystem.h"
 
+// include Fontstash (should be after MemoryTracking so that it also detects memory free/remove in fontstash)
 #define FONTSTASH_IMPLEMENTATION
 #include "../../ThirdParty/OpenSource/Fontstash/src/fontstash.h"
 
@@ -39,7 +64,17 @@ public:
 		return true;
 	}
 
-	bool initRender(Renderer* renderer, int width_, int height_, uint32_t ringSizeBytes) 
+	void exit()
+	{
+		// unload font buffers
+		for (unsigned int i = 0; i < (uint32_t)mFontBuffers.size(); i++)
+			tf_free(mFontBuffers[i]);
+
+		// unload fontstash context
+		fonsDeleteInternal(pContext);
+	}
+
+	bool initRender(Renderer* renderer, int width_, int height_, uint32_t ringSizeBytes)
 	{
 		pRenderer = renderer;
 
@@ -126,9 +161,107 @@ public:
 		return true;
 	}
 
+	void exitRender()
+	{
+		removeResource(pCurrentTexture);
+
+		vk_removeDescriptorSet(pRenderer, pDescriptorSets);
+		vk_removeRootSignature(pRenderer, pRootSignature);
+
+		for (uint32_t i = 0; i < 2; ++i)
+		{
+			vk_removeShader(pRenderer, pShaders[i]);
+		}
+
+		removeGPURingBuffer(pMeshRingBuffer);
+		removeGPURingBuffer(pUniformRingBuffer);
+		vk_removeSampler(pRenderer, pDefaultSampler);
+	}
+
+	bool load(RenderTarget** pRts, uint32_t count, PipelineCache* pCache)
+	{
+		VertexLayout vertexLayout = {};
+		vertexLayout.mAttribCount = 2;
+		vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
+		vertexLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32_SFLOAT;
+		vertexLayout.mAttribs[0].mBinding = 0;
+		vertexLayout.mAttribs[0].mLocation = 0;
+		vertexLayout.mAttribs[0].mOffset = 0;
+
+		vertexLayout.mAttribs[1].mSemantic = SEMANTIC_TEXCOORD0;
+		vertexLayout.mAttribs[1].mFormat = TinyImageFormat_R32G32_SFLOAT;
+		vertexLayout.mAttribs[1].mBinding = 0;
+		vertexLayout.mAttribs[1].mLocation = 1;
+		vertexLayout.mAttribs[1].mOffset = TinyImageFormat_BitSizeOfBlock(vertexLayout.mAttribs[0].mFormat) / 8;
+
+		BlendStateDesc blendStateDesc = {};
+		blendStateDesc.mSrcFactors[0] = BC_SRC_ALPHA;
+		blendStateDesc.mDstFactors[0] = BC_ONE_MINUS_SRC_ALPHA;
+		blendStateDesc.mSrcAlphaFactors[0] = BC_SRC_ALPHA;
+		blendStateDesc.mDstAlphaFactors[0] = BC_ONE_MINUS_SRC_ALPHA;
+		blendStateDesc.mMasks[0] = ALL;
+		blendStateDesc.mRenderTargetMask = BLEND_STATE_TARGET_ALL;
+		blendStateDesc.mIndependentBlend = false;
+
+		DepthStateDesc depthStateDesc[2] = {};
+		depthStateDesc[0].mDepthTest = false;
+		depthStateDesc[0].mDepthWrite = false;
+
+		depthStateDesc[1].mDepthTest = true;
+		depthStateDesc[1].mDepthWrite = true;
+		depthStateDesc[1].mDepthFunc = CMP_LEQUAL;
+
+		RasterizerStateDesc rasterizerStateDesc[2] = {};
+		rasterizerStateDesc[0].mCullMode = CULL_MODE_NONE;
+		rasterizerStateDesc[0].mScissor = true;
+
+		rasterizerStateDesc[1].mCullMode = CULL_MODE_BACK;
+		rasterizerStateDesc[1].mScissor = true;
+
+		PipelineDesc pipelineDesc = {};
+		pipelineDesc.pCache = pCache;
+		pipelineDesc.mType = PIPELINE_TYPE_GRAPHICS;
+		pipelineDesc.mGraphicsDesc.mVRFoveatedRendering = true;
+		pipelineDesc.mGraphicsDesc.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
+		pipelineDesc.mGraphicsDesc.mRenderTargetCount = 1;
+		pipelineDesc.mGraphicsDesc.mSampleCount = SAMPLE_COUNT_1;
+		pipelineDesc.mGraphicsDesc.pBlendState = &blendStateDesc;
+		pipelineDesc.mGraphicsDesc.pRootSignature = pRootSignature;
+		pipelineDesc.mGraphicsDesc.pVertexLayout = &vertexLayout;
+		pipelineDesc.mGraphicsDesc.mRenderTargetCount = 1;
+		pipelineDesc.mGraphicsDesc.mSampleCount = pRts[0]->mSampleCount;
+		pipelineDesc.mGraphicsDesc.mSampleQuality = pRts[0]->mSampleQuality;
+		pipelineDesc.mGraphicsDesc.pColorFormats = &pRts[0]->mFormat;
+		for (uint32_t i = 0; i < min(count, 2U); ++i)
+		{
+			pipelineDesc.mGraphicsDesc.mDepthStencilFormat = (i > 0) ? pRts[1]->mFormat : TinyImageFormat_UNDEFINED;
+			pipelineDesc.mGraphicsDesc.pShaderProgram = pShaders[i];
+			pipelineDesc.mGraphicsDesc.pDepthState = &depthStateDesc[i];
+			pipelineDesc.mGraphicsDesc.pRasterizerState = &rasterizerStateDesc[i];
+			vk_addPipeline(pRenderer, &pipelineDesc, &pPipelines[i]);
+		}
+
+		mScaleBias = { 2.0f / (float)pRts[0]->mWidth, -2.0f / (float)pRts[0]->mHeight };
+
+
+		return true;
+	}
+
+	void unload()
+	{
+		for (uint32_t i = 0; i < 2; ++i)
+		{
+			if (pPipelines[i])
+				vk_removePipeline(pRenderer, pPipelines[i]);
+
+			pPipelines[i] = {};
+		}
+	}
+
 	static int  fonsImplementationGenerateTexture(void* userPtr, int width, int height);
 	static void fonsImplementationModifyTexture(void* userPtr, int* rect, const unsigned char* data);
-	static void fonsImplementationRenderText(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts);
+	static void
+		fonsImplementationRenderText(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts);
 	static void fonsImplementationRemoveTexture(void* userPtr);
 
 	Renderer* pRenderer;
@@ -136,7 +269,7 @@ public:
 
 	const uint8_t* pPixels;
 	Texture* pCurrentTexture;
-	bool     mUpdateTexture;
+	bool           mUpdateTexture;
 
 	uint32_t mWidth;
 	uint32_t mHeight;
@@ -156,7 +289,6 @@ public:
 	Pipeline* pPipelines[2];
 	/// Default states
 	Sampler* pDefaultSampler;
-
 	GPURingBuffer* pUniformRingBuffer;
 	GPURingBuffer* pMeshRingBuffer;
 	float2         mDpiScale;
@@ -164,7 +296,6 @@ public:
 	uint32_t       mRootConstantIndex;
 	bool           mText3D;
 };
-
 
 // FONTSTASH
 float                  m_fFontMaxSize;
@@ -207,27 +338,19 @@ bool platformInitFontSystem()
 	return success;
 #else
 	return true;
-#endif // ENABLE_FORGE_FONTS
+#endif
 }
 
-void* fntGetRawFontData(uint32_t fontID)
+void platformExitFontSystem()
 {
-	if (fontID < impl->mFontBuffers.size())
-		return impl->mFontBuffers[fontID];
-	else
-		return NULL;
+#ifdef ENABLE_FORGE_FONTS
+	impl->exit();
+	impl->~_Impl_FontStash();
+	tf_free(impl);
+#endif
 }
 
-uint32_t fntGetRawFontDataSize(uint32_t fontID)
-{
-	if (fontID < impl->mFontBufferSizes.size())
-		return impl->mFontBufferSizes[fontID];
-	else
-		return UINT_MAX;
-	
-}
-
-bool initFontSystem(FontSystemDesc* pDesc) 
+bool initFontSystem(FontSystemDesc* pDesc)
 {
 #ifdef ENABLE_FORGE_FONTS
 	ASSERT(!renderInitialized);
@@ -242,9 +365,45 @@ bool initFontSystem(FontSystemDesc* pDesc)
 #endif
 }
 
-/// Renders UI-style text to the screen using a loaded font w/ The Forge
-/// This function will assert if Font Rendering has not been initialized
-void cmdDrawTextWithFont(void* /* Cmd* */ pCmd, float2 screenCoordsInPx, const FontDrawDesc* pDesc)
+void exitFontSystem()
+{
+#ifdef ENABLE_FORGE_FONTS
+	ASSERT(renderInitialized);
+
+	impl->exitRender();
+	renderInitialized = false;
+#endif
+}
+
+bool addFontSystemPipelines(void* ppRenderTargets, uint32_t count, void* pPipelineCache)
+{
+#ifdef ENABLE_FORGE_FONTS
+	ASSERT(!renderLoaded);
+
+	RenderTarget** ppRts = (RenderTarget**)ppRenderTargets;
+	PipelineCache* pCache = (PipelineCache*)pPipelineCache;
+
+	bool success = impl->load(ppRts, count, pCache);
+	if (success)
+		renderLoaded = true;
+
+	return success;
+#else
+	return true;
+#endif
+}
+
+void removeFontSystemPipelines()
+{
+#ifdef ENABLE_FORGE_FONTS
+	ASSERT(renderLoaded);
+
+	impl->unload();
+	renderLoaded = false;
+#endif
+}
+
+void cmdDrawTextWithFont(void* pCmd, float2 screenCoordsInPx, const FontDrawDesc* pDesc)
 {
 #ifdef ENABLE_FORGE_FONTS
 	ASSERT(renderInitialized && "Font Rendering not initialized! Make sure to call initFontRendering!");
@@ -280,6 +439,46 @@ void cmdDrawTextWithFont(void* /* Cmd* */ pCmd, float2 screenCoordsInPx, const F
 	// the render target is already scaled up (w/ retina) and the (x,y) position given to this function
 	// is expected to be in the render target's area. Hence, we don't scale up the position again.
 	fonsDrawText(fs, x /** impl->mDpiScale.x*/, y /** impl->mDpiScale.y*/, message, NULL);
+#endif
+}
+
+void cmdDrawWorldSpaceTextWithFont(void* pCmd, const mat4* pMatWorld, const CameraMatrix* pMatProjView, const FontDrawDesc* pDesc)
+{
+#ifdef ENABLE_FORGE_FONTS
+	//ASSERT(pFontStash);
+	ASSERT(renderInitialized && "Font Rendering not initialized! Make sure to call initFontRendering!");
+	ASSERT(renderLoaded && "Font Rendering not loaded! Make sure to call addFontSystemPipelines!");
+
+	ASSERT(pDesc);
+	ASSERT(pDesc->pText);
+	ASSERT(pMatWorld);
+	ASSERT(pMatProjView);
+
+	const char* message = pDesc->pText;
+	const mat4& worldMat = *pMatWorld;
+	const CameraMatrix& projView = *pMatProjView;
+	int fontID = pDesc->mFontID;
+	unsigned color = pDesc->mFontColor;
+	float size = pDesc->mFontSize;
+	float spacing = pDesc->mFontSpacing;
+	float blur = pDesc->mFontBlur;
+
+	impl->mText3D = true;
+	impl->mProjView = projView;
+	impl->mWorldMat = worldMat;
+	impl->pCmd = (Cmd*)pCmd;
+	// clamp the font size to max size.
+	// Precomputed font texture puts limitation to the maximum size.
+	size = min(size, m_fFontMaxSize);
+
+	FONScontext* fs = impl->pContext;
+	fonsSetSize(fs, size * impl->mDpiScaleMin);
+	fonsSetFont(fs, fontID);
+	fonsSetColor(fs, color);
+	fonsSetSpacing(fs, spacing * impl->mDpiScaleMin);
+	fonsSetBlur(fs, blur);
+	fonsSetAlign(fs, FONS_ALIGN_CENTER | FONS_ALIGN_MIDDLE);
+	fonsDrawText(fs, 0.0f, 0.0f, message, NULL);
 #endif
 }
 
@@ -321,12 +520,34 @@ void fntDefineFonts(const FontDesc* pDescs, uint32_t count, uint32_t* pOutIDs)
 
 		pOutIDs[i] = id;
 	}
-
-
 #endif
 }
 
-float2 fntMeasureFontText(const char* pText, const FontDrawDesc* pDrawDesc) 
+void* fntGetRawFontData(uint32_t fontID)
+{
+#ifdef ENABLE_FORGE_FONTS
+	if (fontID < impl->mFontBuffers.size())
+		return impl->mFontBuffers[fontID];
+	else
+		return NULL;
+#else
+	return NULL;
+#endif
+}
+
+uint32_t fntGetRawFontDataSize(uint32_t fontID)
+{
+#ifdef ENABLE_FORGE_FONTS
+	if (fontID < impl->mFontBufferSizes.size())
+		return impl->mFontBufferSizes[fontID];
+	else
+		return UINT_MAX;
+#else
+	return 0;
+#endif
+}
+
+float2 fntMeasureFontText(const char* pText, const FontDrawDesc* pDrawDesc)
 {
 #ifdef ENABLE_FORGE_FONTS
 
@@ -382,18 +603,22 @@ void _Impl_FontStash::fonsImplementationRenderText(
 		return;
 
 	Cmd* pCmd = ctx->pCmd;
+
 	if (ctx->mUpdateTexture)
 	{
+		// #TODO: Investigate - Causes hang on low-mid end Android phones (tested on Samsung Galaxy A50s)
+#ifndef __ANDROID__
 		vk_waitQueueIdle(pCmd->pQueue);
+#endif
 
-		SyncToken token = {};
+		SyncToken         token = {};
 		TextureUpdateDesc updateDesc = {};
 		updateDesc.pTexture = ctx->pCurrentTexture;
 		beginUpdateResource(&updateDesc);
 		for (uint32_t r = 0; r < updateDesc.mRowCount; ++r)
 		{
-			memcmp(updateDesc.pMappedData + r * updateDesc.mDstRowStride,
-				ctx->pPixels + r * updateDesc.mSrcRowStride,
+			memcpy(
+				updateDesc.pMappedData + r * updateDesc.mDstRowStride, ctx->pPixels + r * updateDesc.mSrcRowStride,
 				updateDesc.mSrcRowStride);
 		}
 		endUpdateResource(&updateDesc, &token);
@@ -403,7 +628,7 @@ void _Impl_FontStash::fonsImplementationRenderText(
 	}
 
 	GPURingBufferOffset buffer = getGPURingBufferOffset(ctx->pMeshRingBuffer, nverts * sizeof(float4));
-	BufferUpdateDesc update = { buffer.pBuffer,buffer.mOffset };
+	BufferUpdateDesc    update = { buffer.pBuffer, buffer.mOffset };
 	beginUpdateResource(&update);
 	float4* vtx = (float4*)update.pMappedData;
 	// build vertices
@@ -419,7 +644,7 @@ void _Impl_FontStash::fonsImplementationRenderText(
 	// extract color
 	float4 color = unpackA8B8G8R8_SRGB(*colors);
 
-	uint32_t pipelineIndex = ctx->mText3D ? 1 : 0;
+	uint32_t  pipelineIndex = ctx->mText3D ? 1 : 0;
 	Pipeline* pPipeline = ctx->pPipelines[pipelineIndex];
 	ASSERT(pPipeline);
 
@@ -429,12 +654,16 @@ void _Impl_FontStash::fonsImplementationRenderText(
 	{
 		float4 color;
 		float2 scaleBias;
+#ifdef METAL
+		float _pad0;
+		float _pad1;
+#endif
 	} data;
 
 	data.color = color;
 	data.scaleBias = ctx->mScaleBias;
 
-	if(ctx->mText3D)
+	if (ctx->mText3D)
 	{
 		mat4 mvp = (ctx->mProjView * ctx->mWorldMat).getPrimaryMatrix();
 		data.color = color;

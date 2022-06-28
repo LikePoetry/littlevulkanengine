@@ -105,6 +105,9 @@
     <ClInclude Include="Core\TextureContainers.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="Core\ThreadSystem.h">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="Interfaces\IApp.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
@@ -174,7 +177,6 @@
     <ClInclude Include="UI\imgui_user.h">
       <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="Core\ThreadSystem.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">
@@ -336,6 +338,9 @@
     <ClCompile Include="Core\Screenshot.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="Core\ThreadSystem.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
     <ClCompile Include="Core\Timer.c">
       <Filter>Core</Filter>
     </ClCompile>
@@ -402,9 +407,5 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
-    <ClCompile Include="Core\ThreadSystem.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <Natvis Include="..\ThirdParty\OpenSource\EASTL\EASTL.natvis" />
   </ItemGroup>
 </Project>

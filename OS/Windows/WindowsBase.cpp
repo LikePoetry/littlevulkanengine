@@ -51,6 +51,11 @@ void onRequestReload()
 	gResetScenario |= RESET_SCENARIO_RELOAD;
 }
 
+void onDeviceLost()
+{
+	gResetScenario |= RESET_SCENARIO_DEVICE_LOST;
+}
+
 CustomMessageProcessor sCustomProc = nullptr;
 void setCustomMessageProcessor(CustomMessageProcessor proc)
 {

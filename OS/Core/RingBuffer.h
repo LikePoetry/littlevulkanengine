@@ -1,9 +1,36 @@
+/*
+ * Copyright (c) 2017-2022 The Forge Interactive Inc.
+ *
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+*/
+
 #pragma once
-#include "../Core/Config.h"
-#include "../Renderer/Include/IRenderer.h"
-#include "../Renderer/Include/IResourceLoader.h"
 
+#include "Config.h"
+#include "../../Renderer/Include/IRenderer.h"
+#include "../../Renderer/Include/IResourceLoader.h"
+#include "../Interfaces/ILog.h"
 
+#define IMEMORY_FROM_HEADER
+#include "../../OS/Interfaces/IMemory.h"
 
 /************************************************************************/
 /* RING BUFFER MANAGEMENT											  */
@@ -17,6 +44,7 @@ typedef struct GPURingBuffer
 	uint64_t mMaxBufferSize;
 	uint64_t mCurrentBufferOffset;
 } GPURingBuffer;
+
 
 typedef struct GPURingBufferOffset
 {
@@ -64,17 +92,17 @@ static inline void addUniformGPURingBuffer(Renderer* pRenderer, uint32_t require
 
 	*ppRingBuffer = pRingBuffer;
 }
-//
-//static inline void removeGPURingBuffer(GPURingBuffer* pRingBuffer)
-//{
-//	removeResource(pRingBuffer->pBuffer);
-//	tf_free(pRingBuffer);
-//}
-//
-//static inline void resetGPURingBuffer(GPURingBuffer* pRingBuffer)
-//{
-//	pRingBuffer->mCurrentBufferOffset = 0;
-//}
+
+static inline void removeGPURingBuffer(GPURingBuffer* pRingBuffer)
+{
+	removeResource(pRingBuffer->pBuffer);
+	tf_free(pRingBuffer);
+}
+
+static inline void resetGPURingBuffer(GPURingBuffer* pRingBuffer)
+{
+	pRingBuffer->mCurrentBufferOffset = 0;
+}
 
 static inline GPURingBufferOffset getGPURingBufferOffset(GPURingBuffer* pRingBuffer, uint32_t memoryRequirement, uint32_t alignment = 0)
 {
