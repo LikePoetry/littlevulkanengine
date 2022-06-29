@@ -17,6 +17,7 @@
 static IApp* pApp = nullptr;
 static WindowDesc* gWindowDesc = nullptr;
 static uint8_t gResetScenario = RESET_SCENARIO_NONE;
+static bool           gShowPlatformUI = true;
 
 /// CPU
 static CpuInfo gCpu;
@@ -44,8 +45,22 @@ extern uint32_t     gMonitorCount;
 extern "C" HWND * gLogWindowHandle;
 
 //------------------------------------------------------------------------
+// STATIC HELPER FUNCTIONS
+//------------------------------------------------------------------------
+
+static inline float CounterToSecondsElapsed(int64_t start, int64_t end)
+{
+	return (float)(end - start) / (float)1e6;
+}
+
+//------------------------------------------------------------------------
 // OPERATING SYSTEM INTERFACE FUNCTIONS
 //------------------------------------------------------------------------
+void requestShutdown()
+{
+	PostQuitMessage(0);
+}
+
 void onRequestReload()
 {
 	gResetScenario |= RESET_SCENARIO_RELOAD;
@@ -55,6 +70,24 @@ void onDeviceLost()
 {
 	gResetScenario |= RESET_SCENARIO_DEVICE_LOST;
 }
+
+void onAPISwitch()
+{
+	gResetScenario |= RESET_SCENARIO_API_SWITCH;
+}
+
+void onGpuModeSwitch()
+{
+	gResetScenario |= RESET_SCENARIO_GPU_MODE_SWITCH;
+}
+
+void errorMessagePopup(const char* title, const char* msg, void* windowHandle)
+{
+#ifndef AUTOMATED_TESTING
+	MessageBoxA((HWND)windowHandle, msg, title, MB_OK);
+#endif
+}
+
 
 CustomMessageProcessor sCustomProc = nullptr;
 void setCustomMessageProcessor(CustomMessageProcessor proc)
@@ -97,10 +130,53 @@ bool initBaseSubsystems()
 	return true;
 }
 
+void updateBaseSubsystems(float deltaTime)
+{
+	// Not exposed in the interface files / app layer
+	extern void platformUpdateLuaScriptingSystem();
+	extern void platformUpdateUserInterface(float deltaTime);
+	extern void platformUpdateWindowSystem();
+
+	platformUpdateWindowSystem();
+
+#ifdef ENABLE_FORGE_SCRIPTING
+	extern void platformUpdateLuaScriptingSystem();
+	platformUpdateLuaScriptingSystem();
+#endif
+
+#ifdef ENABLE_FORGE_UI
+	extern void platformUpdateUserInterface(float deltaTime);
+	platformUpdateUserInterface(deltaTime);
+#endif
+}
+
+void exitBaseSubsystems()
+{
+	// Not exposed in the interface files / app layer
+	extern void platformExitFontSystem();
+	extern void platformExitUserInterface();
+	extern void platformExitLuaScriptingSystem();
+	extern void platformExitWindowSystem();
+
+	platformExitWindowSystem();
+
+#ifdef ENABLE_FORGE_UI
+	platformExitUserInterface();
+#endif
+
+#ifdef ENABLE_FORGE_FONTS
+	platformExitFontSystem();
+#endif
+
+#ifdef ENABLE_FORGE_SCRIPTING
+	platformExitLuaScriptingSystem();
+#endif
+}
+
 //------------------------------------------------------------------------
 // PLATFORM LAYER USER INTERFACE
 //------------------------------------------------------------------------
-void setupPlatformUI(int32_t width,int32_t height)
+void setupPlatformUI(int32_t width, int32_t height)
 {
 	gSelectedApiIndex = gSelectedRendererApi;
 
@@ -153,12 +229,26 @@ void setupPlatformUI(int32_t width,int32_t height)
 	luaDefineScripts(&apiScriptDesc, 1);
 }
 
+void togglePlatformUI()
+{
+	gShowPlatformUI = pApp->mSettings.mShowPlatformUI;
+
+#ifdef ENABLE_FORGE_UI
+	extern void platformToggleWindowSystemUI(bool);
+	platformToggleWindowSystemUI(gShowPlatformUI);
+
+	uiSetComponentActive(pToggleVSyncComponent, gShowPlatformUI);
+	uiSetComponentActive(pAPISwitchingComponent, gShowPlatformUI);
+#endif
+}
+
 //------------------------------------------------------------------------
 // APP ENTRY POINT
 //------------------------------------------------------------------------
 
 // WindowsWindow.cpp
 extern void initWindowClass();
+extern void exitWindowClass();
 
 int WindowsMain(int argc, char** argv, IApp* app)
 {
@@ -246,7 +336,140 @@ int WindowsMain(int argc, char** argv, IApp* app)
 			return EXIT_FAILURE;
 
 		setupPlatformUI(pSettings->mWidth, pSettings->mHeight);
+		pSettings->mInitialized = true;
+
+		if (!pApp->Load())
+			return EXIT_FAILURE;
+		LOGF(LogLevel::eINFO, "Application Init+Load %f", getTimerMSec(&t, false) / 1000.0f);
+
+	}
+	bool quit = false;
+	int64_t lastCounter = getUSec(false);
+
+	while (!quit)
+	{
+		if (gResetScenario != RESET_SCENARIO_NONE)
+		{
+			if (gResetScenario & RESET_SCENARIO_RELOAD)
+			{
+				pApp->Unload();
+
+				if (!pApp->Load())
+					return EXIT_FAILURE;
+
+				gResetScenario &= ~RESET_SCENARIO_RELOAD;
+				continue;
+			}
+
+			if (gResetScenario & RESET_SCENARIO_DEVICE_LOST)
+			{
+				errorMessagePopup(
+					"Graphics Device Lost",
+					"Connection to the graphics device has been lost.\nPlease verify the integrity of your graphics drivers.\nCheck the "
+					"logs for further details.",
+					&pApp->pWindow->handle.window);
+			}
+
+			pApp->Unload();
+
+			pApp->Exit();
+
+			gSelectedRendererApi = (RendererApi)gSelectedApiIndex;
+			pSettings->mInitialized = false;
+
+			closeWindow(app->pWindow);
+			openWindow(app->GetName(), app->pWindow);
+
+			exitBaseSubsystems();
+
+			{
+				if (!initBaseSubsystems())
+					return EXIT_FAILURE;
+
+				Timer t;
+				initTimer(&t);
+				if (!pApp->Init())
+					return EXIT_FAILURE;
+
+				setupPlatformUI(pSettings->mWidth, pSettings->mHeight);
+				pSettings->mInitialized = true;
+
+				if (!pApp->Load())
+					return EXIT_FAILURE;
+
+				LOGF(LogLevel::eINFO, "Application Reset %f", getTimerMSec(&t, false) / 1000.0f);
+
+			}
+			gResetScenario = RESET_SCENARIO_NONE;
+			continue;
+		}
+
+		int64_t counter = getUSec(false);
+		float deltaTime = CounterToSecondsElapsed(lastCounter, counter);
+
+		lastCounter = counter;
+
+		// if framerate appears to drop below about 6, assume we're at a breakpoint and simulate 20fps.
+		if (deltaTime > 0.15f)
+			deltaTime = 0.05f;
+
+		bool lastMinimized = gWindow->minimized;
+
+		extern bool handleMessages();
+		quit = handleMessages() || pSettings->mQuit;
+
+		// If window is minimized let other processes take over
+		if (gWindow->minimized)
+		{
+			// Call update once after minimize so app can react.
+			if (lastMinimized != gWindow->minimized)
+			{
+				pApp->Update(deltaTime);
+			}
+			threadSleep(1);
+			continue;
+		}
+
+		// UPDATE BASE INTERFACES
+		updateBaseSubsystems(deltaTime);
+
+		// UPDATE APP
+		pApp->Update(deltaTime);
+		pApp->Draw();
+
+		if (gShowPlatformUI != pApp->mSettings.mShowPlatformUI)
+		{
+			togglePlatformUI();
+		}
+
+
 	}
 
+	pApp->mSettings.mQuit = true;
+	pApp->Unload();
+	pApp->Exit();
+
+	exitWindowClass();
+
+	exitLog();
+
+	exitBaseSubsystems();
+
+	exitFileSystem();
+
+#ifdef ENABLE_FORGE_STACKTRACE_DUMP
+	WindowsStackTrace::Exit();
+#endif
+
+#ifdef ENABLE_MTUNER
+	rmemUnload();
+	rmemShutDown();
+#endif
+
+	exitMemAlloc();
+
+	gWindow = NULL;
+	gWindowDesc = NULL;
+	gLogWindowHandle = NULL;
 	return 0;
 }

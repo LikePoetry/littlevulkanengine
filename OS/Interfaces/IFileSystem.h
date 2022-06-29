@@ -167,6 +167,9 @@ extern "C"
 	///	Initializes the FileSystem API
 	bool initFileSystem(FileSystemInitDesc* pDesc);
 
+	/// Frees resources associated with the FileSystem API
+	void exitFileSystem(void);
+
 	/************************************************************************/
 	// MARK: - Minor filename manipulation
 	/************************************************************************/

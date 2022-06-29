@@ -9,6 +9,14 @@ class IApp
 {
 public:
 	virtual bool Init() = 0;
+	virtual void Exit() = 0;
+
+	virtual bool Load() = 0;
+	virtual void Unload() = 0;
+
+	virtual void Update(float deltaTime) = 0;
+	virtual void Draw() = 0;
+
 	virtual const char* GetName() = 0;
 
 	struct Settings

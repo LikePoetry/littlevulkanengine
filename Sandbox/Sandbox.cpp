@@ -53,6 +53,10 @@ const uint32_t gImageCount = 3;
 const int      gSphereResolution = 30;    // Increase for higher resolution spheres
 const float    gSphereDiameter = 0.5f;
 const uint     gNumPlanets = 11;
+const uint     gTimeOffset = 600000;
+const float    gRotSelfScale = 0.0004f;
+const float    gRotOrbitYScale = 0.001f;
+const float    gRotOrbitZScale = 0.00001f;
 
 Renderer* pRenderer = NULL;
 
@@ -60,15 +64,19 @@ Queue* pGraphicsQueue = NULL;
 CmdPool* pCmdPools[gImageCount] = { NULL };
 Cmd* pCmds[gImageCount] = { NULL };
 
+SwapChain* pSwapChain = NULL;
+RenderTarget* pDepthBuffer = NULL;
 Fence* pRenderCompleteFences[gImageCount] = { NULL };
 Semaphore* pImageAcquiredSemaphore = NULL;
 Semaphore* pRenderCompleteSemaphores[gImageCount] = { NULL };
 
 Shader* pSphereShader = NULL;
 Buffer* pSphereVertexBuffer = NULL;
+Pipeline* pSpherePipeline = NULL;
 
 Shader* pSkyBoxDrawShader = NULL;
 Buffer* pSkyBoxVertexBuffer = NULL;
+Pipeline* pSkyBoxDrawPipeline = NULL;
 RootSignature* pRootSignature = NULL;
 Sampler* pSamplerSkyBox = NULL;
 
@@ -86,7 +94,8 @@ ProfileToken gGpuProfileToken = PROFILE_INVALID_TOKEN;
 Shader* pCrashShader = NULL;
 
 int              gNumberOfSpherePoints;
-
+UniformBlock     gUniformData;
+UniformBlock     gUniformDataSky;
 PlanetInfoStruct gPlanetInfoData[gNumPlanets];
 
 ICameraController* pCameraController = NULL;
@@ -102,14 +111,21 @@ uint32_t gFontID = 0;
  * In this sitatuion, the first marker would be written before the draw command, but the second one would stall for the draw command to finish.
  * Due to the infinite loop in the shader, the second marker won't be written, and we can reason that the draw command has caused the GPU hang.
  * We log the markers information to verify this. */
-const uint32_t gMarkerCount = 2;
 
+bool bHasCrashed = false;
 bool bSimulateCrash = false;
 
+uint32_t gCrashedFrame = 0;
+const uint32_t gMarkerCount = 2;
+const uint32_t gValidMarkerValue = 1U;
 Buffer* pMarkerBuffer[gImageCount] = { NULL };
+
+Pipeline* pCrashPipeline = NULL;
 
 const char* pSkyBoxImageFileNames[] = { "Skybox_right1",  "Skybox_left2",  "Skybox_top3",
 										"Skybox_bottom4", "Skybox_front5", "Skybox_back6" };
+FontDrawDesc gFrameTimeDraw;
+
 
 float* pSpherePoints = 0;
 
@@ -479,12 +495,507 @@ public:
 		inputDesc.pWindow = pWindow;
 		if (!initInputSystem(&inputDesc))
 			return false;
+		// App Actions
+		InputActionDesc actionDesc = { InputBindings::BUTTON_DUMP, [](InputActionContext* ctx) {  dumpProfileData(((Renderer*)ctx->pUserData)->pName); return true; }, pRenderer };
+		addInputAction(&actionDesc);
+		actionDesc = { InputBindings::BUTTON_FULLSCREEN, [](InputActionContext* ctx) { toggleFullscreen(((IApp*)ctx->pUserData)->pWindow); return true; }, this };
+		addInputAction(&actionDesc);
+		actionDesc = { InputBindings::BUTTON_EXIT, [](InputActionContext* ctx) { requestShutdown(); return true; } };
+		addInputAction(&actionDesc);
+		InputActionCallback onUIInput = [](InputActionContext* ctx)
+		{
+			bool capture = uiOnInput(ctx->mBinding, ctx->mBool, ctx->pPosition, &ctx->mFloat2);
+			if (ctx->mBinding != InputBindings::FLOAT_LEFTSTICK)
+				setEnableCaptureInput(capture && INPUT_ACTION_PHASE_CANCELED != ctx->mPhase);
+			return true;
+		};
+		actionDesc = { InputBindings::BUTTON_ANY, onUIInput, this };
+		addInputAction(&actionDesc);
+		actionDesc = { InputBindings::FLOAT_LEFTSTICK, onUIInput, this, 20.0f, 200.0f, 1.0f };
+		addInputAction(&actionDesc);
 
+		typedef bool(*CameraInputHandler)(InputActionContext* ctx, uint32_t index);
+		static CameraInputHandler onCameraInput = [](InputActionContext* ctx, uint32_t index)
+		{
+			if (*ctx->pCaptured)
+			{
+				float2 val = uiIsFocused() ? float2(0.0f) : ctx->mFloat2;
+				index ? pCameraController->onRotate(val) : pCameraController->onMove(val);
+			}
+			return true;
+		};
 
-		LOGF(LogLevel::eERROR, "error ocure");
-		return false;
+		actionDesc = { InputBindings::FLOAT_RIGHTSTICK, [](InputActionContext* ctx) { return onCameraInput(ctx, 1); }, NULL, 20.0f, 200.0f, 0.5f };
+		addInputAction(&actionDesc);
+		actionDesc = { InputBindings::FLOAT_LEFTSTICK, [](InputActionContext* ctx) { return onCameraInput(ctx, 0); }, NULL, 20.0f, 200.0f, 1.0f };
+		addInputAction(&actionDesc);
+
+		actionDesc = { InputBindings::BUTTON_NORTH, [](InputActionContext* ctx) { pCameraController->resetView(); return true; } };
+		addInputAction(&actionDesc);
+
+		updateDescriptorSets();
+
+		gFrameIndex = 0;
+
+		return true;
 	}
+
+	void Exit()
+	{
+		exitInputSystem();
+
+		exitCameraController(pCameraController);
+
+		exitUserInterface();
+
+		exitFontSystem();
+
+		exitProfiler();
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			exitMarkers();
+		}
+
+		for (uint32_t i = 0; i < gImageCount; ++i)
+		{
+			removeResource(pProjViewUniformBuffer[i]);
+			removeResource(pSkyboxUniformBuffer[i]);
+		}
+
+		vk_removeDescriptorSet(pRenderer, pDescriptorSetTexture);
+		vk_removeDescriptorSet(pRenderer, pDescriptorSetUniforms);
+
+		removeResource(pSphereVertexBuffer);
+		removeResource(pSkyBoxVertexBuffer);
+
+		for (uint i = 0; i < 6; ++i)
+			removeResource(pSkyBoxTextures[i]);
+
+		vk_removeSampler(pRenderer, pSamplerSkyBox);
+		vk_removeShader(pRenderer, pSphereShader);
+		vk_removeShader(pRenderer, pSkyBoxDrawShader);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+			vk_removeShader(pRenderer, pCrashShader);
+
+		vk_removeRootSignature(pRenderer, pRootSignature);
+
+		for (uint32_t i = 0; i < gImageCount; ++i)
+		{
+			vk_removeFence(pRenderer, pRenderCompleteFences[i]);
+			vk_removeSemaphore(pRenderer, pRenderCompleteSemaphores[i]);
+
+			vk_removeCmd(pRenderer, pCmds[i]);
+			vk_removeCmdPool(pRenderer, pCmdPools[i]);
+		}
+		vk_removeSemaphore(pRenderer, pImageAcquiredSemaphore);
+
+		exitResourceLoaderInterface(pRenderer);
+		exitScreenshotInterface();
+
+		vk_removeQueue(pRenderer, pGraphicsQueue);
+
+		exitRenderer(pRenderer);
+		pRenderer = NULL;
+
+	}
+
+	bool Load()
+	{
+		if (!addSwapChain())
+			return false;
+
+		if (!addDepthBuffer())
+			return false;
+
+		RenderTarget* ppPipelineRenderTargets[] =
+		{
+			pSwapChain->ppRenderTargets[0],
+			pDepthBuffer
+		};
+
+		if (!addFontSystemPipelines(ppPipelineRenderTargets, 2, NULL))
+			return false;
+
+		if (!addUserInterfacePipelines(ppPipelineRenderTargets[0]))
+			return false;
+
+		//layout and pipeline for sphere draw
+		VertexLayout vertexLayout = {};
+		vertexLayout.mAttribCount = 2;
+		vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
+		vertexLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32B32_SFLOAT;
+		vertexLayout.mAttribs[0].mBinding = 0;
+		vertexLayout.mAttribs[0].mLocation = 0;
+		vertexLayout.mAttribs[0].mOffset = 0;
+		vertexLayout.mAttribs[1].mSemantic = SEMANTIC_NORMAL;
+		vertexLayout.mAttribs[1].mFormat = TinyImageFormat_R32G32B32_SFLOAT;
+		vertexLayout.mAttribs[1].mBinding = 0;
+		vertexLayout.mAttribs[1].mLocation = 1;
+		vertexLayout.mAttribs[1].mOffset = 3 * sizeof(float);
+
+		RasterizerStateDesc rasterizerStateDesc = {};
+		rasterizerStateDesc.mCullMode = CULL_MODE_NONE;
+
+		RasterizerStateDesc sphereRasterizerStateDesc = {};
+		sphereRasterizerStateDesc.mCullMode = CULL_MODE_FRONT;
+
+		DepthStateDesc depthStateDesc = {};
+		depthStateDesc.mDepthTest = true;
+		depthStateDesc.mDepthWrite = true;
+		depthStateDesc.mDepthFunc = CMP_GEQUAL;
+
+		PipelineDesc desc = {};
+		desc.mType = PIPELINE_TYPE_GRAPHICS;
+		GraphicsPipelineDesc& pipelineSettings = desc.mGraphicsDesc;
+		pipelineSettings.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
+		pipelineSettings.mRenderTargetCount = 1;
+		pipelineSettings.pDepthState = &depthStateDesc;
+		pipelineSettings.pColorFormats = &pSwapChain->ppRenderTargets[0]->mFormat;
+		pipelineSettings.mSampleCount = pSwapChain->ppRenderTargets[0]->mSampleCount;
+		pipelineSettings.mSampleQuality = pSwapChain->ppRenderTargets[0]->mSampleQuality;
+		pipelineSettings.mDepthStencilFormat = pDepthBuffer->mFormat;
+		pipelineSettings.pRootSignature = pRootSignature;
+		pipelineSettings.pShaderProgram = pSphereShader;
+		pipelineSettings.pVertexLayout = &vertexLayout;
+		pipelineSettings.pRasterizerState = &sphereRasterizerStateDesc;
+		pipelineSettings.mVRFoveatedRendering = true;
+		vk_addPipeline(pRenderer, &desc, &pSpherePipeline);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			pipelineSettings.pShaderProgram = pCrashShader;
+			vk_addPipeline(pRenderer, &desc, &pCrashPipeline);
+		}
+
+		//layout and pipeline for skybox draw
+		vertexLayout = {};
+		vertexLayout.mAttribCount = 1;
+		vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
+		vertexLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
+		vertexLayout.mAttribs[0].mBinding = 0;
+		vertexLayout.mAttribs[0].mLocation = 0;
+		vertexLayout.mAttribs[0].mOffset = 0;
+
+		pipelineSettings.pDepthState = NULL;
+		pipelineSettings.pRasterizerState = &rasterizerStateDesc;
+		pipelineSettings.pShaderProgram = pSkyBoxDrawShader; //-V519
+		vk_addPipeline(pRenderer, &desc, &pSkyBoxDrawPipeline);
+
+		return true;
+	}
+
+	void Unload()
+	{
+		vk_waitQueueIdle(pGraphicsQueue);
+
+		removeUserInterfacePipelines();
+
+		removeFontSystemPipelines();
+
+		vk_removePipeline(pRenderer, pSkyBoxDrawPipeline);
+		vk_removePipeline(pRenderer, pSpherePipeline);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			vk_removePipeline(pRenderer, pCrashPipeline);
+		}
+		vk_removeSwapChain(pRenderer, pSwapChain);
+		vk_removeRenderTarget(pRenderer, pDepthBuffer);
+	}
+
+	void Update(float deltaTime)
+	{
+		updateInputSystem(mSettings.mWidth, mSettings.mHeight);
+
+		pCameraController->update(deltaTime);
+
+		/************************************************************************/
+		// Scene Update
+		/************************************************************************/
+		static float currentTime = 0.0f;
+		currentTime += deltaTime * 1000.0f;
+
+		// update camera with time
+		mat4 viewMat = pCameraController->getViewMatrix();
+
+		const float aspectInverse = (float)mSettings.mHeight / (float)mSettings.mWidth;
+		const float horizontal_fov = PI / 2.0f;
+		CameraMatrix projMat = CameraMatrix::perspective(horizontal_fov, aspectInverse, 1000.0f, 0.1f);
+		gUniformData.mProjectView = projMat * viewMat;
+
+		// point light parameters
+		gUniformData.mLightPosition = vec3(0, 0, 0);
+		gUniformData.mLightColor = vec3(0.9f, 0.9f, 0.7f);    // Pale Yellow
+
+		// update planet transformations
+		for (unsigned int i = 0; i < gNumPlanets; i++)
+		{
+			mat4 rotSelf, rotOrbitY, rotOrbitZ, trans, scale, parentMat;
+			rotSelf = rotOrbitY = rotOrbitZ = parentMat = mat4::identity();
+			if (gPlanetInfoData[i].mRotationSpeed > 0.0f)
+				rotSelf = mat4::rotationY(gRotSelfScale * (currentTime + gTimeOffset) / gPlanetInfoData[i].mRotationSpeed);
+			if (gPlanetInfoData[i].mYOrbitSpeed > 0.0f)
+				rotOrbitY = mat4::rotationY(gRotOrbitYScale * (currentTime + gTimeOffset) / gPlanetInfoData[i].mYOrbitSpeed);
+			if (gPlanetInfoData[i].mZOrbitSpeed > 0.0f)
+				rotOrbitZ = mat4::rotationZ(gRotOrbitZScale * (currentTime + gTimeOffset) / gPlanetInfoData[i].mZOrbitSpeed);
+			if (gPlanetInfoData[i].mParentIndex > 0)
+				parentMat = gPlanetInfoData[gPlanetInfoData[i].mParentIndex].mSharedMat;
+
+			trans = gPlanetInfoData[i].mTranslationMat;
+			scale = gPlanetInfoData[i].mScaleMat;
+
+			gPlanetInfoData[i].mSharedMat = parentMat * rotOrbitY * trans;
+			gUniformData.mToWorldMat[i] = parentMat * rotOrbitY * rotOrbitZ * trans * rotSelf * scale;
+			gUniformData.mColor[i] = gPlanetInfoData[i].mColor;
+		}
+
+		viewMat.setTranslation(vec3(0));
+		gUniformDataSky = gUniformData;
+		gUniformDataSky.mProjectView = projMat * viewMat;
+	}
+
+	void Draw() 
+	{
+		if (pSwapChain->mEnableVsync != mSettings.mVSyncEnabled)
+		{
+			vk_waitQueueIdle(pGraphicsQueue);
+			::vk_toggleVSync(pRenderer, &pSwapChain);
+		}
+
+		uint32_t swapchainImageIndex;
+		vk_acquireNextImage(pRenderer, pSwapChain, pImageAcquiredSemaphore, NULL, &swapchainImageIndex);
+
+		RenderTarget* pRenderTarget = pSwapChain->ppRenderTargets[swapchainImageIndex];
+		Semaphore* pRenderCompleteSemaphore = pRenderCompleteSemaphores[gFrameIndex];
+		Fence* pRenderCompleteFence = pRenderCompleteFences[gFrameIndex];
+
+		// Stall if CPU is running "Swap Chain Buffer Count" frames ahead of GPU
+		FenceStatus fenceStatus;
+		vk_getFenceStatus(pRenderer, pRenderCompleteFence, &fenceStatus);
+		if (fenceStatus == FENCE_STATUS_INCOMPLETE)
+			vk_waitForFences(pRenderer, 1, &pRenderCompleteFence);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			// Check breadcrumb markers
+			checkMarkers();
+		}
+
+		// Update uniform buffers
+		BufferUpdateDesc viewProjCbv = { pProjViewUniformBuffer[gFrameIndex] };
+		beginUpdateResource(&viewProjCbv);
+		*(UniformBlock*)viewProjCbv.pMappedData = gUniformData;
+		endUpdateResource(&viewProjCbv, NULL);
+
+		BufferUpdateDesc skyboxViewProjCbv = { pSkyboxUniformBuffer[gFrameIndex] };
+		beginUpdateResource(&skyboxViewProjCbv);
+		*(UniformBlock*)skyboxViewProjCbv.pMappedData = gUniformDataSky;
+		endUpdateResource(&skyboxViewProjCbv, NULL);
+
+		// Reset cmd pool for this frame
+		vk_resetCmdPool(pRenderer, pCmdPools[gFrameIndex]);
+
+		Cmd* cmd = pCmds[gFrameIndex];
+		vk_beginCmd(cmd);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			// Reset markers values
+			resetMarkers(cmd);
+		}
+
+		cmdBeginGpuFrameProfile(cmd, gGpuProfileToken);
+
+		RenderTargetBarrier barriers[] = {
+			{ pRenderTarget, RESOURCE_STATE_PRESENT, RESOURCE_STATE_RENDER_TARGET },
+		};
+		vk_cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
+
+		// simply record the screen cleaning command
+		LoadActionsDesc loadActions = {};
+		loadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
+		loadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
+		loadActions.mClearDepth.depth = 0.0f;
+		loadActions.mClearDepth.stencil = 0;
+		vk_cmdBindRenderTargets(cmd, 1, &pRenderTarget, pDepthBuffer, &loadActions, NULL, NULL, -1, -1);
+		vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 0.0f, 1.0f);
+		vk_cmdSetScissor(cmd, 0, 0, pRenderTarget->mWidth, pRenderTarget->mHeight);
+
+		const uint32_t sphereVbStride = sizeof(float) * 6;
+		const uint32_t skyboxVbStride = sizeof(float) * 4;
+
+		// draw skybox
+		cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Skybox");
+		vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 1.0f, 1.0f);
+		vk_cmdBindPipeline(cmd, pSkyBoxDrawPipeline);
+		vk_cmdBindDescriptorSet(cmd, 0, pDescriptorSetTexture);
+		vk_cmdBindDescriptorSet(cmd, gFrameIndex * 2 + 0, pDescriptorSetUniforms);
+		vk_cmdBindVertexBuffer(cmd, 1, &pSkyBoxVertexBuffer, &skyboxVbStride, NULL);
+		vk_cmdDraw(cmd, 36, 0);
+		vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 0.0f, 1.0f);
+		cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+
+		////// draw planets
+		cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Planets");
+
+		Pipeline* pipeline = pSpherePipeline;
+
+		// Using the malfunctioned pipeline
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs && bSimulateCrash)
+		{
+			gCrashedFrame = gFrameIndex;
+			bSimulateCrash = false;
+			bHasCrashed = true;
+			pipeline = pCrashPipeline;
+			LOGF(LogLevel::eERROR, "[Breadcrumb] Simulating a GPU crash situation...");
+		}
+
+		vk_cmdBindPipeline(cmd, pipeline);
+		vk_cmdBindDescriptorSet(cmd, gFrameIndex * 2 + 1, pDescriptorSetUniforms);
+		vk_cmdBindVertexBuffer(cmd, 1, &pSphereVertexBuffer, &sphereVbStride, NULL);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			// Marker on top of the pip, won't wait for the following draw commands.
+			vk_cmdWriteMarker(cmd, MARKER_TYPE_IN, gValidMarkerValue, pMarkerBuffer[gFrameIndex], 0, false);
+		}
+
+		vk_cmdDrawInstanced(cmd, gNumberOfSpherePoints / 6, 0, gNumPlanets, 0);
+
+		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		{
+			// Marker on bottom of the pip, will wait for draw command to be executed.
+			vk_cmdWriteMarker(cmd, MARKER_TYPE_OUT, gValidMarkerValue, pMarkerBuffer[gFrameIndex], 1, false);
+		}
+
+		cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+
+		loadActions = {};
+		loadActions.mLoadActionsColor[0] = LOAD_ACTION_LOAD;
+		vk_cmdBindRenderTargets(cmd, 1, &pRenderTarget, NULL, &loadActions, NULL, NULL, -1, -1);
+		cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw UI");
+
+		gFrameTimeDraw.mFontColor = 0xff00ffff;
+		gFrameTimeDraw.mFontSize = 18.0f;
+		gFrameTimeDraw.mFontID = gFontID;
+		float2 txtSizePx = cmdDrawCpuProfile(cmd, float2(8.f, 15.f), &gFrameTimeDraw);
+		cmdDrawGpuProfile(cmd, float2(8.f, txtSizePx.y + 75.f), gGpuProfileToken, &gFrameTimeDraw);
+
+		cmdDrawUserInterface(cmd);
+
+		vk_cmdBindRenderTargets(cmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
+		cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+
+		barriers[0] = { pRenderTarget, RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PRESENT };
+		vk_cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
+
+		cmdEndGpuFrameProfile(cmd, gGpuProfileToken);
+		vk_endCmd(cmd);
+
+		QueueSubmitDesc submitDesc = {};
+		submitDesc.mCmdCount = 1;
+		submitDesc.mSignalSemaphoreCount = 1;
+		submitDesc.mWaitSemaphoreCount = 1;
+		submitDesc.ppCmds = &cmd;
+		submitDesc.ppSignalSemaphores = &pRenderCompleteSemaphore;
+		submitDesc.ppWaitSemaphores = &pImageAcquiredSemaphore;
+		submitDesc.pSignalFence = pRenderCompleteFence;
+		vk_queueSubmit(pGraphicsQueue, &submitDesc);
+		QueuePresentDesc presentDesc = {};
+		presentDesc.mIndex = swapchainImageIndex;
+		presentDesc.mWaitSemaphoreCount = 1;
+		presentDesc.pSwapChain = pSwapChain;
+		presentDesc.ppWaitSemaphores = &pRenderCompleteSemaphore;
+		presentDesc.mSubmitDone = true;
+
+		// captureScreenshot() must be used before presentation.
+		if (gTakeScreenshot)
+		{
+			// Metal platforms need one renderpass to prepare the swapchain textures for copy.
+			if (prepareScreenshot(pSwapChain))
+			{
+				captureScreenshot(pSwapChain, swapchainImageIndex, RESOURCE_STATE_PRESENT, "01_Transformations_Screenshot.png");
+				gTakeScreenshot = false;
+			}
+		}
+
+		vk_queuePresent(pGraphicsQueue, &presentDesc);
+		flipProfiler();
+
+		gFrameIndex = (gFrameIndex + 1) % gImageCount;
+	}
+
 	const char* GetName() { return "Test Demo"; }
+
+	bool addSwapChain()
+	{
+		SwapChainDesc swapChainDesc = {};
+		swapChainDesc.mWindowHandle = pWindow->handle;
+		swapChainDesc.mPresentQueueCount = 1;
+		swapChainDesc.ppPresentQueues = &pGraphicsQueue;
+		swapChainDesc.mWidth = mSettings.mWidth;
+		swapChainDesc.mHeight = mSettings.mHeight;
+		swapChainDesc.mImageCount = gImageCount;
+		swapChainDesc.mColorFormat = vk_getRecommendedSwapchainFormat(true, true);
+		swapChainDesc.mEnableVsync = mSettings.mVSyncEnabled;
+		swapChainDesc.mFlags = SWAP_CHAIN_CREATION_FLAG_ENABLE_FOVEATED_RENDERING_VR;
+		::vk_addSwapChain(pRenderer, &swapChainDesc, &pSwapChain);
+
+		return pSwapChain != NULL;
+	}
+
+	bool addDepthBuffer()
+	{
+		// Add depth buffer
+		RenderTargetDesc depthRT = {};
+		depthRT.mArraySize = 1;
+		depthRT.mClearValue.depth = 0.0f;
+		depthRT.mClearValue.stencil = 0;
+		depthRT.mDepth = 1;
+		depthRT.mFormat = TinyImageFormat_D32_SFLOAT;
+		depthRT.mStartState = RESOURCE_STATE_DEPTH_WRITE;
+		depthRT.mHeight = mSettings.mHeight;
+		depthRT.mSampleCount = SAMPLE_COUNT_1;
+		depthRT.mSampleQuality = 0;
+		depthRT.mWidth = mSettings.mWidth;
+		depthRT.mFlags = TEXTURE_CREATION_FLAG_ON_TILE | TEXTURE_CREATION_FLAG_VR_MULTIVIEW;
+		vk_addRenderTarget(pRenderer, &depthRT, &pDepthBuffer);
+
+		return pDepthBuffer != NULL;
+	}
+
+	void updateDescriptorSets()
+	{
+		// Prepare descriptor sets
+		DescriptorData params[6] = {};
+		params[0].pName = "RightText";
+		params[0].ppTextures = &pSkyBoxTextures[0];
+		params[1].pName = "LeftText";
+		params[1].ppTextures = &pSkyBoxTextures[1];
+		params[2].pName = "TopText";
+		params[2].ppTextures = &pSkyBoxTextures[2];
+		params[3].pName = "BotText";
+		params[3].ppTextures = &pSkyBoxTextures[3];
+		params[4].pName = "FrontText";
+		params[4].ppTextures = &pSkyBoxTextures[4];
+		params[5].pName = "BackText";
+		params[5].ppTextures = &pSkyBoxTextures[5];
+		vk_updateDescriptorSet(pRenderer, 0, pDescriptorSetTexture, 6, params);
+
+		for (uint32_t i = 0; i < gImageCount; ++i)
+		{
+			DescriptorData params[1] = {};
+			params[0].pName = "uniformBlock";
+			params[0].ppBuffers = &pSkyboxUniformBuffer[i];
+			vk_updateDescriptorSet(pRenderer, i * 2 + 0, pDescriptorSetUniforms, 1, params);
+
+			params[0].pName = "uniformBlock";
+			params[0].ppBuffers = &pProjViewUniformBuffer[i];
+			vk_updateDescriptorSet(pRenderer, i * 2 + 1, pDescriptorSetUniforms, 1, params);
+		}
+	}
 
 	void initMarkers()
 	{
@@ -502,6 +1013,46 @@ public:
 			addResource(&breadcrumbBuffer, NULL);
 		}
 	}
+
+	void checkMarkers()
+	{
+		if (bHasCrashed)
+		{
+			ReadRange readRange = { 0, gMarkerCount * sizeof(uint32_t) };
+			vk_mapBuffer(pRenderer, pMarkerBuffer[gCrashedFrame], &readRange);
+
+			uint32_t* markersValue = (uint32_t*)pMarkerBuffer[gCrashedFrame]->pCpuMappedAddress;
+
+			for (uint32_t m = 0; m < gMarkerCount; ++m)
+			{
+				if (gValidMarkerValue != markersValue[m])
+				{
+					LOGF(LogLevel::eERROR, "[Breadcrumb] crashed frame: %u, marker: %u, value:%u", gCrashedFrame, m, markersValue[m]);
+				}
+			}
+
+			vk_unmapBuffer(pRenderer, pMarkerBuffer[gCrashedFrame]);
+
+			bHasCrashed = false;
+		}
+	}
+
+	void resetMarkers(Cmd* pCmd)
+	{
+		for (uint32_t i = 0; i < gMarkerCount; ++i)
+		{
+			vk_cmdWriteMarker(pCmd, MARKER_TYPE_DEFAULT, 0, pMarkerBuffer[gFrameIndex], i, false);
+		}
+	}
+
+	void exitMarkers()
+	{
+		for (uint32_t i = 0; i < gImageCount; ++i)
+		{
+			removeResource(pMarkerBuffer[i]);
+		}
+	}
+
 };
 
 

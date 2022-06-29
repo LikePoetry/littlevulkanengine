@@ -3307,6 +3307,28 @@ void vk_addRenderTarget(Renderer* pRenderer, const RenderTargetDesc* pDesc, Rend
 void vk_addSwapChain(Renderer* pRenderer, const SwapChainDesc* pDesc, SwapChain** ppSwapChain);
 void vk_removeRenderTarget(Renderer* pRenderer, RenderTarget* pRenderTarget);
 void vk_removeSwapChain(Renderer* pRenderer, SwapChain* pSwapChain);
+
+void vk_toggleVSync(Renderer* pRenderer, SwapChain** ppSwapChain);
+
+void vk_acquireNextImage(Renderer* pRenderer, SwapChain* pSwapChain, Semaphore* pSignalSemaphore, Fence* pFence, uint32_t* pImageIndex);
+
+TinyImageFormat vk_getRecommendedSwapchainFormat(bool hintHDR, bool hintSRGB);
+
+uint32_t vk_cmdWriteMarker(Cmd* pCmd, MarkerType markerType, uint32_t markerValue, Buffer* pBuffer, size_t offset, bool useAutoFlags);
+
+void vk_cmdBindRenderTargets(
+	Cmd* pCmd, uint32_t renderTargetCount, RenderTarget** ppRenderTargets, RenderTarget* pDepthStencil,
+	const LoadActionsDesc* pLoadActions /* = NULL*/, uint32_t* pColorArraySlices, uint32_t* pColorMipSlices, uint32_t depthArraySlice,
+	uint32_t depthMipSlice);
+
+void vk_cmdDrawInstanced(Cmd* pCmd, uint32_t vertexCount, uint32_t firstVertex, uint32_t instanceCount, uint32_t firstInstance);
+
+void vk_cmdBindRenderTargets(
+	Cmd* pCmd, uint32_t renderTargetCount, RenderTarget** ppRenderTargets, RenderTarget* pDepthStencil,
+	const LoadActionsDesc* pLoadActions /* = NULL*/, uint32_t* pColorArraySlices, uint32_t* pColorMipSlices, uint32_t depthArraySlice,
+	uint32_t depthMipSlice);
+
+void vk_queuePresent(Queue* pQueue, const QueuePresentDesc* pDesc);
 /************************************************************************/
 /************************************************************************/
 uint32_t getDescriptorIndexFromName(const RootSignature* pRootSignature, const char* pName);

@@ -251,6 +251,33 @@ void platformInitWindowSystem(WindowDesc* pData)
 	pWindowRef = pData;
 }
 
+void platformExitWindowSystem()
+{
+	pWindowRef = NULL;
+}
+
+void platformUpdateWindowSystem()
+{
+	if (pWindowRef->hide || pWindowRef->mCursorHidden)
+	{
+		unsigned msec = getTimerMSec(&gHideTimer, false);
+		if (msec >= 2000)
+		{
+			wndShowWindow();
+			wndShowCursor();
+			pWindowRef->mCursorHidden = false;
+		}
+	}
+
+	pWindowRef->mCursorInsideWindow = isCursorInsideTrackingArea();
+
+	if (pWindowRef->mMinimizeRequested)
+	{
+		minimizeWindow(pWindowRef);
+		pWindowRef->mMinimizeRequested = false;
+	}
+}
+
 
 void platformSetupWindowSystemUI(IApp* pApp)
 {
@@ -465,4 +492,11 @@ void platformSetupWindowSystemUI(IApp* pApp)
 	uiSetWidgetOnEditedCallback(pClipCursor, wndToggleClipCursor);
 
 	REGISTER_LUA_WIDGET(uiCreateComponentWidget(pWindowControlsComponent, "Cursor", &InputCotrolsWidget, WIDGET_TYPE_COLLAPSING_HEADER));
+}
+
+void platformToggleWindowSystemUI(bool active)
+{
+#ifdef ENABLE_FORGE_UI
+	uiSetComponentActive(pWindowControlsComponent, active);
+#endif
 }

@@ -75,6 +75,11 @@ bool initFileSystem(FileSystemInitDesc* pDesc)
 	return true;
 }
 
+void exitFileSystem(void)
+{
+	gInitialized = false;
+}
+
 static bool fsDirectoryExists(const char* path)
 {
 	return withUTF16Path<bool>(path, [](const wchar_t* pathStr)

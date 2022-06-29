@@ -12,7 +12,7 @@ bool        gD3D11Unsupported = false;
 bool        gGLESUnsupported = false;
 
 extern void initVulkanRenderer(const char* appName, const RendererDesc* pSettings, Renderer** ppRenderer);
-
+extern void exitVulkanRenderer(Renderer* pRenderer);
 
 static bool apiIsUnsupported(const RendererApi api)
 {
@@ -57,6 +57,61 @@ void initRenderer(const char* appName, const RendererDesc* pSettings, Renderer**
 		initRendererAPI(appName, pSettings, ppRenderer, gSelectedRendererApi);
 	}
 #endif
+}
+
+static void exitRendererAPI(Renderer* pRenderer, const RendererApi api) 
+{
+	switch (api)
+	{
+#if defined(DIRECT3D11)
+	case RENDERER_API_D3D11:
+		exitD3D11Renderer(pRenderer);
+		break;
+#endif
+#if defined(DIRECT3D12)
+	case RENDERER_API_D3D12:
+		exitD3D12Renderer(pRenderer);
+		break;
+#endif
+#if defined(VULKAN)
+	case RENDERER_API_VULKAN:
+		exitVulkanRenderer(pRenderer);
+		break;
+#endif
+#if defined(METAL)
+	case RENDERER_API_METAL:
+		exitMetalRenderer(pRenderer);
+		break;
+#endif
+#if defined(GLES)
+	case RENDERER_API_GLES:
+		exitGLESRenderer(pRenderer);
+		break;
+#endif
+#if defined(ORBIS)
+	case RENDERER_API_ORBIS:
+		exitOrbisRenderer(pRenderer);
+		break;
+#endif
+#if defined(PROSPERO)
+	case RENDERER_API_PROSPERO:
+		exitProsperoRenderer(pRenderer);
+		break;
+#endif
+	default:
+		LOGF(LogLevel::eERROR, "No Renderer API defined!");
+		break;
+	}
+}
+
+void exitRenderer(Renderer* pRenderer)
+{
+	ASSERT(pRenderer);
+
+	exitRendererAPI(pRenderer, gSelectedRendererApi);
+
+	gD3D11Unsupported = false;
+	gGLESUnsupported = false;
 }
 
 uint32_t getDescriptorIndexFromName(const RootSignature* pRootSignature, const char* pName)
