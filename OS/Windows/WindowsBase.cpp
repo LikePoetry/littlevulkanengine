@@ -23,7 +23,6 @@ static bool           gShowPlatformUI = true;
 static CpuInfo gCpu;
 
 // UI
-// UI
 static UIComponent* pAPISwitchingComponent = NULL;
 static UIComponent* pToggleVSyncComponent = NULL;
 static UIWidget* pSwitchComponentLabelWidget = NULL;

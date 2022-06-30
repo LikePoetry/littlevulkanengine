@@ -372,7 +372,7 @@ project "gainputstatic"
 			runtime "Release"
 			optimize "on"			
 
-group	""
+group	"Examples"
 		project "Sandbox"
 
 		location "Sandbox"
@@ -432,3 +432,64 @@ group	""
 			defines ""
 			runtime "Release"
 			optimize "on"
+
+
+project "TriangleDemo"
+
+	location "TriangleDemo"
+	kind "ConsoleApp"
+	language "C++"
+	cppdialect "C++17"
+	staticruntime "on"
+	targetdir("bin/" ..outputdir.. "/%{prj.name}")
+	objdir("bin-int/" ..outputdir.. "/%{prj.name}")
+
+	files
+	{
+		"%{prj.name}/**.h",
+		"%{prj.name}/**.cpp",
+		"%{prj.name}/**.c",
+
+	}
+	
+	defines
+	{
+		"_CRT_SECURE_NO_WARNINGS",
+		"_WINDOWS"
+	}
+
+	includedirs
+	{
+		"%{prj.name}",
+		"OS",
+		"Renderer",
+		"SpirvTools",
+		"gainputstatic",
+		"$(VULKAN_SDK)/Include"
+	}
+
+	libdirs 
+	{ 
+		"%VULKAN_SDK%/lib" 
+	}
+
+	links
+	{
+		"OS",
+		"Renderer",
+		"SpirvTools",
+		"gainputstatic"
+	}
+
+	filter "system:windows"
+		systemversion "latest"
+		
+	filter "configurations:Debug"
+		defines ""
+		runtime "Debug"
+		symbols "on"
+
+	filter "configurations:Release"
+		defines ""
+		runtime "Release"
+		optimize "on"

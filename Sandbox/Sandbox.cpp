@@ -13,13 +13,8 @@
 #include "../OS/Interfaces/IFont.h"
 #include "../OS/Interfaces/IUI.h"
 
-
-
-
-
 #include "../Renderer/Include/IRenderer.h"
 #include "../Renderer/Include/IResourceLoader.h"
-
 
 #include "../OS/Math/MathTypes.h"
 
@@ -50,7 +45,7 @@ struct UniformBlock
 };
 
 const uint32_t gImageCount = 3;
-const int      gSphereResolution = 30;    // Increase for higher resolution spheres
+const int      gSphereResolution = 1;    // Increase for higher resolution spheres
 const float    gSphereDiameter = 0.5f;
 const uint     gNumPlanets = 11;
 const uint     gTimeOffset = 600000;
@@ -187,7 +182,7 @@ public:
 		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_SCRIPTS, "Scripts");
 
 		// Generate sphere vertex buffer
-		generateSpherePoints(&pSpherePoints, &gNumberOfSpherePoints, gSphereResolution, gSphereDiameter);
+		generateCuboidPoints(&pSpherePoints, &gNumberOfSpherePoints);
 
 		// window and renderer setup
 		RendererDesc settings;
@@ -789,6 +784,7 @@ public:
 		*(UniformBlock*)viewProjCbv.pMappedData = gUniformData;
 		endUpdateResource(&viewProjCbv, NULL);
 
+		// Sky box data
 		BufferUpdateDesc skyboxViewProjCbv = { pSkyboxUniformBuffer[gFrameIndex] };
 		beginUpdateResource(&skyboxViewProjCbv);
 		*(UniformBlock*)skyboxViewProjCbv.pMappedData = gUniformDataSky;
