@@ -87,6 +87,9 @@
     <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h">
       <Filter>ThirdParty\OpenSource\imgui</Filter>
     </ClInclude>
+    <ClInclude Include="Core\Application.h">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="Core\Atomics.h">
       <Filter>Core</Filter>
     </ClInclude>
@@ -94,6 +97,9 @@
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="Core\Config.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\EntryPoint.h">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="Core\GPUConfig.h">
@@ -331,6 +337,9 @@
     </ClCompile>
     <ClCompile Include="Camera\CameraController.cpp">
       <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Application.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
     <ClCompile Include="Core\CPUConfig.cpp">
       <Filter>Core</Filter>

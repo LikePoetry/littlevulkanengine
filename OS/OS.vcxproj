@@ -57,7 +57,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..\Renderer;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;..\Renderer;..\ThirdParty\OpenSource\GLFW\include;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -76,7 +76,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..\Renderer;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;..\Renderer;..\ThirdParty\OpenSource\GLFW\include;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -98,9 +98,11 @@
     <ClInclude Include="..\ThirdParty\OpenSource\imgui\imconfig.h" />
     <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui.h" />
     <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h" />
+    <ClInclude Include="Core\Application.h" />
     <ClInclude Include="Core\Atomics.h" />
     <ClInclude Include="Core\CPUConfig.h" />
     <ClInclude Include="Core\Config.h" />
+    <ClInclude Include="Core\EntryPoint.h" />
     <ClInclude Include="Core\GPUConfig.h" />
     <ClInclude Include="Core\RingBuffer.h" />
     <ClInclude Include="Core\TextureContainers.h" />
@@ -181,6 +183,7 @@
     <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lvm.c" />
     <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lzio.c" />
     <ClCompile Include="Camera\CameraController.cpp" />
+    <ClCompile Include="Core\Application.cpp" />
     <ClCompile Include="Core\CPUConfig.cpp" />
     <ClCompile Include="Core\Screenshot.cpp" />
     <ClCompile Include="Core\ThreadSystem.cpp" />
@@ -206,6 +209,11 @@
     <ClCompile Include="Windows\WindowsThread.c" />
     <ClCompile Include="Windows\WindowsTime.c" />
     <ClCompile Include="Windows\WindowsWindow.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ThirdParty\OpenSource\GLFW\GLFW.vcxproj">
+      <Project>{154B857C-0182-860D-AA6E-6C109684020F}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

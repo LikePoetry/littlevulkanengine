@@ -18,51 +18,26 @@
 
 #include "../OS/Interfaces/IMemory.h"
 
+#include "../OS/Core/EntryPoint.h"
+#include "../OS/Core/Application.h"
 
-class App :public IApp
+
+class TriangleDemo :public Application
 {
 public:
-	bool Init()
+	TriangleDemo()
 	{
-		// FILE PATHS
-		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_SHADER_SOURCES, "Shaders");
-		fsSetPathForResourceDir(pSystemFileIO, RM_DEBUG, RD_SHADER_BINARIES, "CompiledShaders");
-		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_GPU_CONFIG, "GPUCfg");
-		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_TEXTURES, "Textures");
-		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_FONTS, "Fonts");
-		fsSetPathForResourceDir(pSystemFileIO, RM_DEBUG, RD_SCREENSHOTS, "Screenshots");
-		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_SCRIPTS, "Scripts");
 
+	};
 
-
-		return true;
-	}
-
-	void Exit()
+	~TriangleDemo() 
 	{
-	}
 
-	bool Load()
-	{
-		return true;
-	}
+	};
 
-	void Unload()
-	{
-		
-	}
-
-	void Update(float deltaTime)
-	{
-		
-	}
-
-	void Draw()
-	{
-	}
-
-	const char* GetName() { return "Test Demo"; }
-
+private:
 };
 
-DEFINE_APPLICATION_MAIN(App)
+Application* CreateApplication() {
+	return tf_placement_new<TriangleDemo>(tf_calloc(1,sizeof(TriangleDemo)));
+}

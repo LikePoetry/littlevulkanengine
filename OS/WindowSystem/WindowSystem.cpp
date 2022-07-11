@@ -281,7 +281,7 @@ void platformUpdateWindowSystem()
 
 void platformSetupWindowSystemUI(IApp* pApp)
 {
-	float dpiSacle;
+	/*float dpiSacle;
 	{
 		float dpiScaleArray[2];
 		getDpiScale(dpiScaleArray);
@@ -491,7 +491,7 @@ void platformSetupWindowSystemUI(IApp* pApp)
 	UIWidget* pClipCursor = uiCreateCollapsingHeaderSubWidget(&InputCotrolsWidget, "Clip Cursor to Window", &bClipCursor, WIDGET_TYPE_BUTTON);
 	uiSetWidgetOnEditedCallback(pClipCursor, wndToggleClipCursor);
 
-	REGISTER_LUA_WIDGET(uiCreateComponentWidget(pWindowControlsComponent, "Cursor", &InputCotrolsWidget, WIDGET_TYPE_COLLAPSING_HEADER));
+	REGISTER_LUA_WIDGET(uiCreateComponentWidget(pWindowControlsComponent, "Cursor", &InputCotrolsWidget, WIDGET_TYPE_COLLAPSING_HEADER));*/
 }
 
 void platformToggleWindowSystemUI(bool active)

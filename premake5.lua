@@ -10,6 +10,15 @@ workspace "TheForge"
 
 outputdir="%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
+-- Include directories relative to root folder (solution directory)
+IncludeDir={}
+IncludeDir["GLFW"]="ThirdParty/OpenSource/GLFW/include"
+
+group "Dependencies"
+	include "ThirdParty/OpenSource/GLFW"
+
+group ""
+
 project "Renderer"
 		location "Renderer"
 		kind "StaticLib"
@@ -43,12 +52,18 @@ project "Renderer"
 		{
 			"Renderer",
 			"OS",
+			"%{IncludeDir.GLFW}",
 			"$(VULKAN_SDK)/Include"
 		}
 
 		libdirs 
 		{ 
 			"%VULKAN_SDK%/lib" 
+		}
+
+		links
+		{
+			"GLFW",
 		}
 	
 		filter "system:windows"
@@ -145,6 +160,7 @@ project "OS"
 	{
 		"OS",
 		"Renderer",
+		"%{IncludeDir.GLFW}",
 		"$(VULKAN_SDK)/Include"
 	}
 
@@ -155,6 +171,7 @@ project "OS"
 
 	links
 	{
+		"GLFW",
 	}
 
 	filter "system:windows"
