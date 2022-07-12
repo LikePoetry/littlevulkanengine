@@ -508,10 +508,101 @@ bool Application::addSwapChain()
 	return pSwapChain != NULL;
 }
 
+bool addDepthBuffer()
+{
+	// Add depth buffer
+	RenderTargetDesc depthRT = {};
+	depthRT.mArraySize = 1;
+	depthRT.mClearValue.depth = 0.0f;
+	depthRT.mClearValue.stencil = 0;
+	depthRT.mDepth = 1;
+	depthRT.mFormat = TinyImageFormat_D32_SFLOAT;
+	depthRT.mStartState = RESOURCE_STATE_DEPTH_WRITE;
+	depthRT.mHeight = 600;
+	depthRT.mSampleCount = SAMPLE_COUNT_1;
+	depthRT.mSampleQuality = 0;
+	depthRT.mWidth = 900;
+	depthRT.mFlags = TEXTURE_CREATION_FLAG_ON_TILE | TEXTURE_CREATION_FLAG_VR_MULTIVIEW;
+	vk_addRenderTarget(pRenderer, &depthRT, &pDepthBuffer);
+
+	return pDepthBuffer != NULL;
+}
+
 void Application::Load()
 {
 	if (!addSwapChain())
 		LOGF(LogLevel::eERROR, "addSwapChain failed!");
+
+	if (!addDepthBuffer())
+		LOGF(LogLevel::eERROR, "addDepthBuffer failed!");
+
+	RenderTarget* ppPipelineRenderTargets[] =
+	{
+		pSwapChain->ppRenderTargets[0],
+		pDepthBuffer
+	};
+
+	//layout and pipeline for sphere draw
+	VertexLayout vertexLayout = {};
+	vertexLayout.mAttribCount = 2;
+	vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
+	vertexLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32B32_SFLOAT;
+	vertexLayout.mAttribs[0].mBinding = 0;
+	vertexLayout.mAttribs[0].mLocation = 0;
+	vertexLayout.mAttribs[0].mOffset = 0;
+	vertexLayout.mAttribs[1].mSemantic = SEMANTIC_NORMAL;
+	vertexLayout.mAttribs[1].mFormat = TinyImageFormat_R32G32B32_SFLOAT;
+	vertexLayout.mAttribs[1].mBinding = 0;
+	vertexLayout.mAttribs[1].mLocation = 1;
+	vertexLayout.mAttribs[1].mOffset = 3 * sizeof(float);
+
+	RasterizerStateDesc rasterizerStateDesc = {};
+	rasterizerStateDesc.mCullMode = CULL_MODE_NONE;
+
+	RasterizerStateDesc sphereRasterizerStateDesc = {};
+	sphereRasterizerStateDesc.mCullMode = CULL_MODE_FRONT;
+
+	DepthStateDesc depthStateDesc = {};
+	depthStateDesc.mDepthTest = true;
+	depthStateDesc.mDepthWrite = true;
+	depthStateDesc.mDepthFunc = CMP_GEQUAL;
+
+	PipelineDesc desc = {};
+	desc.mType = PIPELINE_TYPE_GRAPHICS;
+	GraphicsPipelineDesc& pipelineSettings = desc.mGraphicsDesc;
+	pipelineSettings.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
+	pipelineSettings.mRenderTargetCount = 1;
+	pipelineSettings.pDepthState = &depthStateDesc;
+	pipelineSettings.pColorFormats = &pSwapChain->ppRenderTargets[0]->mFormat;
+	pipelineSettings.mSampleCount = pSwapChain->ppRenderTargets[0]->mSampleCount;
+	pipelineSettings.mSampleQuality = pSwapChain->ppRenderTargets[0]->mSampleQuality;
+	pipelineSettings.mDepthStencilFormat = pDepthBuffer->mFormat;
+	pipelineSettings.pRootSignature = pRootSignature;
+	pipelineSettings.pShaderProgram = pSphereShader;
+	pipelineSettings.pVertexLayout = &vertexLayout;
+	pipelineSettings.pRasterizerState = &sphereRasterizerStateDesc;
+	pipelineSettings.mVRFoveatedRendering = true;
+	vk_addPipeline(pRenderer, &desc, &pSpherePipeline);
+
+	if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+	{
+		pipelineSettings.pShaderProgram = pCrashShader;
+		vk_addPipeline(pRenderer, &desc, &pCrashPipeline);
+	}
+
+	//layout and pipeline for skybox draw
+	vertexLayout = {};
+	vertexLayout.mAttribCount = 1;
+	vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
+	vertexLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
+	vertexLayout.mAttribs[0].mBinding = 0;
+	vertexLayout.mAttribs[0].mLocation = 0;
+	vertexLayout.mAttribs[0].mOffset = 0;
+
+	pipelineSettings.pDepthState = NULL;
+	pipelineSettings.pRasterizerState = &rasterizerStateDesc;
+	pipelineSettings.pShaderProgram = pSkyBoxDrawShader; //-V519
+	vk_addPipeline(pRenderer, &desc, &pSkyBoxDrawPipeline);
 }
 
 void Application::Close()
@@ -519,10 +610,231 @@ void Application::Close()
 
 }
 
+void Update(float deltaTime)
+{
+	pCameraController->update(deltaTime);
+
+	static float currentTime = 0.0f;
+	currentTime += deltaTime * 1000.0f;
+
+	// update camera with time
+	mat4 viewMat = pCameraController->getViewMatrix();
+
+	const float aspectInverse = (float)600 / (float)900;
+	const float horizontal_fov = PI / 2.0f;
+	CameraMatrix projMat = CameraMatrix::perspective(horizontal_fov, aspectInverse, 1000.0f, 0.1f);
+	gUniformData.mProjectView = projMat * viewMat;
+
+	// point light parameters
+	gUniformData.mLightPosition = vec3(0, 0, 0);
+	gUniformData.mLightColor = vec3(0.9f, 0.9f, 0.7f);    // Pale Yellow
+
+	// update planet transformations
+	for (unsigned int i = 0; i < gNumPlanets; i++)
+	{
+		mat4 rotSelf, rotOrbitY, rotOrbitZ, trans, scale, parentMat;
+		rotSelf = rotOrbitY = rotOrbitZ = parentMat = mat4::identity();
+		if (gPlanetInfoData[i].mRotationSpeed > 0.0f)
+			rotSelf = mat4::rotationY(gRotSelfScale * (currentTime + gTimeOffset) / gPlanetInfoData[i].mRotationSpeed);
+		if (gPlanetInfoData[i].mYOrbitSpeed > 0.0f)
+			rotOrbitY = mat4::rotationY(gRotOrbitYScale * (currentTime + gTimeOffset) / gPlanetInfoData[i].mYOrbitSpeed);
+		if (gPlanetInfoData[i].mZOrbitSpeed > 0.0f)
+			rotOrbitZ = mat4::rotationZ(gRotOrbitZScale * (currentTime + gTimeOffset) / gPlanetInfoData[i].mZOrbitSpeed);
+		if (gPlanetInfoData[i].mParentIndex > 0)
+			parentMat = gPlanetInfoData[gPlanetInfoData[i].mParentIndex].mSharedMat;
+
+		trans = gPlanetInfoData[i].mTranslationMat;
+		scale = gPlanetInfoData[i].mScaleMat;
+
+		gPlanetInfoData[i].mSharedMat = parentMat * rotOrbitY * trans;
+		gUniformData.mToWorldMat[i] = parentMat * rotOrbitY * rotOrbitZ * trans * rotSelf * scale;
+		gUniformData.mColor[i] = gPlanetInfoData[i].mColor;
+	}
+
+	viewMat.setTranslation(vec3(0));
+	gUniformDataSky = gUniformData;
+	gUniformDataSky.mProjectView = projMat * viewMat;
+}
+
+void Draw()
+{
+	if (pSwapChain->mEnableVsync != false)
+	{
+		vk_waitQueueIdle(pGraphicsQueue);
+		::vk_toggleVSync(pRenderer, &pSwapChain);
+	}
+
+	uint32_t swapchainImageIndex;
+	vk_acquireNextImage(pRenderer, pSwapChain, pImageAcquiredSemaphore, NULL, &swapchainImageIndex);
+
+	RenderTarget* pRenderTarget = pSwapChain->ppRenderTargets[swapchainImageIndex];
+	Semaphore* pRenderCompleteSemaphore = pRenderCompleteSemaphores[gFrameIndex];
+	Fence* pRenderCompleteFence = pRenderCompleteFences[gFrameIndex];
+
+	// Stall if CPU is running "Swap Chain Buffer Count" frames ahead of GPU
+	FenceStatus fenceStatus;
+	vk_getFenceStatus(pRenderer, pRenderCompleteFence, &fenceStatus);
+	if (fenceStatus == FENCE_STATUS_INCOMPLETE)
+		vk_waitForFences(pRenderer, 1, &pRenderCompleteFence);
+
+	//if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+	//{
+	//	// Check breadcrumb markers
+	//	checkMarkers();
+	//}
+
+	// Update uniform buffers
+	BufferUpdateDesc viewProjCbv = { pProjViewUniformBuffer[gFrameIndex] };
+	beginUpdateResource(&viewProjCbv);
+	*(UniformBlock*)viewProjCbv.pMappedData = gUniformData;
+	endUpdateResource(&viewProjCbv, NULL);
+
+	// Sky box data
+	BufferUpdateDesc skyboxViewProjCbv = { pSkyboxUniformBuffer[gFrameIndex] };
+	beginUpdateResource(&skyboxViewProjCbv);
+	*(UniformBlock*)skyboxViewProjCbv.pMappedData = gUniformDataSky;
+	endUpdateResource(&skyboxViewProjCbv, NULL);
+
+	// Reset cmd pool for this frame
+	vk_resetCmdPool(pRenderer, pCmdPools[gFrameIndex]);
+
+	Cmd* cmd = pCmds[gFrameIndex];
+	vk_beginCmd(cmd);
+
+	//if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+	//{
+	//	// Reset markers values
+	//	resetMarkers(cmd);
+	//}
+
+	//cmdBeginGpuFrameProfile(cmd, gGpuProfileToken);
+
+	RenderTargetBarrier barriers[] = {
+		{ pRenderTarget, RESOURCE_STATE_PRESENT, RESOURCE_STATE_RENDER_TARGET },
+	};
+	vk_cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
+
+	// simply record the screen cleaning command
+	LoadActionsDesc loadActions = {};
+	loadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
+	loadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
+	loadActions.mClearDepth.depth = 0.0f;
+	loadActions.mClearDepth.stencil = 0;
+	vk_cmdBindRenderTargets(cmd, 1, &pRenderTarget, pDepthBuffer, &loadActions, NULL, NULL, -1, -1);
+	vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 0.0f, 1.0f);
+	vk_cmdSetScissor(cmd, 0, 0, pRenderTarget->mWidth, pRenderTarget->mHeight);
+
+	const uint32_t sphereVbStride = sizeof(float) * 6;
+	const uint32_t skyboxVbStride = sizeof(float) * 4;
+
+	// draw skybox
+	cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Skybox");
+	vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 1.0f, 1.0f);
+	vk_cmdBindPipeline(cmd, pSkyBoxDrawPipeline);
+	vk_cmdBindDescriptorSet(cmd, 0, pDescriptorSetTexture);
+	vk_cmdBindDescriptorSet(cmd, gFrameIndex * 2 + 0, pDescriptorSetUniforms);
+	vk_cmdBindVertexBuffer(cmd, 1, &pSkyBoxVertexBuffer, &skyboxVbStride, NULL);
+	vk_cmdDraw(cmd, 36, 0);
+	vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 0.0f, 1.0f);
+	cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+
+	////// draw planets
+	cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Planets");
+
+	Pipeline* pipeline = pSpherePipeline;
+
+	// Using the malfunctioned pipeline
+	if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs && bSimulateCrash)
+	{
+		gCrashedFrame = gFrameIndex;
+		bSimulateCrash = false;
+		bHasCrashed = true;
+		pipeline = pCrashPipeline;
+		LOGF(LogLevel::eERROR, "[Breadcrumb] Simulating a GPU crash situation...");
+	}
+
+	vk_cmdBindPipeline(cmd, pipeline);
+	vk_cmdBindDescriptorSet(cmd, gFrameIndex * 2 + 1, pDescriptorSetUniforms);
+	vk_cmdBindVertexBuffer(cmd, 1, &pSphereVertexBuffer, &sphereVbStride, NULL);
+
+	if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+	{
+		// Marker on top of the pip, won't wait for the following draw commands.
+		vk_cmdWriteMarker(cmd, MARKER_TYPE_IN, gValidMarkerValue, pMarkerBuffer[gFrameIndex], 0, false);
+	}
+
+	vk_cmdDrawInstanced(cmd, gNumberOfSpherePoints / 6, 0, gNumPlanets, 0);
+
+	//if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+	//{
+	//	// Marker on bottom of the pip, will wait for draw command to be executed.
+	//	vk_cmdWriteMarker(cmd, MARKER_TYPE_OUT, gValidMarkerValue, pMarkerBuffer[gFrameIndex], 1, false);
+	//}
+
+	cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+
+	loadActions = {};
+	loadActions.mLoadActionsColor[0] = LOAD_ACTION_LOAD;
+	vk_cmdBindRenderTargets(cmd, 1, &pRenderTarget, NULL, &loadActions, NULL, NULL, -1, -1);
+	//cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw UI");
+
+	//gFrameTimeDraw.mFontColor = 0xff00ffff;
+	//gFrameTimeDraw.mFontSize = 18.0f;
+	//gFrameTimeDraw.mFontID = gFontID;
+	/*float2 txtSizePx = cmdDrawCpuProfile(cmd, float2(8.f, 15.f), &gFrameTimeDraw);
+	cmdDrawGpuProfile(cmd, float2(8.f, txtSizePx.y + 75.f), gGpuProfileToken, &gFrameTimeDraw);
+
+	cmdDrawUserInterface(cmd);*/
+
+	vk_cmdBindRenderTargets(cmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
+	cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+
+	barriers[0] = { pRenderTarget, RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PRESENT };
+	vk_cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
+
+	//cmdEndGpuFrameProfile(cmd, gGpuProfileToken);
+	vk_endCmd(cmd);
+
+	QueueSubmitDesc submitDesc = {};
+	submitDesc.mCmdCount = 1;
+	submitDesc.mSignalSemaphoreCount = 1;
+	submitDesc.mWaitSemaphoreCount = 1;
+	submitDesc.ppCmds = &cmd;
+	submitDesc.ppSignalSemaphores = &pRenderCompleteSemaphore;
+	submitDesc.ppWaitSemaphores = &pImageAcquiredSemaphore;
+	submitDesc.pSignalFence = pRenderCompleteFence;
+	vk_queueSubmit(pGraphicsQueue, &submitDesc);
+	QueuePresentDesc presentDesc = {};
+	presentDesc.mIndex = swapchainImageIndex;
+	presentDesc.mWaitSemaphoreCount = 1;
+	presentDesc.pSwapChain = pSwapChain;
+	presentDesc.ppWaitSemaphores = &pRenderCompleteSemaphore;
+	presentDesc.mSubmitDone = true;
+
+	// captureScreenshot() must be used before presentation.
+	//if (gTakeScreenshot)
+	//{
+	//	// Metal platforms need one renderpass to prepare the swapchain textures for copy.
+	//	if (prepareScreenshot(pSwapChain))
+	//	{
+	//		captureScreenshot(pSwapChain, swapchainImageIndex, RESOURCE_STATE_PRESENT, "01_Transformations_Screenshot.png");
+	//		gTakeScreenshot = false;
+	//	}
+	//}
+
+	vk_queuePresent(pGraphicsQueue, &presentDesc);
+	//flipProfiler();
+
+	gFrameIndex = (gFrameIndex + 1) % gImageCount;
+}
+
 void Application::Run()
 {
 	while (m_Running)
 	{
 		m_Window->OnUpdate();
+		float deltaTime = 0.05f;
+		Update(deltaTime);
+		Draw();
 	}
 }
