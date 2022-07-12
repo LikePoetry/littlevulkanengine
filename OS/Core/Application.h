@@ -6,6 +6,9 @@ class Application
 public:
 	Application();
 	virtual ~Application();
+	bool addSwapChain();
+	void Init();
+	void Load();
 
 	void Close();
 	void Run();

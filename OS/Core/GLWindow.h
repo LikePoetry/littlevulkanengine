@@ -24,4 +24,6 @@ public:
 	static GLWindow* Create(const GLWindowProps& props = GLWindowProps());
 
 	virtual void OnUpdate() = 0;
+
+	virtual void* GetNativeWindow() const = 0;
 };

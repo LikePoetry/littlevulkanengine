@@ -27,7 +27,7 @@ class TriangleDemo :public Application
 public:
 	TriangleDemo()
 	{
-
+		//PushLayer(new TestLayer());
 	};
 
 	~TriangleDemo() 

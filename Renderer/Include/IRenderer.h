@@ -35,6 +35,8 @@
 #include "../OS/Interfaces/IThread.h"
 #include "../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
 
+#include <GLFW/glfw3.h>
+
 #ifdef __cplusplus
 #ifndef MAKE_ENUM_FLAG
 #define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
@@ -2535,8 +2537,14 @@ MAKE_ENUM_FLAG(uint32_t, SwapChainCreationFlags);
 
 typedef struct SwapChainDesc
 {
+#ifdef ENABLE_GLFW_WINDOW
+	GLFWwindow* mWindow;
+#else
 	/// Window handle
 	WindowHandle mWindowHandle;
+#endif // DEBUG
+
+
 	/// Queues which should be allowed to present
 	Queue** ppPresentQueues;
 	/// Number of present queues

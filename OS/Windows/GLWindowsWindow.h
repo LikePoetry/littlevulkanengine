@@ -11,7 +11,7 @@ public:
 	virtual ~GLWindowsWindow() {};
 
 	void OnUpdate() override;
-
+	virtual void* GetNativeWindow() const { return m_Window; }
 private:
 	virtual void Init(const GLWindowProps& props);
 
