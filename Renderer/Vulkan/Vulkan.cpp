@@ -242,6 +242,7 @@ VkAttachmentStoreOp gVkAttachmentStoreOpTranslator[StoreActionType::MAX_STORE_AC
 const char* gVkWantedInstanceExtensions[] =
 {
 	VK_KHR_SURFACE_EXTENSION_NAME,
+	"VK_KHR_win32_surface",
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 	VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
@@ -2265,6 +2266,7 @@ void CreateInstance(
 		create_info.enabledExtensionCount = extension_count;
 		create_info.ppEnabledExtensionNames = instanceExtensionCache;
 		CHECK_VKRESULT(vkCreateInstance(&create_info, &gVkAllocationCallbacks, &(pRenderer->mVulkan.pVkInstance)));
+
 	}
 
 #if defined(NX64)
@@ -3697,6 +3699,9 @@ void vk_addSwapChain(Renderer* pRenderer, const SwapChainDesc* pDesc, SwapChain*
 	add_info.hinstance = ::GetModuleHandle(NULL);
 	add_info.hwnd = (HWND)pDesc->mWindowHandle.window;
 	CHECK_VKRESULT(vkCreateWin32SurfaceKHR(pRenderer->mVulkan.pVkInstance, &add_info, &gVkAllocationCallbacks, &vkSurface));
+#elif defined(VK_USE_GLFW_KHR)
+	//DECLARE_ZERO(VkWin32SurfaceCreateInfoKHR, add_info);
+	CHECK_VKRESULT(glfwCreateWindowSurface(pRenderer->mVulkan.pVkInstance, pDesc->mWindow, nullptr, &vkSurface));
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
 	DECLARE_ZERO(VkXlibSurfaceCreateInfoKHR, add_info);
 	add_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;

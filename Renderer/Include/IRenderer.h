@@ -26,6 +26,9 @@
 
 #include "RendererConfig.h"
 
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
 #ifdef ENABLE_NSIGHT_AFTERMATH
 #include "../ThirdParty/PrivateNvidia/NsightAftermath/include/AftermathTracker.h"
 #endif
@@ -34,8 +37,6 @@
 #include "../OS/Interfaces/IOperatingSystem.h"
 #include "../OS/Interfaces/IThread.h"
 #include "../ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h"
-
-#include <GLFW/glfw3.h>
 
 #ifdef __cplusplus
 #ifndef MAKE_ENUM_FLAG

@@ -102,6 +102,9 @@
     <ClInclude Include="Core\EntryPoint.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="Core\GLWindow.h">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="Core\GPUConfig.h">
       <Filter>Core</Filter>
     </ClInclude>
@@ -183,8 +186,9 @@
     <ClInclude Include="UI\imgui_user.h">
       <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="Core\GLWindow.h" />
-    <ClInclude Include="Windows\GLWindowsWindow.h" />
+    <ClInclude Include="Windows\GLWindowsWindow.h">
+      <Filter>Windows</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">
@@ -400,6 +404,9 @@
     <ClCompile Include="WindowSystem\WindowSystem.cpp">
       <Filter>WindowSystem</Filter>
     </ClCompile>
+    <ClCompile Include="Windows\GLWindowsWindow.cpp">
+      <Filter>Windows</Filter>
+    </ClCompile>
     <ClCompile Include="Windows\WindowsBase.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
@@ -418,6 +425,5 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
-    <ClCompile Include="Windows\GLWindowsWindow.cpp" />
   </ItemGroup>
 </Project>

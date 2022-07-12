@@ -6,7 +6,9 @@
 #define VULKAN
 
 #if defined(_WINDOWS) || defined(XBOX)
-#define VK_USE_PLATFORM_WIN32_KHR
+//#define VK_USE_PLATFORM_WIN32_KHR
+
+#define VK_USE_GLFW_KHR
 #elif defined(__ANDROID__)
 #ifndef VK_USE_PLATFORM_ANDROID_KHR
 #define VK_USE_PLATFORM_ANDROID_KHR

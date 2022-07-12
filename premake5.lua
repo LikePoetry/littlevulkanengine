@@ -482,6 +482,7 @@ project "TriangleDemo"
 		"Renderer",
 		"SpirvTools",
 		"gainputstatic",
+		"%{IncludeDir.GLFW}",
 		"$(VULKAN_SDK)/Include"
 	}
 
@@ -494,6 +495,7 @@ project "TriangleDemo"
 	{
 		"OS",
 		"Renderer",
+		"GLFW",
 		"SpirvTools",
 		"gainputstatic"
 	}
