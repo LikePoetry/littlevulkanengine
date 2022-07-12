@@ -1,4 +1,6 @@
 #pragma once
+#include "GLWindow.h"
+
 class Application
 {
 public:
@@ -7,7 +9,14 @@ public:
 
 	void Close();
 	void Run();
+
 private:
+	bool m_Running = true;	//Ö÷Ñ­»·Ìå
+	GLWindow* m_Window;
+
+private:
+
+
 	static Application* s_Instance;
 };
 

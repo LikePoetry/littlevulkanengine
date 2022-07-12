@@ -5,7 +5,7 @@
 extern Application* CreateApplication();
 
 
-char* GetAppName() { return "App"; };
+const char* GetAppName() { return "App"; };
 /***********************/
 // 应用入口
 /************************/

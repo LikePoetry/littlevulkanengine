@@ -183,6 +183,8 @@
     <ClInclude Include="UI\imgui_user.h">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="Core\GLWindow.h" />
+    <ClInclude Include="Windows\GLWindowsWindow.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">
@@ -416,5 +418,6 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
+    <ClCompile Include="Windows\GLWindowsWindow.cpp" />
   </ItemGroup>
 </Project>

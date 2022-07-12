@@ -103,6 +103,7 @@
     <ClInclude Include="Core\CPUConfig.h" />
     <ClInclude Include="Core\Config.h" />
     <ClInclude Include="Core\EntryPoint.h" />
+    <ClInclude Include="Core\GLWindow.h" />
     <ClInclude Include="Core\GPUConfig.h" />
     <ClInclude Include="Core\RingBuffer.h" />
     <ClInclude Include="Core\TextureContainers.h" />
@@ -130,6 +131,7 @@
     <ClInclude Include="Scripting\LuaManagerCommon.h" />
     <ClInclude Include="Scripting\LuaManagerImpl.h" />
     <ClInclude Include="UI\imgui_user.h" />
+    <ClInclude Include="Windows\GLWindowsWindow.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp" />
@@ -203,6 +205,7 @@
     <ClCompile Include="UI\UI.cpp" />
     <ClCompile Include="UI\imgui_user.cpp" />
     <ClCompile Include="WindowSystem\WindowSystem.cpp" />
+    <ClCompile Include="Windows\GLWindowsWindow.cpp" />
     <ClCompile Include="Windows\WindowsBase.cpp" />
     <ClCompile Include="Windows\WindowsFileSystem.cpp" />
     <ClCompile Include="Windows\WindowsLog.c" />
