@@ -25,7 +25,7 @@
 // INTERFACES
 #include "../Interfaces/IScripting.h"
 #include "../Interfaces/ILog.h"
-#include "../Interfaces/IUI.h"
+//#include "../Interfaces/IUI.h"
 
 #ifdef ENABLE_FORGE_SCRIPTING
 
@@ -92,392 +92,392 @@ static void TrimString(char* str)
 	}
 }
 
-void registerCollapsingHeaderWidgetLua(const UIWidget* pWidget)
-{
-	const CollapsingHeaderWidget* pOriginalWidget = (const CollapsingHeaderWidget*)(pWidget->pWidget);
-	for (UIWidget* widget : pOriginalWidget->mGroupedWidgets)
-	{
-		REGISTER_LUA_WIDGET(widget);
-	}
-}
-
-void registerSliderFloatWidgetLua(const UIWidget* pWidget)
-{
-	const SliderFloatWidget* pOriginalWidget = (const SliderFloatWidget*)(pWidget->pWidget);
-
-	float* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		*data = (float)state->GetNumberArg(1);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultNumber((double)*data);
-		return 1;
-		});
-}
-
-void registerSliderFloat2WidgetLua(const UIWidget* pWidget)
-{
-	const SliderFloat2Widget* pOriginalWidget = (const SliderFloat2Widget*)(pWidget->pWidget);
-
-	float2* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		data->x = (float)state->GetNumberArg(1);
-		data->y = (float)state->GetNumberArg(2);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultNumber((double)data->x);
-		state->PushResultNumber((double)data->y);
-		return 2;
-		});
-}
-
-void registerSliderFloat3WidgetLua(const UIWidget* pWidget)
-{
-	const SliderFloat3Widget* pOriginalWidget = (const SliderFloat3Widget*)(pWidget->pWidget);
-
-	float3* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		data->x = (float)state->GetNumberArg(1);
-		data->y = (float)state->GetNumberArg(2);
-		data->z = (float)state->GetNumberArg(3);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultNumber((double)data->x);
-		state->PushResultNumber((double)data->y);
-		state->PushResultNumber((double)data->z);
-		return 3;
-		});
-}
-
-void registerSliderFloat4WidgetLua(const UIWidget* pWidget)
-{
-	const SliderFloat4Widget* pOriginalWidget = (const SliderFloat4Widget*)(pWidget->pWidget);
-
-	float4* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		data->x = (float)state->GetNumberArg(1);
-		data->y = (float)state->GetNumberArg(2);
-		data->z = (float)state->GetNumberArg(3);
-		data->w = (float)state->GetNumberArg(4);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultNumber((double)data->x);
-		state->PushResultNumber((double)data->y);
-		state->PushResultNumber((double)data->z);
-		state->PushResultNumber((double)data->w);
-		return 4;
-		});
-}
-
-void registerSliderIntWidgetLua(const UIWidget* pWidget)
-{
-	const SliderIntWidget* pOriginalWidget = (const SliderIntWidget*)(pWidget->pWidget);
-
-	int32_t* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		*data = (int32_t)state->GetIntegerArg(1);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultInteger((int)*data);
-		return 1;
-		});
-}
-
-void registerSliderUintWidgetLua(const UIWidget* pWidget)
-{
-	const SliderUintWidget* pOriginalWidget = (const SliderUintWidget*)(pWidget->pWidget);
-
-	uint32_t* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		*data = (uint32_t)state->GetIntegerArg(1);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultInteger((int)*data);
-		return 1;
-		});
-}
-
-void registerCheckboxWidgetLua(const UIWidget* pWidget)
-{
-	const CheckboxWidget* pOriginalWidget = (const CheckboxWidget*)(pWidget->pWidget);
-
-	bool* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		*data = (bool)state->GetIntegerArg(1);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultInteger((int)*data);
-		return 1;
-		});
-}
-
-void registerOneLineCheckboxWidgetLua(const UIWidget* pWidget)
-{
-	const OneLineCheckboxWidget* pOriginalWidget = (const OneLineCheckboxWidget*)(pWidget->pWidget);
-
-	bool* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		*data = (bool)state->GetIntegerArg(1);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultInteger((int)*data);
-		return 1;
-		});
-}
-
-void registerDropdownWidgetLua(const UIWidget* pWidget)
-{
-	const DropdownWidget* pOriginalWidget = (const DropdownWidget*)(pWidget->pWidget);
-
-	uint32_t* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		*data = (uint32_t)state->GetIntegerArg(1);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultInteger((int)*data);
-		return 1;
-		});
-
-	char functionSizeName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionSizeName, "Size");
-	strcat(functionSizeName, pWidget->mLabel);
-
-	TrimString(functionSizeName);
-
-	uint32_t size = (uint32_t)pOriginalWidget->mValues.size();
-	pLuaManager->SetFunction(functionSizeName, [size](ILuaStateWrap* state) -> int {
-		state->PushResultInteger((int)size);
-		return 1;
-		});
-}
-
-void registerProgressBarWidgetLua(const UIWidget* pWidget)
-{
-	const ProgressBarWidget* pOriginalWidget = (const ProgressBarWidget*)(pWidget->pWidget);
-
-	size_t* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		*data = (size_t)state->GetIntegerArg(1);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultInteger((int)*data);
-		return 1;
-		});
-}
-
-void registerColorSliderWidgetLua(const UIWidget* pWidget)
-{
-	const ColorSliderWidget* pOriginalWidget = (const ColorSliderWidget*)(pWidget->pWidget);
-
-	float4* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		data->x = (float)state->GetNumberArg(1);
-		data->y = (float)state->GetNumberArg(2);
-		data->z = (float)state->GetNumberArg(3);
-		data->w = (float)state->GetNumberArg(4);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultNumber((double)data->x);
-		state->PushResultNumber((double)data->y);
-		state->PushResultNumber((double)data->z);
-		state->PushResultNumber((double)data->w);
-		return 4;
-		});
-}
-
-void registerColorPickerWidgetLua(const UIWidget* pWidget)
-{
-	const ColorPickerWidget* pOriginalWidget = (const ColorPickerWidget*)(pWidget->pWidget);
-
-	float4* data = pOriginalWidget->pData;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		data->x = (float)state->GetNumberArg(1);
-		data->y = (float)state->GetNumberArg(2);
-		data->z = (float)state->GetNumberArg(3);
-		data->w = (float)state->GetNumberArg(4);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultNumber((double)data->x);
-		state->PushResultNumber((double)data->y);
-		state->PushResultNumber((double)data->z);
-		state->PushResultNumber((double)data->w);
-		return 4;
-		});
-}
-
-void registerTextboxWidgetLua(const UIWidget* pWidget)
-{
-	const TextboxWidget* pOriginalWidget = (const TextboxWidget*)(pWidget->pWidget);
-
-	char* data = pOriginalWidget->pData;
-	uint32_t len = pOriginalWidget->mLength;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data, len](ILuaStateWrap* state) -> int {
-		char strData[MAX_LUA_STR_LEN]{};
-		state->GetStringArg(1, strData);
-
-		size_t size = strlen(strData);
-		ASSERT(len > size);
-		memcpy(data, strData, size);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
-		state->PushResultString(data);
-		return 1;
-		});
-}
-
-void registerDynamicTextWidgetLua(const UIWidget* pWidget)
-{
-	const DynamicTextWidget* pOriginalWidget = (const DynamicTextWidget*)(pWidget->pWidget);
-
-	char* data = pOriginalWidget->pData;
-	uint32_t len = pOriginalWidget->mLength;
-	float4* color = pOriginalWidget->pColor;
-	char functionName[MAX_LABEL_STR_LENGTH + 3];
-	sprintf(functionName, "Set");
-	strcat(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	pLuaManager->SetFunction(functionName, [data, len, color](ILuaStateWrap* state) -> int {
-		char strData[MAX_LUA_STR_LEN]{};
-		state->GetStringArg(1, strData);
-		size_t size = strlen(strData);
-		ASSERT(len > size);
-		memcpy(data, strData, size);
-		color->x = (float)state->GetNumberArg(2);
-		color->y = (float)state->GetNumberArg(3);
-		color->z = (float)state->GetNumberArg(4);
-		color->w = (float)state->GetNumberArg(5);
-		return 0;
-		});
-
-	functionName[0] = 'G';
-	pLuaManager->SetFunction(functionName, [data, color](ILuaStateWrap* state) -> int {
-		state->PushResultString(data);
-		state->PushResultNumber(color->x);
-		state->PushResultNumber(color->y);
-		state->PushResultNumber(color->z);
-		state->PushResultNumber(color->w);
-		return 5;
-		});
-}
+//void registerCollapsingHeaderWidgetLua(const UIWidget* pWidget)
+//{
+//	const CollapsingHeaderWidget* pOriginalWidget = (const CollapsingHeaderWidget*)(pWidget->pWidget);
+//	for (UIWidget* widget : pOriginalWidget->mGroupedWidgets)
+//	{
+//		REGISTER_LUA_WIDGET(widget);
+//	}
+//}
+//
+//void registerSliderFloatWidgetLua(const UIWidget* pWidget)
+//{
+//	const SliderFloatWidget* pOriginalWidget = (const SliderFloatWidget*)(pWidget->pWidget);
+//
+//	float* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		*data = (float)state->GetNumberArg(1);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultNumber((double)*data);
+//		return 1;
+//		});
+//}
+//
+//void registerSliderFloat2WidgetLua(const UIWidget* pWidget)
+//{
+//	const SliderFloat2Widget* pOriginalWidget = (const SliderFloat2Widget*)(pWidget->pWidget);
+//
+//	float2* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		data->x = (float)state->GetNumberArg(1);
+//		data->y = (float)state->GetNumberArg(2);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultNumber((double)data->x);
+//		state->PushResultNumber((double)data->y);
+//		return 2;
+//		});
+//}
+//
+//void registerSliderFloat3WidgetLua(const UIWidget* pWidget)
+//{
+//	const SliderFloat3Widget* pOriginalWidget = (const SliderFloat3Widget*)(pWidget->pWidget);
+//
+//	float3* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		data->x = (float)state->GetNumberArg(1);
+//		data->y = (float)state->GetNumberArg(2);
+//		data->z = (float)state->GetNumberArg(3);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultNumber((double)data->x);
+//		state->PushResultNumber((double)data->y);
+//		state->PushResultNumber((double)data->z);
+//		return 3;
+//		});
+//}
+//
+//void registerSliderFloat4WidgetLua(const UIWidget* pWidget)
+//{
+//	const SliderFloat4Widget* pOriginalWidget = (const SliderFloat4Widget*)(pWidget->pWidget);
+//
+//	float4* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		data->x = (float)state->GetNumberArg(1);
+//		data->y = (float)state->GetNumberArg(2);
+//		data->z = (float)state->GetNumberArg(3);
+//		data->w = (float)state->GetNumberArg(4);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultNumber((double)data->x);
+//		state->PushResultNumber((double)data->y);
+//		state->PushResultNumber((double)data->z);
+//		state->PushResultNumber((double)data->w);
+//		return 4;
+//		});
+//}
+//
+//void registerSliderIntWidgetLua(const UIWidget* pWidget)
+//{
+//	const SliderIntWidget* pOriginalWidget = (const SliderIntWidget*)(pWidget->pWidget);
+//
+//	int32_t* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		*data = (int32_t)state->GetIntegerArg(1);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultInteger((int)*data);
+//		return 1;
+//		});
+//}
+//
+//void registerSliderUintWidgetLua(const UIWidget* pWidget)
+//{
+//	const SliderUintWidget* pOriginalWidget = (const SliderUintWidget*)(pWidget->pWidget);
+//
+//	uint32_t* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		*data = (uint32_t)state->GetIntegerArg(1);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultInteger((int)*data);
+//		return 1;
+//		});
+//}
+//
+//void registerCheckboxWidgetLua(const UIWidget* pWidget)
+//{
+//	const CheckboxWidget* pOriginalWidget = (const CheckboxWidget*)(pWidget->pWidget);
+//
+//	bool* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		*data = (bool)state->GetIntegerArg(1);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultInteger((int)*data);
+//		return 1;
+//		});
+//}
+//
+//void registerOneLineCheckboxWidgetLua(const UIWidget* pWidget)
+//{
+//	const OneLineCheckboxWidget* pOriginalWidget = (const OneLineCheckboxWidget*)(pWidget->pWidget);
+//
+//	bool* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		*data = (bool)state->GetIntegerArg(1);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultInteger((int)*data);
+//		return 1;
+//		});
+//}
+//
+//void registerDropdownWidgetLua(const UIWidget* pWidget)
+//{
+//	const DropdownWidget* pOriginalWidget = (const DropdownWidget*)(pWidget->pWidget);
+//
+//	uint32_t* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		*data = (uint32_t)state->GetIntegerArg(1);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultInteger((int)*data);
+//		return 1;
+//		});
+//
+//	char functionSizeName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionSizeName, "Size");
+//	strcat(functionSizeName, pWidget->mLabel);
+//
+//	TrimString(functionSizeName);
+//
+//	uint32_t size = (uint32_t)pOriginalWidget->mValues.size();
+//	pLuaManager->SetFunction(functionSizeName, [size](ILuaStateWrap* state) -> int {
+//		state->PushResultInteger((int)size);
+//		return 1;
+//		});
+//}
+//
+//void registerProgressBarWidgetLua(const UIWidget* pWidget)
+//{
+//	const ProgressBarWidget* pOriginalWidget = (const ProgressBarWidget*)(pWidget->pWidget);
+//
+//	size_t* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		*data = (size_t)state->GetIntegerArg(1);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultInteger((int)*data);
+//		return 1;
+//		});
+//}
+//
+//void registerColorSliderWidgetLua(const UIWidget* pWidget)
+//{
+//	const ColorSliderWidget* pOriginalWidget = (const ColorSliderWidget*)(pWidget->pWidget);
+//
+//	float4* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		data->x = (float)state->GetNumberArg(1);
+//		data->y = (float)state->GetNumberArg(2);
+//		data->z = (float)state->GetNumberArg(3);
+//		data->w = (float)state->GetNumberArg(4);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultNumber((double)data->x);
+//		state->PushResultNumber((double)data->y);
+//		state->PushResultNumber((double)data->z);
+//		state->PushResultNumber((double)data->w);
+//		return 4;
+//		});
+//}
+//
+//void registerColorPickerWidgetLua(const UIWidget* pWidget)
+//{
+//	const ColorPickerWidget* pOriginalWidget = (const ColorPickerWidget*)(pWidget->pWidget);
+//
+//	float4* data = pOriginalWidget->pData;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		data->x = (float)state->GetNumberArg(1);
+//		data->y = (float)state->GetNumberArg(2);
+//		data->z = (float)state->GetNumberArg(3);
+//		data->w = (float)state->GetNumberArg(4);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultNumber((double)data->x);
+//		state->PushResultNumber((double)data->y);
+//		state->PushResultNumber((double)data->z);
+//		state->PushResultNumber((double)data->w);
+//		return 4;
+//		});
+//}
+//
+//void registerTextboxWidgetLua(const UIWidget* pWidget)
+//{
+//	const TextboxWidget* pOriginalWidget = (const TextboxWidget*)(pWidget->pWidget);
+//
+//	char* data = pOriginalWidget->pData;
+//	uint32_t len = pOriginalWidget->mLength;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data, len](ILuaStateWrap* state) -> int {
+//		char strData[MAX_LUA_STR_LEN]{};
+//		state->GetStringArg(1, strData);
+//
+//		size_t size = strlen(strData);
+//		ASSERT(len > size);
+//		memcpy(data, strData, size);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data](ILuaStateWrap* state) -> int {
+//		state->PushResultString(data);
+//		return 1;
+//		});
+//}
+//
+//void registerDynamicTextWidgetLua(const UIWidget* pWidget)
+//{
+//	const DynamicTextWidget* pOriginalWidget = (const DynamicTextWidget*)(pWidget->pWidget);
+//
+//	char* data = pOriginalWidget->pData;
+//	uint32_t len = pOriginalWidget->mLength;
+//	float4* color = pOriginalWidget->pColor;
+//	char functionName[MAX_LABEL_STR_LENGTH + 3];
+//	sprintf(functionName, "Set");
+//	strcat(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	pLuaManager->SetFunction(functionName, [data, len, color](ILuaStateWrap* state) -> int {
+//		char strData[MAX_LUA_STR_LEN]{};
+//		state->GetStringArg(1, strData);
+//		size_t size = strlen(strData);
+//		ASSERT(len > size);
+//		memcpy(data, strData, size);
+//		color->x = (float)state->GetNumberArg(2);
+//		color->y = (float)state->GetNumberArg(3);
+//		color->z = (float)state->GetNumberArg(4);
+//		color->w = (float)state->GetNumberArg(5);
+//		return 0;
+//		});
+//
+//	functionName[0] = 'G';
+//	pLuaManager->SetFunction(functionName, [data, color](ILuaStateWrap* state) -> int {
+//		state->PushResultString(data);
+//		state->PushResultNumber(color->x);
+//		state->PushResultNumber(color->y);
+//		state->PushResultNumber(color->z);
+//		state->PushResultNumber(color->w);
+//		return 5;
+//		});
+//}
 
 #endif
 
@@ -693,193 +693,193 @@ void luaQueueScriptToRun(LuaScriptDesc* pDesc)
 
 void luaRegisterWidget(const void* pWidgetHandle)
 {
-#ifdef ENABLE_FORGE_UI
-#ifdef ENABLE_FORGE_SCRIPTING 
-	ASSERT(pWidgetHandle);
-	const UIWidget* pWidget = (const UIWidget*)pWidgetHandle;
-
-	typedef eastl::pair<char*, WidgetCallback> NamePtrPair;
-	eastl::vector<NamePtrPair> functionsList;
-	char functionName[MAX_LABEL_STR_LENGTH]{};
-	strcpy(functionName, pWidget->mLabel);
-
-	TrimString(functionName);
-
-	if (pWidget->pOnHover)
-	{
-		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
-		strcpy(fullName, functionName);
-		strcat(fullName, "OnHover");
-		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnHover });
-	}
-	if (pWidget->pOnActive)
-	{
-		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
-		strcpy(fullName, functionName);
-		strcat(fullName, "OnActive");
-		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnActive });
-	}
-	if (pWidget->pOnFocus)
-	{
-		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
-		strcpy(fullName, functionName);
-		strcat(fullName, "OnFocus");
-		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnFocus });
-	}
-	if (pWidget->pOnEdited)
-	{
-		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
-		strcpy(fullName, functionName);
-		strcat(fullName, "OnEdited");
-		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnEdited });
-	}
-	if (pWidget->pOnDeactivated)
-	{
-		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
-		strcpy(fullName, functionName);
-		strcat(fullName, "OnDeactivated");
-		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnDeactivated });
-	}
-	if (pWidget->pOnDeactivatedAfterEdit)
-	{
-		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
-		strcpy(fullName, functionName);
-		strcat(fullName, "OnDeactivatedAfterEdit");
-		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnDeactivatedAfterEdit });
-	}
-
-	for (NamePtrPair pair : functionsList)
-	{
-		pLuaManager->SetFunction(pair.first, [pair](ILuaStateWrap* state) -> int {
-			pair.second();
-			return 0;
-			});
-
-		tf_free(pair.first);
-	}
-
-	switch (pWidget->mType)
-	{
-	case WIDGET_TYPE_COLLAPSING_HEADER:
-	{
-		registerCollapsingHeaderWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_SLIDER_FLOAT:
-	{
-		registerSliderFloatWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_SLIDER_FLOAT2:
-	{
-		registerSliderFloat2WidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_SLIDER_FLOAT3:
-	{
-		registerSliderFloat3WidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_SLIDER_FLOAT4:
-	{
-		registerSliderFloat4WidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_SLIDER_INT:
-	{
-		registerSliderIntWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_SLIDER_UINT:
-	{
-		registerSliderUintWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_CHECKBOX:
-	{
-		registerCheckboxWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_ONE_LINE_CHECKBOX:
-	{
-		registerOneLineCheckboxWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_DROPDOWN:
-	{
-		registerDropdownWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_PROGRESS_BAR:
-	{
-		registerProgressBarWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_COLOR_SLIDER:
-	{
-		registerColorSliderWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_COLOR_PICKER:
-	{
-		registerColorPickerWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_TEXTBOX:
-	{
-		registerTextboxWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_DYNAMIC_TEXT:
-	{
-		registerDynamicTextWidgetLua(pWidget);
-		break;
-	}
-
-	case WIDGET_TYPE_RADIO_BUTTON:
-	case WIDGET_TYPE_CURSOR_LOCATION:
-	case WIDGET_TYPE_COLUMN:
-	case WIDGET_TYPE_HISTOGRAM:
-	case WIDGET_TYPE_PLOT_LINES:
-	case WIDGET_TYPE_DEBUG_TEXTURES:
-	case WIDGET_TYPE_LABEL:
-	case WIDGET_TYPE_COLOR_LABEL:
-	case WIDGET_TYPE_HORIZONTAL_SPACE:
-	case WIDGET_TYPE_SEPARATOR:
-	case WIDGET_TYPE_VERTICAL_SEPARATOR:
-	case WIDGET_TYPE_BUTTON:
-	case WIDGET_TYPE_FILLED_RECT:
-	case WIDGET_TYPE_DRAW_TEXT:
-	case WIDGET_TYPE_DRAW_TOOLTIP:
-	case WIDGET_TYPE_DRAW_LINE:
-	case WIDGET_TYPE_DRAW_CURVE:
-	{
-		break;
-	}
-
-	default:
-	{
-		ASSERT(0 && "Trying to register a Widget of incompatible type!");
-	}
-	}
-#else
-	LOGF(LogLevel::eWARNING, "Attempting to use Forge Lua Scripting without define!");
-	LOGF(LogLevel::eWARNING, "Make sure to define 'ENABLE_FORGE_SCRIPTING' for Scripting to work!");
-#endif
-#endif
+//#ifdef ENABLE_FORGE_UI
+//#ifdef ENABLE_FORGE_SCRIPTING 
+//	ASSERT(pWidgetHandle);
+//	const UIWidget* pWidget = (const UIWidget*)pWidgetHandle;
+//
+//	typedef eastl::pair<char*, WidgetCallback> NamePtrPair;
+//	eastl::vector<NamePtrPair> functionsList;
+//	char functionName[MAX_LABEL_STR_LENGTH]{};
+//	strcpy(functionName, pWidget->mLabel);
+//
+//	TrimString(functionName);
+//
+//	if (pWidget->pOnHover)
+//	{
+//		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
+//		strcpy(fullName, functionName);
+//		strcat(fullName, "OnHover");
+//		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnHover });
+//	}
+//	if (pWidget->pOnActive)
+//	{
+//		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
+//		strcpy(fullName, functionName);
+//		strcat(fullName, "OnActive");
+//		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnActive });
+//	}
+//	if (pWidget->pOnFocus)
+//	{
+//		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
+//		strcpy(fullName, functionName);
+//		strcat(fullName, "OnFocus");
+//		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnFocus });
+//	}
+//	if (pWidget->pOnEdited)
+//	{
+//		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
+//		strcpy(fullName, functionName);
+//		strcat(fullName, "OnEdited");
+//		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnEdited });
+//	}
+//	if (pWidget->pOnDeactivated)
+//	{
+//		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
+//		strcpy(fullName, functionName);
+//		strcat(fullName, "OnDeactivated");
+//		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnDeactivated });
+//	}
+//	if (pWidget->pOnDeactivatedAfterEdit)
+//	{
+//		char* fullName = (char*)tf_calloc(MAX_LABEL_STR_LENGTH + 32, sizeof(char));
+//		strcpy(fullName, functionName);
+//		strcat(fullName, "OnDeactivatedAfterEdit");
+//		functionsList.emplace_back(NamePtrPair{ fullName, pWidget->pOnDeactivatedAfterEdit });
+//	}
+//
+//	for (NamePtrPair pair : functionsList)
+//	{
+//		pLuaManager->SetFunction(pair.first, [pair](ILuaStateWrap* state) -> int {
+//			pair.second();
+//			return 0;
+//			});
+//
+//		tf_free(pair.first);
+//	}
+//
+//	switch (pWidget->mType)
+//	{
+//	case WIDGET_TYPE_COLLAPSING_HEADER:
+//	{
+//		registerCollapsingHeaderWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_SLIDER_FLOAT:
+//	{
+//		registerSliderFloatWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_SLIDER_FLOAT2:
+//	{
+//		registerSliderFloat2WidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_SLIDER_FLOAT3:
+//	{
+//		registerSliderFloat3WidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_SLIDER_FLOAT4:
+//	{
+//		registerSliderFloat4WidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_SLIDER_INT:
+//	{
+//		registerSliderIntWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_SLIDER_UINT:
+//	{
+//		registerSliderUintWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_CHECKBOX:
+//	{
+//		registerCheckboxWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_ONE_LINE_CHECKBOX:
+//	{
+//		registerOneLineCheckboxWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_DROPDOWN:
+//	{
+//		registerDropdownWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_PROGRESS_BAR:
+//	{
+//		registerProgressBarWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_COLOR_SLIDER:
+//	{
+//		registerColorSliderWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_COLOR_PICKER:
+//	{
+//		registerColorPickerWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_TEXTBOX:
+//	{
+//		registerTextboxWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_DYNAMIC_TEXT:
+//	{
+//		registerDynamicTextWidgetLua(pWidget);
+//		break;
+//	}
+//
+//	case WIDGET_TYPE_RADIO_BUTTON:
+//	case WIDGET_TYPE_CURSOR_LOCATION:
+//	case WIDGET_TYPE_COLUMN:
+//	case WIDGET_TYPE_HISTOGRAM:
+//	case WIDGET_TYPE_PLOT_LINES:
+//	case WIDGET_TYPE_DEBUG_TEXTURES:
+//	case WIDGET_TYPE_LABEL:
+//	case WIDGET_TYPE_COLOR_LABEL:
+//	case WIDGET_TYPE_HORIZONTAL_SPACE:
+//	case WIDGET_TYPE_SEPARATOR:
+//	case WIDGET_TYPE_VERTICAL_SEPARATOR:
+//	case WIDGET_TYPE_BUTTON:
+//	case WIDGET_TYPE_FILLED_RECT:
+//	case WIDGET_TYPE_DRAW_TEXT:
+//	case WIDGET_TYPE_DRAW_TOOLTIP:
+//	case WIDGET_TYPE_DRAW_LINE:
+//	case WIDGET_TYPE_DRAW_CURVE:
+//	{
+//		break;
+//	}
+//
+//	default:
+//	{
+//		ASSERT(0 && "Trying to register a Widget of incompatible type!");
+//	}
+//	}
+//#else
+//	LOGF(LogLevel::eWARNING, "Attempting to use Forge Lua Scripting without define!");
+//	LOGF(LogLevel::eWARNING, "Make sure to define 'ENABLE_FORGE_SCRIPTING' for Scripting to work!");
+//#endif
+//#endif
 }
 

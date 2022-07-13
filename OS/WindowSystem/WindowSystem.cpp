@@ -1,15 +1,15 @@
 #include "../Core/Config.h"
 
-#include "../Interfaces/IUI.h"
+//#include "../Interfaces/IUI.h"
 #include "../Interfaces/IApp.h"
 #include "../Interfaces/ITime.h"
 #include "../Interfaces/ILog.h"
-#include "../Interfaces/IInput.h"
+//#include "../Interfaces/IInput.h"
 #include "../Interfaces/IScripting.h"
 #include "../Interfaces/IOperatingSystem.h"
 
 static WindowDesc* pWindowRef = NULL;
-static UIComponent* pWindowControlsComponent = NULL;
+//static UIComponent* pWindowControlsComponent = NULL;
 
 Timer gHideTimer;
 
@@ -219,10 +219,10 @@ void wndShowCursor()
 
 void wndToggleClipCursor()
 {
-	pWindowRef->mCursorClipped = !pWindowRef->mCursorClipped;
-#ifdef ENABLE_FORGE_INPUT
-	setEnableCaptureInput(pWindowRef->mCursorClipped);
-#endif
+//	pWindowRef->mCursorClipped = !pWindowRef->mCursorClipped;
+//#ifdef ENABLE_FORGE_INPUT
+//	setEnableCaptureInput(pWindowRef->mCursorClipped);
+//#endif
 }
 
 static void HideWindow()
@@ -496,7 +496,7 @@ void platformSetupWindowSystemUI(IApp* pApp)
 
 void platformToggleWindowSystemUI(bool active)
 {
-#ifdef ENABLE_FORGE_UI
-	uiSetComponentActive(pWindowControlsComponent, active);
-#endif
+//#ifdef ENABLE_FORGE_UI
+//	uiSetComponentActive(pWindowControlsComponent, active);
+//#endif
 }

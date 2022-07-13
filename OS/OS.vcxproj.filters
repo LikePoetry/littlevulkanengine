@@ -13,9 +13,6 @@
     <Filter Include="Fonts">
       <UniqueIdentifier>{CF74300D-3B89-58BE-040B-FC1D70DE54EF}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Input">
-      <UniqueIdentifier>{953A660D-014F-8EBE-CAD0-311E36A48AEF}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Interfaces">
       <UniqueIdentifier>{A9FC10E8-95B4-5235-FEBB-2B91EA92ED25}</UniqueIdentifier>
     </Filter>
@@ -27,9 +24,6 @@
     </Filter>
     <Filter Include="MemoryTracking">
       <UniqueIdentifier>{31B3166C-1D81-0A72-0615-7B98F281E6D6}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Profiler">
-      <UniqueIdentifier>{28AC12A2-1479-6DAD-3D92-5B5529BEA23B}</UniqueIdentifier>
     </Filter>
     <Filter Include="Scripting">
       <UniqueIdentifier>{985A7358-04C5-27CF-4D03-D974B9AC0524}</UniqueIdentifier>
@@ -164,15 +158,6 @@
     </ClInclude>
     <ClInclude Include="Math\MathTypes.h">
       <Filter>Math</Filter>
-    </ClInclude>
-    <ClInclude Include="Profiler\GpuProfiler.h">
-      <Filter>Profiler</Filter>
-    </ClInclude>
-    <ClInclude Include="Profiler\ProfilerBase.h">
-      <Filter>Profiler</Filter>
-    </ClInclude>
-    <ClInclude Include="Profiler\ProfilerHTML.h">
-      <Filter>Profiler</Filter>
     </ClInclude>
     <ClInclude Include="Scripting\LuaManager.h">
       <Filter>Scripting</Filter>
@@ -371,20 +356,11 @@
     <ClCompile Include="Fonts\stbtt.cpp">
       <Filter>Fonts</Filter>
     </ClCompile>
-    <ClCompile Include="Input\InputSystem.cpp">
-      <Filter>Input</Filter>
-    </ClCompile>
     <ClCompile Include="Logging\Log.c">
       <Filter>Logging</Filter>
     </ClCompile>
     <ClCompile Include="MemoryTracking\MemoryTracking.c">
       <Filter>MemoryTracking</Filter>
-    </ClCompile>
-    <ClCompile Include="Profiler\GpuProfiler.cpp">
-      <Filter>Profiler</Filter>
-    </ClCompile>
-    <ClCompile Include="Profiler\ProfilerBase.cpp">
-      <Filter>Profiler</Filter>
     </ClCompile>
     <ClCompile Include="Scripting\LuaManager.cpp">
       <Filter>Scripting</Filter>
@@ -394,9 +370,6 @@
     </ClCompile>
     <ClCompile Include="Scripting\LuaSystem.cpp">
       <Filter>Scripting</Filter>
-    </ClCompile>
-    <ClCompile Include="UI\UI.cpp">
-      <Filter>UI</Filter>
     </ClCompile>
     <ClCompile Include="UI\imgui_user.cpp">
       <Filter>UI</Filter>
@@ -408,9 +381,6 @@
       <Filter>Windows</Filter>
     </ClCompile>
     <ClCompile Include="Windows\GLWindowsWindow.cpp">
-      <Filter>Windows</Filter>
-    </ClCompile>
-    <ClCompile Include="Windows\WindowsBase.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
     <ClCompile Include="Windows\WindowsFileSystem.cpp">

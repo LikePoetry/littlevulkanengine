@@ -3,15 +3,15 @@
 #include "../OS/Interfaces/ICameraController.h"
 #include "../OS/Interfaces/IApp.h"
 #include "../OS/Interfaces/ILog.h"
-#include "../OS/Interfaces/IInput.h"
+//#include "../OS/Interfaces/IInput.h"
 #include "../OS/Interfaces/IFileSystem.h"
 #include "../OS/Interfaces/ITime.h"
-#include "../OS/Interfaces/IProfiler.h"
+//#include "../OS/Interfaces/IProfiler.h"
 #include "../OS/Interfaces/IScreenshot.h"
 #include "../OS/Interfaces/IScripting.h"
 
 #include "../OS/Interfaces/IFont.h"
-#include "../OS/Interfaces/IUI.h"
+//#include "../OS/Interfaces/IUI.h"
 
 #include "../Renderer/Include/IRenderer.h"
 #include "../Renderer/Include/IResourceLoader.h"
@@ -107,7 +107,7 @@ Buffer* pProjViewUniformBuffer[gImageCount] = { NULL };
 Buffer* pSkyboxUniformBuffer[gImageCount] = { NULL };
 
 uint32_t gFrameIndex = 0;
-ProfileToken gGpuProfileToken = PROFILE_INVALID_TOKEN;
+//ProfileToken gGpuProfileToken = PROFILE_INVALID_TOKEN;
 
 Shader* pCrashShader = NULL;
 
@@ -118,7 +118,7 @@ PlanetInfoStruct gPlanetInfoData[gNumPlanets];
 
 ICameraController* pCameraController = NULL;
 
-UIComponent* pGuiWindow = NULL;
+//UIComponent* pGuiWindow = NULL;
 
 uint32_t gFontID = 0;
 
@@ -426,42 +426,42 @@ public:
 		if (!initFontSystem(&fontRenderDesc))
 			return false; // report?
 
-		// Initialize Forge User Interface Rendering
-		UserInterfaceDesc uiRenderDesc = {};
-		uiRenderDesc.pRenderer = pRenderer;
-		initUserInterface(&uiRenderDesc);
+		//// Initialize Forge User Interface Rendering
+		//UserInterfaceDesc uiRenderDesc = {};
+		//uiRenderDesc.pRenderer = pRenderer;
+		//initUserInterface(&uiRenderDesc);
 
 		// Initialize micro profiler and its UI.
-		ProfilerDesc profiler = {};
-		profiler.pRenderer = pRenderer;
-		profiler.mWidthUI = mSettings.mWidth;
-		profiler.mHeightUI = mSettings.mHeight;
-		initProfiler(&profiler);
+		//ProfilerDesc profiler = {};
+		//profiler.pRenderer = pRenderer;
+		//profiler.mWidthUI = mSettings.mWidth;
+		//profiler.mHeightUI = mSettings.mHeight;
+		//initProfiler(&profiler);
 
-		// Gpu profiler can only be added after initProfile
-		gGpuProfileToken = addGpuProfiler(pRenderer, pGraphicsQueue, "Graphics");
+		//// Gpu profiler can only be added after initProfile
+		//gGpuProfileToken = addGpuProfiler(pRenderer, pGraphicsQueue, "Graphics");
 
 		/************************************************************************/
 		// GUI
 		/************************************************************************/
-		UIComponentDesc guiDesc = {};
-		guiDesc.mStartPosition = vec2(mSettings.mWidth * 0.01f, mSettings.mHeight * 0.2f);
-		uiCreateComponent(GetName(), &guiDesc, &pGuiWindow);
+		//UIComponentDesc guiDesc = {};
+		//guiDesc.mStartPosition = vec2(mSettings.mWidth * 0.01f, mSettings.mHeight * 0.2f);
+		//uiCreateComponent(GetName(), &guiDesc, &pGuiWindow);
 
-		// Take a screenshot with a button.
-		ButtonWidget screenshot;
-		UIWidget* pScreenshot = uiCreateComponentWidget(pGuiWindow, "Screenshot", &screenshot, WIDGET_TYPE_BUTTON);
-		uiSetWidgetOnEditedCallback(pScreenshot, takeScreenshot);
-		luaRegisterWidget(pScreenshot);
+		//// Take a screenshot with a button.
+		//ButtonWidget screenshot;
+		//UIWidget* pScreenshot = uiCreateComponentWidget(pGuiWindow, "Screenshot", &screenshot, WIDGET_TYPE_BUTTON);
+		//uiSetWidgetOnEditedCallback(pScreenshot, takeScreenshot);
+		//luaRegisterWidget(pScreenshot);
 
-		if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
-		{
-			ButtonWidget crashButton;
-			UIWidget* pCrashButton = uiCreateComponentWidget(pGuiWindow, "Simulate crash", &crashButton, WIDGET_TYPE_BUTTON);
-			WidgetCallback crashCallback = []() { bSimulateCrash = true; };
-			uiSetWidgetOnEditedCallback(pCrashButton, crashCallback);
-			luaRegisterWidget(pCrashButton);
-		}
+		//if (pRenderer->pActiveGpuSettings->mGpuBreadcrumbs)
+		//{
+		//	ButtonWidget crashButton;
+		//	UIWidget* pCrashButton = uiCreateComponentWidget(pGuiWindow, "Simulate crash", &crashButton, WIDGET_TYPE_BUTTON);
+		//	WidgetCallback crashCallback = []() { bSimulateCrash = true; };
+		//	uiSetWidgetOnEditedCallback(pCrashButton, crashCallback);
+		//	luaRegisterWidget(pCrashButton);
+		//}
 
 		const uint32_t numScripts = sizeof(gWindowTestScripts) / sizeof(gWindowTestScripts[0]);
 		LuaScriptDesc scriptDescs[numScripts] = {};
@@ -579,48 +579,48 @@ public:
 
 		pCameraController->setMotionParameters(cmp);
 
-		InputSystemDesc inputDesc = {};
-		inputDesc.pRenderer = pRenderer;
-		inputDesc.pWindow = pWindow;
-		if (!initInputSystem(&inputDesc))
-			return false;
-		// App Actions
-		InputActionDesc actionDesc = { InputBindings::BUTTON_DUMP, [](InputActionContext* ctx) {  dumpProfileData(((Renderer*)ctx->pUserData)->pName); return true; }, pRenderer };
-		addInputAction(&actionDesc);
-		actionDesc = { InputBindings::BUTTON_FULLSCREEN, [](InputActionContext* ctx) { toggleFullscreen(((IApp*)ctx->pUserData)->pWindow); return true; }, this };
-		addInputAction(&actionDesc);
-		actionDesc = { InputBindings::BUTTON_EXIT, [](InputActionContext* ctx) { requestShutdown(); return true; } };
-		addInputAction(&actionDesc);
-		InputActionCallback onUIInput = [](InputActionContext* ctx)
-		{
-			bool capture = uiOnInput(ctx->mBinding, ctx->mBool, ctx->pPosition, &ctx->mFloat2);
-			if (ctx->mBinding != InputBindings::FLOAT_LEFTSTICK)
-				setEnableCaptureInput(capture && INPUT_ACTION_PHASE_CANCELED != ctx->mPhase);
-			return true;
-		};
-		actionDesc = { InputBindings::BUTTON_ANY, onUIInput, this };
-		addInputAction(&actionDesc);
-		actionDesc = { InputBindings::FLOAT_LEFTSTICK, onUIInput, this, 20.0f, 200.0f, 1.0f };
-		addInputAction(&actionDesc);
+		//InputSystemDesc inputDesc = {};
+		//inputDesc.pRenderer = pRenderer;
+		//inputDesc.pWindow = pWindow;
+		//if (!initInputSystem(&inputDesc))
+		//	return false;
+		//// App Actions
+		//InputActionDesc actionDesc = { InputBindings::BUTTON_DUMP, [](InputActionContext* ctx) {  dumpProfileData(((Renderer*)ctx->pUserData)->pName); return true; }, pRenderer };
+		//addInputAction(&actionDesc);
+		//actionDesc = { InputBindings::BUTTON_FULLSCREEN, [](InputActionContext* ctx) { toggleFullscreen(((IApp*)ctx->pUserData)->pWindow); return true; }, this };
+		//addInputAction(&actionDesc);
+		//actionDesc = { InputBindings::BUTTON_EXIT, [](InputActionContext* ctx) { requestShutdown(); return true; } };
+		//addInputAction(&actionDesc);
+		//InputActionCallback onUIInput = [](InputActionContext* ctx)
+		//{
+		//	bool capture = uiOnInput(ctx->mBinding, ctx->mBool, ctx->pPosition, &ctx->mFloat2);
+		//	if (ctx->mBinding != InputBindings::FLOAT_LEFTSTICK)
+		//		setEnableCaptureInput(capture && INPUT_ACTION_PHASE_CANCELED != ctx->mPhase);
+		//	return true;
+		//};
+		//actionDesc = { InputBindings::BUTTON_ANY, onUIInput, this };
+		//addInputAction(&actionDesc);
+		//actionDesc = { InputBindings::FLOAT_LEFTSTICK, onUIInput, this, 20.0f, 200.0f, 1.0f };
+		//addInputAction(&actionDesc);
 
-		typedef bool(*CameraInputHandler)(InputActionContext* ctx, uint32_t index);
-		static CameraInputHandler onCameraInput = [](InputActionContext* ctx, uint32_t index)
-		{
-			if (*ctx->pCaptured)
-			{
-				float2 val = uiIsFocused() ? float2(0.0f) : ctx->mFloat2;
-				index ? pCameraController->onRotate(val) : pCameraController->onMove(val);
-			}
-			return true;
-		};
+		//typedef bool(*CameraInputHandler)(InputActionContext* ctx, uint32_t index);
+		//static CameraInputHandler onCameraInput = [](InputActionContext* ctx, uint32_t index)
+		//{
+		//	if (*ctx->pCaptured)
+		//	{
+		//		float2 val = uiIsFocused() ? float2(0.0f) : ctx->mFloat2;
+		//		index ? pCameraController->onRotate(val) : pCameraController->onMove(val);
+		//	}
+		//	return true;
+		//};
 
-		actionDesc = { InputBindings::FLOAT_RIGHTSTICK, [](InputActionContext* ctx) { return onCameraInput(ctx, 1); }, NULL, 20.0f, 200.0f, 0.5f };
-		addInputAction(&actionDesc);
-		actionDesc = { InputBindings::FLOAT_LEFTSTICK, [](InputActionContext* ctx) { return onCameraInput(ctx, 0); }, NULL, 20.0f, 200.0f, 1.0f };
-		addInputAction(&actionDesc);
+		//actionDesc = { InputBindings::FLOAT_RIGHTSTICK, [](InputActionContext* ctx) { return onCameraInput(ctx, 1); }, NULL, 20.0f, 200.0f, 0.5f };
+		//addInputAction(&actionDesc);
+		//actionDesc = { InputBindings::FLOAT_LEFTSTICK, [](InputActionContext* ctx) { return onCameraInput(ctx, 0); }, NULL, 20.0f, 200.0f, 1.0f };
+		//addInputAction(&actionDesc);
 
-		actionDesc = { InputBindings::BUTTON_NORTH, [](InputActionContext* ctx) { pCameraController->resetView(); return true; } };
-		addInputAction(&actionDesc);
+		//actionDesc = { InputBindings::BUTTON_NORTH, [](InputActionContext* ctx) { pCameraController->resetView(); return true; } };
+		//addInputAction(&actionDesc);
 
 		updateDescriptorSets();
 
@@ -684,8 +684,8 @@ public:
 		if (!addFontSystemPipelines(ppPipelineRenderTargets, 2, NULL))
 			return false;
 
-		if (!addUserInterfacePipelines(ppPipelineRenderTargets[0]))
-			return false;
+	/*	if (!addUserInterfacePipelines(ppPipelineRenderTargets[0]))
+			return false;*/
 
 		//layout and pipeline for sphere draw
 		VertexLayout vertexLayout = {};
@@ -854,7 +854,7 @@ public:
 			resetMarkers(cmd);
 		}
 
-		cmdBeginGpuFrameProfile(cmd, gGpuProfileToken);
+		/*cmdBeginGpuFrameProfile(cmd, gGpuProfileToken);*/
 
 		RenderTargetBarrier barriers[] = {
 			{ pRenderTarget, RESOURCE_STATE_PRESENT, RESOURCE_STATE_RENDER_TARGET },
@@ -875,7 +875,7 @@ public:
 		const uint32_t skyboxVbStride = sizeof(float) * 4;
 
 		// draw skybox
-		cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Skybox");
+		/*cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Skybox");*/
 		vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 1.0f, 1.0f);
 		vk_cmdBindPipeline(cmd, pSkyBoxDrawPipeline);
 		vk_cmdBindDescriptorSet(cmd, 0, pDescriptorSetTexture);
@@ -883,10 +883,10 @@ public:
 		vk_cmdBindVertexBuffer(cmd, 1, &pSkyBoxVertexBuffer, &skyboxVbStride, NULL);
 		vk_cmdDraw(cmd, 36, 0);
 		vk_cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 0.0f, 1.0f);
-		cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+		/*cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);*/
 
 		////// draw planets
-		cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Planets");
+		/*cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw Planets");*/
 
 		Pipeline* pipeline = pSpherePipeline;
 
@@ -918,28 +918,28 @@ public:
 			vk_cmdWriteMarker(cmd, MARKER_TYPE_OUT, gValidMarkerValue, pMarkerBuffer[gFrameIndex], 1, false);
 		}
 
-		cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+		/*cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);*/
 
 		loadActions = {};
 		loadActions.mLoadActionsColor[0] = LOAD_ACTION_LOAD;
 		vk_cmdBindRenderTargets(cmd, 1, &pRenderTarget, NULL, &loadActions, NULL, NULL, -1, -1);
-		cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw UI");
+		//cmdBeginGpuTimestampQuery(cmd, gGpuProfileToken, "Draw UI");
 
-		gFrameTimeDraw.mFontColor = 0xff00ffff;
-		gFrameTimeDraw.mFontSize = 18.0f;
-		gFrameTimeDraw.mFontID = gFontID;
-		float2 txtSizePx = cmdDrawCpuProfile(cmd, float2(8.f, 15.f), &gFrameTimeDraw);
-		cmdDrawGpuProfile(cmd, float2(8.f, txtSizePx.y + 75.f), gGpuProfileToken, &gFrameTimeDraw);
+		//gFrameTimeDraw.mFontColor = 0xff00ffff;
+		//gFrameTimeDraw.mFontSize = 18.0f;
+		//gFrameTimeDraw.mFontID = gFontID;
+		//float2 txtSizePx = cmdDrawCpuProfile(cmd, float2(8.f, 15.f), &gFrameTimeDraw);
+		//cmdDrawGpuProfile(cmd, float2(8.f, txtSizePx.y + 75.f), gGpuProfileToken, &gFrameTimeDraw);
 
-		cmdDrawUserInterface(cmd);
+		//cmdDrawUserInterface(cmd);
 
 		vk_cmdBindRenderTargets(cmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
-		cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);
+		/*cmdEndGpuTimestampQuery(cmd, gGpuProfileToken);*/
 
 		barriers[0] = { pRenderTarget, RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PRESENT };
 		vk_cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
 
-		cmdEndGpuFrameProfile(cmd, gGpuProfileToken);
+		/*cmdEndGpuFrameProfile(cmd, gGpuProfileToken);*/
 		vk_endCmd(cmd);
 
 		QueueSubmitDesc submitDesc = {};
@@ -970,7 +970,7 @@ public:
 		}
 
 		vk_queuePresent(pGraphicsQueue, &presentDesc);
-		flipProfiler();
+		/*flipProfiler();*/
 
 		gFrameIndex = (gFrameIndex + 1) % gImageCount;
 	};

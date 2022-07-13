@@ -7,7 +7,7 @@
 #include "../Interfaces/IFileSystem.h"
 #include "../Interfaces/ITime.h"
 #include "../Interfaces/IScripting.h"
-#include "../Interfaces/IUI.h"
+//#include "../Interfaces/IUI.h"
 #include "../Interfaces/IMemory.h"
 
 
@@ -52,11 +52,11 @@ bool initGLBaseSubsystems()
 	if (!platformInitFontSystem())
 		return false;
 #endif
-#ifdef ENABLE_FORGE_UI
-	extern bool platformInitUserInterface();
-	if (!platformInitUserInterface())
-		return false;
-#endif
+//#ifdef ENABLE_FORGE_UI
+//	extern bool platformInitUserInterface();
+//	if (!platformInitUserInterface())
+//		return false;
+//#endif
 #ifdef ENABLE_FORGE_SCRIPTING
 	extern void platformInitLuaScriptingSystem();
 	platformInitLuaScriptingSystem();
@@ -65,10 +65,10 @@ bool initGLBaseSubsystems()
 }
 
 // UI
-static UIComponent* pAPISwitchingComponent = NULL;
-static UIComponent* pToggleVSyncComponent = NULL;
-static UIWidget* pSwitchComponentLabelWidget = NULL;
-static UIWidget* pSelectApUIWidget = NULL;
+//static UIComponent* pAPISwitchingComponent = NULL;
+//static UIComponent* pToggleVSyncComponent = NULL;
+//static UIWidget* pSwitchComponentLabelWidget = NULL;
+//static UIWidget* pSelectApUIWidget = NULL;
 static uint32_t     gSelectedApiIndex = 0;
 
 // Renderer.cpp
@@ -78,53 +78,53 @@ void setupGLPlatformUI(int32_t width, int32_t height)
 {
 	gSelectedApiIndex = gSelectedRendererApi;
 
-	// WINDOW AND RESOLUTION CONTROL
-	extern void platformSetupWindowSystemUI(IApp*);
-	platformSetupWindowSystemUI(pApp);
+	//// WINDOW AND RESOLUTION CONTROL
+	//extern void platformSetupWindowSystemUI(IApp*);
+	//platformSetupWindowSystemUI(pApp);
 
-	// VSYNC CONTROL
+	//// VSYNC CONTROL
 
-	UIComponentDesc uiDesc = {};
-	uiDesc.mStartPosition = vec2(width * 0.4f, height * 0.90f);
-	uiCreateComponent("VSync Control", &uiDesc, &pToggleVSyncComponent);
+	//UIComponentDesc uiDesc = {};
+	//uiDesc.mStartPosition = vec2(width * 0.4f, height * 0.90f);
+	//uiCreateComponent("VSync Control", &uiDesc, &pToggleVSyncComponent);
 
-	CheckboxWidget checkbox;
-	checkbox.pData = &pApp->mSettings.mVSyncEnabled;
-	UIWidget* pCheckbox = uiCreateComponentWidget(pToggleVSyncComponent, "Toggle VSync\t\t\t\t\t", &checkbox, WIDGET_TYPE_CHECKBOX);
-	REGISTER_LUA_WIDGET(pCheckbox);
+	//CheckboxWidget checkbox;
+	//checkbox.pData = &pApp->mSettings.mVSyncEnabled;
+	//UIWidget* pCheckbox = uiCreateComponentWidget(pToggleVSyncComponent, "Toggle VSync\t\t\t\t\t", &checkbox, WIDGET_TYPE_CHECKBOX);
+	//REGISTER_LUA_WIDGET(pCheckbox);
 
-	// API SWITCHING
+	//// API SWITCHING
 
-	uiDesc = {};
-	uiDesc.mStartPosition = vec2(width * 0.4f, height * 0.01f);
-	uiCreateComponent("API Switching", &uiDesc, &pAPISwitchingComponent);
+	//uiDesc = {};
+	//uiDesc.mStartPosition = vec2(width * 0.4f, height * 0.01f);
+	//uiCreateComponent("API Switching", &uiDesc, &pAPISwitchingComponent);
 
-	static const char* pApiNames[] =
-	{
-		"Vulkan",
-	};
+	//static const char* pApiNames[] =
+	//{
+	//	"Vulkan",
+	//};
 
-	// Select Api 
-	DropdownWidget selectApUIWidget;
-	selectApUIWidget.pData = &gSelectedApiIndex;
+	//// Select Api 
+	//DropdownWidget selectApUIWidget;
+	//selectApUIWidget.pData = &gSelectedApiIndex;
 
-	uint32_t apiCount = RENDERER_API_COUNT;
+	//uint32_t apiCount = RENDERER_API_COUNT;
 
-	ASSERT(apiCount != 0 && "No supported Graphics API available!");
-	for (uint32_t i = 0; i < apiCount; ++i)
-	{
-		selectApUIWidget.mNames.push_back((char*)pApiNames[i]);
-		selectApUIWidget.mValues.push_back(i);
-	}
+	//ASSERT(apiCount != 0 && "No supported Graphics API available!");
+	//for (uint32_t i = 0; i < apiCount; ++i)
+	//{
+	//	selectApUIWidget.mNames.push_back((char*)pApiNames[i]);
+	//	selectApUIWidget.mValues.push_back(i);
+	//}
 
-	pSelectApUIWidget = uiCreateComponentWidget(pAPISwitchingComponent, "Select API", &selectApUIWidget, WIDGET_TYPE_DROPDOWN);
-	//TODO
-	//pSelectApUIWidget->pOnEdited = onAPISwitch;
-	REGISTER_LUA_WIDGET(pSelectApUIWidget);
+	//pSelectApUIWidget = uiCreateComponentWidget(pAPISwitchingComponent, "Select API", &selectApUIWidget, WIDGET_TYPE_DROPDOWN);
+	////TODO
+	////pSelectApUIWidget->pOnEdited = onAPISwitch;
+	//REGISTER_LUA_WIDGET(pSelectApUIWidget);
 
-	LuaScriptDesc apiScriptDesc = {};
-	apiScriptDesc.pScriptFileName = "Test_API_Switching.lua";
-	luaDefineScripts(&apiScriptDesc, 1);
+	//LuaScriptDesc apiScriptDesc = {};
+	//apiScriptDesc.pScriptFileName = "Test_API_Switching.lua";
+	//luaDefineScripts(&apiScriptDesc, 1);
 }
 
 void updateGLBaseSubsystems(float deltaTime)
@@ -137,10 +137,10 @@ void updateGLBaseSubsystems(float deltaTime)
 	platformUpdateLuaScriptingSystem();
 #endif
 
-#ifdef ENABLE_FORGE_UI
-	extern void platformUpdateUserInterface(float deltaTime);
-	platformUpdateUserInterface(deltaTime);
-#endif
+//#ifdef ENABLE_FORGE_UI
+//	extern void platformUpdateUserInterface(float deltaTime);
+//	platformUpdateUserInterface(deltaTime);
+//#endif
 }
 
 int GLWindowsMain(int argc, char** argv, IApp* app)

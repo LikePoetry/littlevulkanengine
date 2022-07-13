@@ -7674,7 +7674,7 @@ void vk_queuePresent(Queue* pQueue, const QueuePresentDesc* pDesc)
 			// Will crash normally on Android.
 #if defined(_WINDOWS)
 			threadSleep(5000);    // Wait for a few seconds to allow the driver to come back online before doing a reset.
-			onDeviceLost();
+			//onDeviceLost();
 #endif
 		}
 		else if (vk_res == VK_ERROR_OUT_OF_DATE_KHR)

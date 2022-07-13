@@ -702,7 +702,7 @@ public:
 
 	void Update(float deltaTime)
 	{
-		//updateInputSystem(mSettings.mWidth, mSettings.mHeight);
+		updateInputSystem(mSettings.mWidth, mSettings.mHeight);
 
 		pCameraController->update(deltaTime);
 
