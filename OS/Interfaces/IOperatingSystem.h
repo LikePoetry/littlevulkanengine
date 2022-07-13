@@ -225,6 +225,10 @@ void minimizeWindow(WindowDesc* winDesc);
 void centerWindow(WindowDesc* winDesc);
 void captureCursor(WindowDesc* winDesc, bool bEnable);
 
+// GL Window handling
+void openGLWindow(const char* app_name, WindowDesc* winDesc);
+void updateGLWindow();
+
 // Mouse and cursor handling
 void* createCursor(const char* path);
 void  setCursor(void* cursor);
@@ -235,10 +239,17 @@ void  setMousePositionRelative(const WindowDesc* winDesc, int32_t x, int32_t y);
 void  setMousePositionAbsolute(int32_t x, int32_t y);
 
 void getRecommendedResolution(RectDesc* rect);
+
+void getGLRecommendedResolution(RectDesc* rect);
+
 // Sets video mode for specified display
 void setResolution(const MonitorDesc* pMonitor, const Resolution* pRes);
 
 MonitorDesc* getMonitor(uint32_t index);
+
+MonitorDesc* getGLMonitor(uint32_t index);
+
+
 uint32_t     getMonitorCount(void);
 // pArray pointer to array with at least 2 elements(x,y)
 void getDpiScale(float array[2]);

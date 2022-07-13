@@ -216,6 +216,8 @@ COMPILE_ASSERT(sizeof(ssize_t) == sizeof(int64_t));
 
 
 #define ENABLE_GLFW_WINDOW
+// 
+// 
 //Uncomment this to enable empty mounts
 //used for absolute paths
 //#define ENABLE_FS_EMPTY_MOUNT

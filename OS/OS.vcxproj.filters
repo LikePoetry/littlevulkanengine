@@ -404,6 +404,9 @@
     <ClCompile Include="WindowSystem\WindowSystem.cpp">
       <Filter>WindowSystem</Filter>
     </ClCompile>
+    <ClCompile Include="Windows\GLWindowsBase.cpp">
+      <Filter>Windows</Filter>
+    </ClCompile>
     <ClCompile Include="Windows\GLWindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>

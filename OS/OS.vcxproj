@@ -205,6 +205,7 @@
     <ClCompile Include="UI\UI.cpp" />
     <ClCompile Include="UI\imgui_user.cpp" />
     <ClCompile Include="WindowSystem\WindowSystem.cpp" />
+    <ClCompile Include="Windows\GLWindowsBase.cpp" />
     <ClCompile Include="Windows\GLWindowsWindow.cpp" />
     <ClCompile Include="Windows\WindowsBase.cpp" />
     <ClCompile Include="Windows\WindowsFileSystem.cpp" />

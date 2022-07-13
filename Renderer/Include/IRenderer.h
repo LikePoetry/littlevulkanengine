@@ -26,8 +26,12 @@
 
 #include "RendererConfig.h"
 
+#ifdef ENABLE_GLFW_WINDOW
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#endif // VK_USE_GLFW_KHR
+
+
 
 #ifdef ENABLE_NSIGHT_AFTERMATH
 #include "../ThirdParty/PrivateNvidia/NsightAftermath/include/AftermathTracker.h"
