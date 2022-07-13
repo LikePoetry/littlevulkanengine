@@ -52,17 +52,11 @@
     <Filter Include="ThirdParty\OpenSource\cpu_features\src">
       <UniqueIdentifier>{CEF5F145-BA47-C935-A366-06468F57E21E}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ThirdParty\OpenSource\imgui">
-      <UniqueIdentifier>{CC94FF32-38A2-2D19-C188-29042D95F9CF}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ThirdParty\OpenSource\lua-5.3.5">
       <UniqueIdentifier>{59593565-C53C-44A5-CE3F-72E13AA20AF6}</UniqueIdentifier>
     </Filter>
     <Filter Include="ThirdParty\OpenSource\lua-5.3.5\src">
       <UniqueIdentifier>{F01BA048-5CD5-0AF3-E534-25CD51EDC062}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="UI">
-      <UniqueIdentifier>{83755900-6F01-880B-D8AF-880BC45A880B}</UniqueIdentifier>
     </Filter>
     <Filter Include="WindowSystem">
       <UniqueIdentifier>{A2AFCCEE-8E12-5C93-3798-944923DA2716}</UniqueIdentifier>

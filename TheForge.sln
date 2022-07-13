@@ -19,8 +19,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{DD376B17
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SpirvTools", "SpirvTools\SpirvTools.vcxproj", "{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gainputstatic", "gainputstatic\gainputstatic.vcxproj", "{4507963E-B1C7-1175-7A02-5BF2E6815651}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,10 +49,6 @@ Global
 		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}.Debug|x64.Build.0 = Debug|x64
 		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}.Release|x64.ActiveCfg = Release|x64
 		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701}.Release|x64.Build.0 = Release|x64
-		{4507963E-B1C7-1175-7A02-5BF2E6815651}.Debug|x64.ActiveCfg = Debug|x64
-		{4507963E-B1C7-1175-7A02-5BF2E6815651}.Debug|x64.Build.0 = Debug|x64
-		{4507963E-B1C7-1175-7A02-5BF2E6815651}.Release|x64.ActiveCfg = Release|x64
-		{4507963E-B1C7-1175-7A02-5BF2E6815651}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -64,6 +58,5 @@ Global
 		{40367217-2C99-01BC-D51E-3A72C160CD3E} = {CBC3873E-B791-7B44-A025-EC6A8C9257A9}
 		{154B857C-0182-860D-AA6E-6C109684020F} = {53E47842-3FC8-3998-A828-34EB942B241A}
 		{CA446BC3-B6FC-AC10-1F04-866C0BDB4701} = {DD376B17-49ED-E30C-D2E1-DDE33E96DA10}
-		{4507963E-B1C7-1175-7A02-5BF2E6815651} = {DD376B17-49ED-E30C-D2E1-DDE33E96DA10}
 	EndGlobalSection
 EndGlobal
