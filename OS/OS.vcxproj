@@ -95,9 +95,6 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imconfig.h" />
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui.h" />
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h" />
     <ClInclude Include="Core\Application.h" />
     <ClInclude Include="Core\Atomics.h" />
     <ClInclude Include="Core\CPUConfig.h" />
@@ -127,7 +124,6 @@
     <ClInclude Include="Scripting\LuaManager.h" />
     <ClInclude Include="Scripting\LuaManagerCommon.h" />
     <ClInclude Include="Scripting\LuaManagerImpl.h" />
-    <ClInclude Include="UI\imgui_user.h" />
     <ClInclude Include="Windows\GLWindowsWindow.h" />
   </ItemGroup>
   <ItemGroup>
@@ -144,10 +140,6 @@
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\thread_support.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\basis_universal\transcoder\basisu_transcoder.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c" />
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp" />
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_demo.cpp" />
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_draw.cpp" />
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lapi.c" />
     <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lauxlib.c" />
     <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lbaselib.c" />
@@ -196,7 +188,6 @@
     <ClCompile Include="Scripting\LuaManager.cpp" />
     <ClCompile Include="Scripting\LuaManagerImpl.cpp" />
     <ClCompile Include="Scripting\LuaSystem.cpp" />
-    <ClCompile Include="UI\imgui_user.cpp" />
     <ClCompile Include="WindowSystem\WindowSystem.cpp" />
     <ClCompile Include="Windows\GLWindowsBase.cpp" />
     <ClCompile Include="Windows\GLWindowsWindow.cpp" />

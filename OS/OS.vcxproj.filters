@@ -72,15 +72,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imconfig.h">
-      <Filter>ThirdParty\OpenSource\imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui.h">
-      <Filter>ThirdParty\OpenSource\imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\ThirdParty\OpenSource\imgui\imgui_internal.h">
-      <Filter>ThirdParty\OpenSource\imgui</Filter>
-    </ClInclude>
     <ClInclude Include="Core\Application.h">
       <Filter>Core</Filter>
     </ClInclude>
@@ -168,9 +159,6 @@
     <ClInclude Include="Scripting\LuaManagerImpl.h">
       <Filter>Scripting</Filter>
     </ClInclude>
-    <ClInclude Include="UI\imgui_user.h">
-      <Filter>UI</Filter>
-    </ClInclude>
     <ClInclude Include="Windows\GLWindowsWindow.h">
       <Filter>Windows</Filter>
     </ClInclude>
@@ -214,18 +202,6 @@
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\cpu_features\src\impl_x86_windows.c">
       <Filter>ThirdParty\OpenSource\cpu_features\src</Filter>
-    </ClCompile>
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui.cpp">
-      <Filter>ThirdParty\OpenSource\imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_demo.cpp">
-      <Filter>ThirdParty\OpenSource\imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_draw.cpp">
-      <Filter>ThirdParty\OpenSource\imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="..\ThirdParty\OpenSource\imgui\imgui_widgets.cpp">
-      <Filter>ThirdParty\OpenSource\imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\ThirdParty\OpenSource\lua-5.3.5\src\lapi.c">
       <Filter>ThirdParty\OpenSource\lua-5.3.5\src</Filter>
@@ -370,9 +346,6 @@
     </ClCompile>
     <ClCompile Include="Scripting\LuaSystem.cpp">
       <Filter>Scripting</Filter>
-    </ClCompile>
-    <ClCompile Include="UI\imgui_user.cpp">
-      <Filter>UI</Filter>
     </ClCompile>
     <ClCompile Include="WindowSystem\WindowSystem.cpp">
       <Filter>WindowSystem</Filter>
