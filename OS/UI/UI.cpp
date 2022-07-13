@@ -2176,7 +2176,7 @@ bool platformInitUserInterface()
 #ifdef ENABLE_FORGE_UI
 	UserInterface* pAppUI = tf_new(UserInterface);
 
-	pAppUI->mShowDemoUiWindow = false;
+	pAppUI->mShowDemoUiWindow = true;
 
 	pAppUI->mHandledGestures = false;
 	pAppUI->mActive = true;
