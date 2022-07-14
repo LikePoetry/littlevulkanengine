@@ -13,9 +13,11 @@ outputdir="%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 -- Include directories relative to root folder (solution directory)
 IncludeDir={}
 IncludeDir["GLFW"]="ThirdParty/OpenSource/GLFW/include"
+IncludeDir["imgui"]="vendor/imgui"
 
 group "Dependencies"
 	include "ThirdParty/OpenSource/GLFW"
+	include "ThirdParty/OpenSource/imgui"
 
 group ""
 
@@ -53,6 +55,7 @@ project "Renderer"
 			"Renderer",
 			"OS",
 			"%{IncludeDir.GLFW}",
+			"%{IncludeDir.imgui}",
 			"$(VULKAN_SDK)/Include"
 		}
 
@@ -64,6 +67,7 @@ project "Renderer"
 		links
 		{
 			"GLFW",
+			"ImGui",
 		}
 	
 		filter "system:windows"
@@ -161,6 +165,7 @@ project "OS"
 		"OS",
 		"Renderer",
 		"%{IncludeDir.GLFW}",
+		"%{IncludeDir.imgui}",
 		"$(VULKAN_SDK)/Include"
 	}
 
@@ -172,6 +177,7 @@ project "OS"
 	links
 	{
 		"GLFW",
+		"ImGui",
 	}
 
 	filter "system:windows"
@@ -332,6 +338,7 @@ project "TriangleDemo"
 		"Renderer",
 		"SpirvTools",
 		"%{IncludeDir.GLFW}",
+		"%{IncludeDir.imgui}",
 		"$(VULKAN_SDK)/Include"
 	}
 
@@ -345,6 +352,7 @@ project "TriangleDemo"
 		"OS",
 		"Renderer",
 		"GLFW",
+		"ImGui",
 		"SpirvTools"
 	}
 

@@ -57,7 +57,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..\Renderer;..\ThirdParty\OpenSource\GLFW\include;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;..\Renderer;..\ThirdParty\OpenSource\GLFW\include;..\vendor\imgui;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -76,7 +76,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WINDOWS;;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..\Renderer;..\ThirdParty\OpenSource\GLFW\include;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;..\Renderer;..\ThirdParty\OpenSource\GLFW\include;..\vendor\imgui;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -124,6 +124,8 @@
     <ClInclude Include="Scripting\LuaManager.h" />
     <ClInclude Include="Scripting\LuaManagerCommon.h" />
     <ClInclude Include="Scripting\LuaManagerImpl.h" />
+    <ClInclude Include="UI\imgui_impl_glfw.h" />
+    <ClInclude Include="UI\imgui_impl_vulkan.h" />
     <ClInclude Include="Windows\GLWindowsWindow.h" />
   </ItemGroup>
   <ItemGroup>
@@ -188,6 +190,9 @@
     <ClCompile Include="Scripting\LuaManager.cpp" />
     <ClCompile Include="Scripting\LuaManagerImpl.cpp" />
     <ClCompile Include="Scripting\LuaSystem.cpp" />
+    <ClCompile Include="UI\imgui_impl_glfw.cpp" />
+    <ClCompile Include="UI\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="UI\UI.cpp" />
     <ClCompile Include="WindowSystem\WindowSystem.cpp" />
     <ClCompile Include="Windows\GLWindowsBase.cpp" />
     <ClCompile Include="Windows\GLWindowsWindow.cpp" />
@@ -200,6 +205,9 @@
   <ItemGroup>
     <ProjectReference Include="..\ThirdParty\OpenSource\GLFW\GLFW.vcxproj">
       <Project>{154B857C-0182-860D-AA6E-6C109684020F}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\ThirdParty\OpenSource\imgui\ImGui.vcxproj">
+      <Project>{C0FF640D-2C14-8DBE-F595-301E616989EF}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

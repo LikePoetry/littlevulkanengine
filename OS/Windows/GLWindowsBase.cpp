@@ -52,11 +52,11 @@ bool initGLBaseSubsystems()
 	if (!platformInitFontSystem())
 		return false;
 #endif
-//#ifdef ENABLE_FORGE_UI
-//	extern bool platformInitUserInterface();
-//	if (!platformInitUserInterface())
-//		return false;
-//#endif
+#ifdef ENABLE_FORGE_UI
+	extern bool platformInitUserInterface();
+	if (!platformInitUserInterface())
+		return false;
+#endif
 #ifdef ENABLE_FORGE_SCRIPTING
 	extern void platformInitLuaScriptingSystem();
 	platformInitLuaScriptingSystem();

@@ -11,7 +11,7 @@
 #include "../OS/Interfaces/IScripting.h"
 
 #include "../OS/Interfaces/IFont.h"
-//#include "../OS/Interfaces/IUI.h"
+#include "../OS/Interfaces/IUI.h"
 
 #include "../Renderer/Include/IRenderer.h"
 #include "../Renderer/Include/IResourceLoader.h"
@@ -426,10 +426,10 @@ public:
 		if (!initFontSystem(&fontRenderDesc))
 			return false; // report?
 
-		//// Initialize Forge User Interface Rendering
-		//UserInterfaceDesc uiRenderDesc = {};
-		//uiRenderDesc.pRenderer = pRenderer;
-		//initUserInterface(&uiRenderDesc);
+		// Initialize Forge User Interface Rendering
+		UserInterfaceDesc uiRenderDesc = {};
+		uiRenderDesc.pRenderer = pRenderer;
+		initUserInterface(&uiRenderDesc);
 
 		// Initialize micro profiler and its UI.
 		//ProfilerDesc profiler = {};

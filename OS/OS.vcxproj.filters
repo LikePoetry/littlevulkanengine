@@ -156,6 +156,8 @@
     <ClInclude Include="Windows\GLWindowsWindow.h">
       <Filter>Windows</Filter>
     </ClInclude>
+    <ClInclude Include="UI\imgui_impl_glfw.h" />
+    <ClInclude Include="UI\imgui_impl_vulkan.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ThirdParty\OpenSource\EASTL\EAStdC\EAMemory.cpp">
@@ -365,5 +367,8 @@
     <ClCompile Include="Windows\WindowsWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
+    <ClCompile Include="UI\UI.cpp" />
+    <ClCompile Include="UI\imgui_impl_glfw.cpp" />
+    <ClCompile Include="UI\imgui_impl_vulkan.cpp" />
   </ItemGroup>
 </Project>
